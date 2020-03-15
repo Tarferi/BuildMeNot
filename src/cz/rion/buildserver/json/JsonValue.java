@@ -107,6 +107,16 @@ public abstract class JsonValue {
 				while (!inst.isDone()) {
 					inst.nextChar(false);
 					char next = inst.getCurrentChar();
+					if (next == '\\') {
+						inst.nextChar(false);
+						next = inst.getCurrentChar();
+						next = next == 'r' ? '\r' : next;
+						next = next == 'n' ? '\n' : next;
+						next = next == 't' ? '\t' : next;
+						next = next == '\\' ? '\\' : next;
+						sb.append(next);
+						continue;
+					}
 					if (next == '"' && previous != '\\') {
 						break;
 					} else {
@@ -114,6 +124,7 @@ public abstract class JsonValue {
 						previous = next;
 					}
 				}
+				inst.nextChar(true);
 				return new JsonString(sb.toString());
 			} else if (c >= '0' && c <= '9') {
 				int num = c - '0';
@@ -266,7 +277,35 @@ public abstract class JsonValue {
 
 		@Override
 		public String getJsonString() {
-			return "\"" + Value + "\"";
+			StringBuilder sb = new StringBuilder();
+			sb.append("\"");
+			for (byte b : Value.getBytes()) {
+				int c = (int) (b & 0xff);
+				if (c == '\n') {
+					sb.append("\\n");
+				} else if (c == '\r') {
+					sb.append("\\r");
+				} else if (c == '\\') {
+					sb.append("\\\\");
+				} else if (c == '"') {
+					sb.append("\\\"");
+				} else if (c == 't') {
+					sb.append("\\t");
+				} else if (c == 'f') {
+					sb.append("\\f");
+				} else if (c == 'b') {
+					sb.append("\\b");
+				} else if (c >= 32 && c <= 126) {
+					sb.append((char) b);
+				} else {
+					sb.append("\\u00");
+					String hex = "00" + Integer.toHexString(c);
+					hex = hex.substring(hex.length() - 2, hex.length());
+					sb.append(hex);
+				}
+			}
+			sb.append("\"");
+			return sb.toString();
 		}
 	}
 
@@ -451,7 +490,6 @@ public abstract class JsonValue {
 		public JsonObject() {
 			this(new HashMap<String, JsonValue>());
 		}
-		
 
 		@Override
 		public String getJsonString() {
@@ -461,7 +499,7 @@ public abstract class JsonValue {
 			} else {
 				sb.append("{");
 				for (Entry<String, JsonValue> entry : Value.entrySet()) {
-					sb.append(entry.getKey() + ":");
+					sb.append("\"" + entry.getKey() + "\":");
 					sb.append(entry.getValue().getJsonString());
 					sb.append(",");
 				}

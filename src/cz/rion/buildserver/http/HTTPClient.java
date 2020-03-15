@@ -14,6 +14,8 @@ import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.json.JsonValue.JsonNumber;
 import cz.rion.buildserver.json.JsonValue.JsonString;
+import cz.rion.buildserver.wrappers.FileReadException;
+import cz.rion.buildserver.wrappers.MyFS;
 import cz.rion.buildserver.wrappers.NasmWrapper;
 import cz.rion.buildserver.wrappers.NasmWrapper.RunResult;
 
@@ -50,8 +52,9 @@ public class HTTPClient {
 	}
 
 	private final Socket client;
+	private int builderID;
 
-	public void close() {
+	private void close() {
 		try {
 			client.close();
 		} catch (IOException e) {
@@ -60,10 +63,13 @@ public class HTTPClient {
 
 	public HTTPClient(Socket client) {
 		this.client = client;
+	}
+
+	public void run(int builderID) {
+		this.builderID = builderID;
 		try {
 			handle(handle(handle()));
 		} catch (HTTPClientException e) {
-			e.printStackTrace();
 		}
 		close();
 	}
@@ -110,9 +116,29 @@ public class HTTPClient {
 		int returnCode = 200;
 		String returnCodeDescription = "OK";
 		byte[] data = ("\"" + request.path + "\" neumim!").getBytes();
-		if (!request.path.equals("/test") && request.method.equals("POST") && request.data.length > 0) {
+		if (request.path.equals("/test") && request.method.equals("POST") && request.data.length > 0) {
 			data = handleTest(request.data);
+		} else if (request.path.startsWith("/") && request.method.equals("GET")) {
+			String endPoint = request.path.substring(1);
+			if (endPoint.equals("")) {
+				endPoint = "index.html";
+			}
+			String[] allowed = new String[] { "index.html", "index.css", "index.js" };
+			for (String allow : allowed) {
+				if (allow.equals(endPoint)) {
+					try {
+						String fileContents = MyFS.readFile("./web/" + endPoint);
+						data = fileContents.getBytes();
+					} catch (FileReadException e) {
+						returnCode = 404;
+						returnCodeDescription = "Not Found";
+						data = ("Nemuzu precist: " + endPoint).getBytes();
+					}
+					break;
+				}
+			}
 		}
+
 		return new HTTPResponse(request.protocol, returnCode, returnCodeDescription, data);
 	}
 
@@ -140,7 +166,7 @@ public class HTTPClient {
 		return sb.toString();
 	}
 
-	private static char toHex(byte c) throws HTTPClientException {
+	private static char toHex(int c) throws HTTPClientException {
 		if (c >= 0 && c <= 9) {
 			return (char) (c + '0');
 		} else if (c >= 10 && c <= 15) {
@@ -155,9 +181,9 @@ public class HTTPClient {
 		byte[] result = new byte[bdata.length * 2];
 
 		for (int i = 0; i < bdata.length; i++) {
-			byte c = bdata[i];
+			int c = bdata[i] & 0xff;
 			char c1 = toHex((byte) (c >> 4));
-			char c2 = toHex((byte) (c & 4));
+			char c2 = toHex((byte) (c & 0b1111));
 			result[i * 2] = (byte) c1;
 			result[(i * 2) + 1] = (byte) c2;
 		}
@@ -165,6 +191,11 @@ public class HTTPClient {
 	}
 
 	private byte[] handleTest(byte[] data) throws HTTPClientException {
+		if (data[0] == 'q' && data[1] == '=') {
+			byte[] newData = new byte[data.length - 2];
+			System.arraycopy(data, 2, newData, 0, data.length - 2);
+			data = newData;
+		}
 		JsonObject returnValue = new JsonObject();
 		returnValue.add("code", new JsonNumber(1));
 		returnValue.add("result", new JsonString("Internal error"));
@@ -193,7 +224,7 @@ public class HTTPClient {
 
 						run.add("stdin", new JsonString(stdin));
 						try {
-							RunResult result = NasmWrapper.run("./test02", asm, stdin, 2000);
+							RunResult result = NasmWrapper.run("./test" + builderID, asm, stdin, 2000);
 							run.add("returnCode", new JsonNumber(result.runtime.returnCode));
 							run.add("stdout", new JsonString(result.runtime.stdout));
 							run.add("stderr", new JsonString(result.runtime.stderr));
