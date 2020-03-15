@@ -7,14 +7,20 @@ import java.util.ArrayList;
 import java.util.List;
 
 import cz.rion.buildserver.BuildThread;
+import cz.rion.buildserver.db.MyDB;
+import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.exceptions.HTTPServerException;
+import cz.rion.buildserver.ui.provider.RemoteUIProviderServer;
 
 public class HTTPServer {
 
 	private static final int TOTAL_BUILDERS = 8;
 
 	private final int port;
-	private final List<BuildThread> builders = new ArrayList<>();
+	public final List<BuildThread> builders = new ArrayList<>();
+	private final RemoteUIProviderServer remoteUI = new RemoteUIProviderServer(this);
+
+	public final MyDB db;
 
 	private BuildThread getBuilder() {
 		int min = -1;
@@ -33,11 +39,16 @@ public class HTTPServer {
 		return selectedBuilder;
 	}
 
-	public HTTPServer(int port) {
+	public HTTPServer(int port) throws DatabaseException {
+		this.db = new MyDB("data.sqlite");
 		this.port = port;
 		for (int i = 0; i < TOTAL_BUILDERS; i++) {
 			builders.add(new BuildThread(this, i));
 		}
+	}
+
+	public void addRemoteUIClient(Socket socket) {
+		remoteUI.addClient(socket);
 	}
 
 	public void run() throws HTTPServerException {

@@ -3,13 +3,17 @@ package cz.rion.buildserver.http;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.Socket;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
+import cz.rion.buildserver.db.MyDB;
+import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.exceptions.GoLinkExecutionException;
 import cz.rion.buildserver.exceptions.HTTPClientException;
 import cz.rion.buildserver.exceptions.NasmExecutionException;
 import cz.rion.buildserver.exceptions.RuntimeExecutionException;
+import cz.rion.buildserver.exceptions.SwitchClientException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.json.JsonValue.JsonNumber;
@@ -53,6 +57,7 @@ public class HTTPClient {
 
 	private final Socket client;
 	private int builderID;
+	private final String SECRET_PASSWORD = "abc";
 
 	private void close() {
 		try {
@@ -64,13 +69,17 @@ public class HTTPClient {
 	public HTTPClient(Socket client) {
 		this.client = client;
 	}
+	
+	private JsonObject returnValue = null;
+	private String asm = "";
 
-	public void run(int builderID) {
+	public void run(MyDB db, int builderID) throws SwitchClientException, DatabaseException {
 		this.builderID = builderID;
 		try {
 			handle(handle(handle()));
 		} catch (HTTPClientException e) {
 		}
+		db.storeCompilation(client.getRemoteSocketAddress().toString(), new Date(), asm, returnValue.getJsonString());
 		close();
 	}
 
@@ -196,7 +205,7 @@ public class HTTPClient {
 			System.arraycopy(data, 2, newData, 0, data.length - 2);
 			data = newData;
 		}
-		JsonObject returnValue = new JsonObject();
+		returnValue = new JsonObject();
 		returnValue.add("code", new JsonNumber(1));
 		returnValue.add("result", new JsonString("Internal error"));
 		if (data.length % 2 == 0) {
@@ -207,7 +216,7 @@ public class HTTPClient {
 					JsonObject obj = json.asObject();
 					if (obj.containsString("asm")) {
 
-						String asm = obj.getString("asm").Value;
+						asm = obj.getString("asm").Value;
 						String stdin = "";
 						if (obj.containsString("stdin")) {
 							stdin = obj.getString("stdin").Value;
@@ -268,7 +277,7 @@ public class HTTPClient {
 		return encode(resutJson);
 	}
 
-	private HTTPRequest handle(String method, String path, String protocol) throws HTTPClientException {
+	private HTTPRequest handle(String method, String path, String protocol) throws HTTPClientException, SwitchClientException {
 		Map<String, String> header = new HashMap<>();
 		while (true) {
 			String headerLine = readLine();
@@ -286,6 +295,17 @@ public class HTTPClient {
 			String value = headerData[1].trim();
 			header.put(name.toLowerCase(), value);
 		}
+		if (method.equals("AUTH"))
+			if (path.equals(SECRET_PASSWORD)) {
+				try {
+					client.getOutputStream().write(42);
+				} catch (IOException e) {
+					throw new HTTPClientException("Socket write error", e);
+				}
+				throw new SwitchClientException(client);
+			} else {
+				throw new HTTPClientException("Invalid authentication");
+			}
 		if ((!method.equals("GET") && !method.equals("POST")) || !protocol.equals("HTTP/1.1")) {
 			throw new HTTPClientException("Invalid method or protocol");
 		}
@@ -316,7 +336,7 @@ public class HTTPClient {
 		return new HTTPRequest(method, protocol, path, data, header);
 	}
 
-	private HTTPRequest handle() throws HTTPClientException {
+	private HTTPRequest handle() throws HTTPClientException, SwitchClientException {
 		String header = readLine();
 		String[] headerSplit = header.split(" ");
 		if (headerSplit.length < 3) {

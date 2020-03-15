@@ -1,20 +1,25 @@
 package cz.rion.buildserver;
 
+import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.exceptions.GoLinkExecutionException;
 import cz.rion.buildserver.exceptions.HTTPServerException;
 import cz.rion.buildserver.exceptions.NasmExecutionException;
 import cz.rion.buildserver.exceptions.RuntimeExecutionException;
 import cz.rion.buildserver.http.HTTPServer;
+import cz.rion.buildserver.ui.MainWindow;
 import cz.rion.buildserver.wrappers.NasmWrapper;
 import cz.rion.buildserver.wrappers.NasmWrapper.RunResult;
 
 public class MAIN {
 
 	public static void main(String[] args) {
-		HTTPServer server = new HTTPServer(8000);
+		MainWindow wnd = new MainWindow();
+
+		HTTPServer server;
 		try {
+			server = new HTTPServer(8000);
 			server.run();
-		} catch (HTTPServerException e) {
+		} catch (HTTPServerException | DatabaseException e) {
 			e.printStackTrace();
 		}
 	}
