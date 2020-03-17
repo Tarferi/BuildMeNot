@@ -1,0 +1,56 @@
+{
+	"title":"Test vynásobení dvou čísel",
+	"id":"test02",
+	"init": "%include \"rw32-2018.inc\"
+
+section .data
+	sMessage db \"Hello World!\",EOL,0
+
+section .text
+
+CMAIN:
+	push ebp
+	mov ebp,esp
+
+	mov esi,sMessage
+	call WriteString
+
+	; zde muzete psat vas kod
+
+	pop ebp
+	ret",
+	"description":"Implementujte kód v asembleru, který načte 2 8-bitová čísla z klávesnice a vypíše jejich násobek<br />ve formátu \"a*b=c\", kde \"a\" a \"b\" jsou načtené vstupy z klávesnice a \"c\" je součin",
+	"id": "test01",
+	"tests":
+		[
+			{
+				"stdin": "5\r\n10\r\n",
+				"stdout": "15",
+				"stderr": "",
+				"code": 0,
+				"timeout": 1000
+			},
+			{
+				"stdin": "-5\r\n10\r\n",
+				"stdout": "5",
+				"stderr": "",
+				"code": 0,
+				"timeout": 1000
+			},
+			{
+				"stdin": "-5\r\n-10\r\n",
+				"stdout": "-15",
+				"stderr": "",
+				"code": 0,
+				"timeout": 1000
+			},
+			{
+				"stdin": "-5\r\n-10\r\n",
+				"stdout": "-25",
+				"stderr": "",
+				"code": 0,
+				"timeout": 1000
+			}
+
+		]
+}
