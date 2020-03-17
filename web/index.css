@@ -1,0 +1,91 @@
+.log_err {
+	color: red;
+}
+
+.txtWrap {
+	display: inline-block;
+	width: 500px;
+	height: 380px;
+	border: 1px solid black;
+	padding: 0px;
+	margin: 0px;
+	padding-bottom: 10px;
+}
+
+.txtWrap>textarea {
+	width: 495px;
+	height: 340px;
+	padding-left: 5px;
+	padding-top: 10px;
+	padding-right: 0px;
+	padding-bottom: -10px;
+	outline: none;
+	border-left: none;
+	border-right: none;
+	border-top: none;
+	border-bottom: 1px solid black;
+	background: #fafafa;
+	font-family: courier;
+	resize: none;
+}
+
+.txtDescr {
+	margin-left: -4px;
+	padding-left: 5px;
+	display: block;
+	padding-bottom: 10px;
+	vertical-align: top;
+	display: inline-block;
+	border-right: 1px solid black;
+	border-top: 1px solid black;
+	border-bottom: 1px solid black;
+	width: 500px;
+	height: 380px;
+	padding-bottom: 10px;
+}
+
+.txtDescrName {
+	display: block;
+	width: 100%;
+	height: 32px;
+	background: #daffff;
+	text-align: center;
+	font-family: tahoma;
+	font-size: 20pt;
+	border-bottom: 1px solid black;
+}
+
+.txtDescrNameSolution {
+	background: #ffddcc;
+}
+
+.pnlControls {
+	display: block;
+	height: 80px;
+	padding-left: 4px;
+}
+
+.pnlControls>button {
+	width: 150px;
+	height: 28px;
+}
+
+.txtTest {
+	display: block;
+	padding-bottom: 80px;
+}
+
+.txtTest .txtTestLbl {
+	width: 1484px;
+	background: #eeeeee;
+	display: block;
+	border-left: 1px solid black;
+	border-right: 1px solid black;
+	border-top: 1px solid black;
+	border-bottom: 0px;
+	font-family: tahoma;
+	font-size: 20pt;
+	text-align: left;
+	padding-left: 20px;
+	padding-top: 5px;
+}

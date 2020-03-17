@@ -3,8 +3,10 @@ package cz.rion.buildserver.http;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.Socket;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import cz.rion.buildserver.db.MyDB;
@@ -16,8 +18,11 @@ import cz.rion.buildserver.exceptions.RuntimeExecutionException;
 import cz.rion.buildserver.exceptions.SwitchClientException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
+import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonNumber;
 import cz.rion.buildserver.json.JsonValue.JsonString;
+import cz.rion.buildserver.test.AsmTest;
+import cz.rion.buildserver.test.TestManager;
 import cz.rion.buildserver.wrappers.FileReadException;
 import cz.rion.buildserver.wrappers.MyFS;
 import cz.rion.buildserver.wrappers.NasmWrapper;
@@ -58,6 +63,7 @@ public class HTTPClient {
 	private final Socket client;
 	private int builderID;
 	private final String SECRET_PASSWORD = "abc";
+	private final TestManager tests;
 
 	private void close() {
 		try {
@@ -66,12 +72,14 @@ public class HTTPClient {
 		}
 	}
 
-	public HTTPClient(Socket client) {
+	public HTTPClient(TestManager tests, Socket client) {
 		this.client = client;
+		this.tests = tests;
 	}
-	
+
 	private JsonObject returnValue = null;
 	private String asm = "";
+	private String test_id = "";
 
 	public void run(MyDB db, int builderID) throws SwitchClientException, DatabaseException {
 		this.builderID = builderID;
@@ -214,9 +222,14 @@ public class HTTPClient {
 			if (json != null) {
 				if (json.isObject()) {
 					JsonObject obj = json.asObject();
-					if (obj.containsString("asm")) {
+					if (obj.containsString("asm") && obj.containsString("id")) {
 
+						test_id  = obj.getString("id").Value;
 						asm = obj.getString("asm").Value;
+						
+						returnValue = tests.run(builderID, test_id, asm);
+						
+						/*
 						String stdin = "";
 						if (obj.containsString("stdin")) {
 							stdin = obj.getString("stdin").Value;
@@ -269,8 +282,29 @@ public class HTTPClient {
 
 						returnValue.add("code", new JsonNumber(code));
 						returnValue.add("result", new JsonString(codeDescription));
+						*/
+					} else if(obj.containsString("action")) {
+						String act = obj.getString("action").Value;
+						if(act.equals("COLLECT")) {
+							
+							List<AsmTest> tsts = tests.getAllTests();
+							List<JsonValue> d =new ArrayList<>();
+							
+							for(AsmTest tst:tsts) {
+								JsonObject tobj = new JsonObject();
+								// {"title":"TEST1", "init": "tohle je uvodni cast", "zadani":"Implementujte XXX YYY", "id": "test01"}
+								tobj.add("title", new JsonString(tst.getTitle()));
+								tobj.add("zadani", new JsonString(tst.getDescription()));
+								tobj.add("init", new JsonString(tst.getInitialCode()));
+								tobj.add("id", new JsonString(tst.getID()));
+								d.add(tobj);
+							}
+							
+							returnValue.add("code", new JsonNumber(0));
+							returnValue.add("tests", new JsonArray(d));
+						}
 					}
-				}
+				} 
 			}
 		}
 		String resutJson = returnValue.getJsonString();

@@ -15,15 +15,19 @@ public class NasmWrapper {
 		public final MyExecResult nasm;
 		public final MyExecResult golink;
 		public final MyExecResult runtime;
+		public final String exePath;
+		public final String exeName;
 
-		private RunResult(MyExecResult nasm, MyExecResult golink, MyExecResult runtime) {
+		private RunResult(MyExecResult nasm, MyExecResult golink, MyExecResult runtime, String exePath, String exeName) {
 			this.nasm = nasm;
 			this.golink = golink;
 			this.runtime = runtime;
+			this.exePath = exePath;
+			this.exeName = exeName;
 		}
 	}
 
-	public static RunResult runRaw(String workingDir, String asm, String stdin, int timeout) throws NasmExecutionException, GoLinkExecutionException, RuntimeExecutionException {
+	public static RunResult runRaw(String workingDir, String asm, String stdin, int timeout, boolean runExe) throws NasmExecutionException, GoLinkExecutionException, RuntimeExecutionException {
 		try {
 			MyFS.writeFile(workingDir + "/run.asm", asm);
 		} catch (FileWriteException e) {
@@ -53,28 +57,31 @@ public class NasmWrapper {
 		if (linkResult.returnCode != 0) {
 			throw new GoLinkExecutionException("GoLink returned " + linkResult.returnCode, null, linkResult);
 		}
-
-		MyExecResult runtime;
-		try {
-			runtime = MyExec.execute(workingDir, stdin, workingDir + "/run.exe", new String[0], timeout);
-		} catch (CommandLineExecutionException e) {
-			throw new RuntimeExecutionException("Failed to run result file", e);
+		if (runExe) {
+			MyExecResult runtime;
+			try {
+				runtime = MyExec.execute(workingDir, stdin, workingDir + "/run.exe", new String[0], timeout);
+			} catch (CommandLineExecutionException e) {
+				throw new RuntimeExecutionException("Failed to run result file", e);
+			}
+			return new RunResult(nasmResult, linkResult, runtime, workingDir, "/run.exe");
 		}
-		return new RunResult(nasmResult, linkResult, runtime);
-
+		return new RunResult(nasmResult, linkResult, null, workingDir, "/run.exe");
 	}
 
 	public static void clean(String workingDir) {
-		MyFS.deleteFileSilent(workingDir+"/run.asm");
-		MyFS.deleteFileSilent(workingDir+"/run.obj");
-		MyFS.deleteFileSilent(workingDir+"/run.exe");
-		MyFS.deleteFileSilent(workingDir+"/rw32-2018.inc");
+		MyFS.deleteFileSilent(workingDir + "/run.asm");
+		MyFS.deleteFileSilent(workingDir + "/run.obj");
+		MyFS.deleteFileSilent(workingDir + "/run.exe");
+		MyFS.deleteFileSilent(workingDir + "/rw32-2018.inc");
 	}
-	
-	public static RunResult run(String workingDir, String asm, String stdin, int timeout) throws NasmExecutionException, GoLinkExecutionException, RuntimeExecutionException {
+
+	public static RunResult run(String workingDir, String asm, String stdin, int timeout, boolean clean, boolean runExe) throws NasmExecutionException, GoLinkExecutionException, RuntimeExecutionException {
 		try {
-			RunResult result = runRaw(workingDir, asm, stdin, timeout);
-			clean(workingDir);
+			RunResult result = runRaw(workingDir, asm, stdin, timeout, runExe);
+			if (clean) {
+				clean(workingDir);
+			}
 			return result;
 		} catch (NasmExecutionException | GoLinkExecutionException | RuntimeExecutionException e) {
 			clean(workingDir);

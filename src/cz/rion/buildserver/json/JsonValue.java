@@ -8,6 +8,11 @@ import java.util.Map.Entry;
 
 public abstract class JsonValue {
 
+	@Override
+	public String toString() {
+		return this.getJsonString();
+	}
+
 	public boolean isString() {
 		return false;
 	}
@@ -142,7 +147,6 @@ public abstract class JsonValue {
 			} else if (c == '{') {
 				inst.nextChar(true);
 				boolean foundEnd = false;
-
 				if (inst.isCurrentWhiteSpace()) {
 					inst.nextChar(true);
 				}
@@ -189,6 +193,7 @@ public abstract class JsonValue {
 				inst.nextChar(true);
 				return new JsonObject(data);
 			} else if (c == '[') {
+				inst.nextChar(true);
 				List<JsonValue> values = new ArrayList<>();
 				boolean foundEnd = false;
 				if (inst.isCurrentWhiteSpace()) {
@@ -200,16 +205,16 @@ public abstract class JsonValue {
 						if (val == null) {
 							return null;
 						}
+						values.add(val);
 						if (inst.isCurrentWhiteSpace()) {
 							inst.nextChar(true);
 						}
 						if (inst.getCurrentChar() == ',') {
 							inst.nextChar(true);
-						} else if (inst.getCurrentChar() != ']') {
+						} else if (inst.getCurrentChar() == ']') {
 							foundEnd = true;
 							break;
 						}
-						values.add(val);
 					}
 					if (!foundEnd) {
 						return null;
@@ -289,11 +294,11 @@ public abstract class JsonValue {
 					sb.append("\\\\");
 				} else if (c == '"') {
 					sb.append("\\\"");
-				} else if (c == 't') {
+				} else if (c == '\t') {
 					sb.append("\\t");
-				} else if (c == 'f') {
+				} else if (c == '\f') {
 					sb.append("\\f");
-				} else if (c == 'b') {
+				} else if (c == '\b') {
 					sb.append("\\b");
 				} else if (c >= 32 && c <= 126) {
 					sb.append((char) b);

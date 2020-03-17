@@ -10,6 +10,7 @@ import cz.rion.buildserver.BuildThread;
 import cz.rion.buildserver.db.MyDB;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.exceptions.HTTPServerException;
+import cz.rion.buildserver.test.TestManager;
 import cz.rion.buildserver.ui.provider.RemoteUIProviderServer;
 
 public class HTTPServer {
@@ -19,6 +20,8 @@ public class HTTPServer {
 	private final int port;
 	public final List<BuildThread> builders = new ArrayList<>();
 	private final RemoteUIProviderServer remoteUI = new RemoteUIProviderServer(this);
+
+	private final TestManager tests = new TestManager("./web/tests");
 
 	public final MyDB db;
 
@@ -65,7 +68,7 @@ public class HTTPServer {
 			} catch (IOException e) {
 				throw new HTTPServerException("Failed to accept client on port " + port, e);
 			}
-			HTTPClient myClient = new HTTPClient(client);
+			HTTPClient myClient = new HTTPClient(tests, client);
 			getBuilder().addJob(myClient);
 		}
 	}
