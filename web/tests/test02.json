@@ -20,33 +20,32 @@ CMAIN:
 	pop ebp
 	ret",
 	"description":"Implementujte kód v asembleru, který načte 2 8-bitová čísla z klávesnice a vypíše jejich násobek<br />ve formátu \"a*b=c\", kde \"a\" a \"b\" jsou načtené vstupy z klávesnice a \"c\" je součin",
-	"id": "test01",
 	"tests":
 		[
 			{
 				"stdin": "5\r\n10\r\n",
-				"stdout": "15",
+				"stdout": "Zadejte cele cislo se znamenkem z intervalu <-128,127>: Zadejte cele cislo se znamenkem z intervalu <-128,127>: 50",
 				"stderr": "",
 				"code": 0,
 				"timeout": 1000
 			},
 			{
 				"stdin": "-5\r\n10\r\n",
-				"stdout": "5",
+				"stdout": "Zadejte cele cislo se znamenkem z intervalu <-128,127>: Zadejte cele cislo se znamenkem z intervalu <-128,127>: -50",
 				"stderr": "",
 				"code": 0,
 				"timeout": 1000
 			},
 			{
 				"stdin": "-5\r\n-10\r\n",
-				"stdout": "-15",
+				"stdout": "Zadejte cele cislo se znamenkem z intervalu <-128,127>: Zadejte cele cislo se znamenkem z intervalu <-128,127>: 50",
 				"stderr": "",
 				"code": 0,
 				"timeout": 1000
 			},
 			{
 				"stdin": "-5\r\n-10\r\n",
-				"stdout": "-25",
+				"stdout": "Zadejte cele cislo se znamenkem z intervalu <-128,127>: Zadejte cele cislo se znamenkem z intervalu <-128,127>: -50",
 				"stderr": "",
 				"code": 0,
 				"timeout": 1000
