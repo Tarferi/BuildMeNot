@@ -1,6 +1,9 @@
 .log_err {
 	color: red;
 }
+.log_ok {
+	color: green;
+}
 
 .txtWrap {
 	display: inline-block;

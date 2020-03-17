@@ -25,9 +25,9 @@ public class MAIN {
 	}
 
 	public static void main2(String[] args) {
-		String code = "%include \"rw32-2018.inc\"\r\n" + "\r\n" + "section .data\r\n" + "	sMessage db \"Hello World!\",EOL,0\r\n" + "\r\n" + "section .text\r\n" + "\r\n" + "CMAIN:\r\n" + "	push ebp\r\n" + "	mov ebp,esp\r\n" + "\r\n" + "	mov esi,sMessage\r\n" + "	call WriteString\r\n" + "\r\n" + "; zde muzete psat vas kod\r\n" + "\r\n" + "	pop ebp\r\n" + "	ret\r\n" + "";
+		String code = "%include \"rw32-2018.inc\"\r\n" + "\r\n" + "section .data\r\n" + "	sMessage db \"Hello World!\",EOL,0\r\n" + "\r\n" + "section .text\r\n" + "\r\n" + "CMAIN:\r\n" + "	push ebp\r\n" + "	mov ebp,esp\r\n" + "\r\n" + "	mov esi,sMessage\r\n" + "	call ReadInt8\r\n" + "call WriteInt8\r\n"+ "call WriteInt8\r\n" + "; zde muzete psat vas kod\r\n" + "\r\n" + "	pop ebp\r\n" + "	ret\r\n" + "";
 		try {
-			RunResult result = NasmWrapper.run("test01", code, "", 2000, false, false);
+			RunResult result = NasmWrapper.run("test01", code, "10\r\n15\r\n", 2000, true, true);
 			return;
 		} catch (NasmExecutionException e) {
 			e.printStackTrace();

@@ -58,6 +58,7 @@ public class MyExec {
 		}
 		try {
 			p.getOutputStream().write(stdin.getBytes());
+			p.getOutputStream().close();
 		} catch (IOException e) {
 			throw new CommandLineExecutionException("Failed to write to STDIN", e);
 		}
