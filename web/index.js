@@ -291,6 +291,7 @@ function runTest(tesx) {
 	
 	var cbFail = function(descr) {
 		console.log(descr);
+		descr = dec(descr);
 		tesx.setSolution(descr);
 		setAllTestsEnabled(true);
 	}
