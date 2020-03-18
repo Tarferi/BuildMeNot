@@ -18,7 +18,7 @@ public class BuilderPanel extends JPanel {
 		setBorder(new LineBorder(new Color(0, 0, 0)));
 		this.thr = thr;
 		this.setOpaque(false);
-		setLayout(new MigLayout("", "[][][120][][][grow]", "[][][][grow]"));
+		setLayout(new MigLayout("", "[][][80:n,grow][][][][][80:n,grow][][][grow]", "[][][][grow]"));
 
 		JLabel lblBulider = new JLabel("Bulider#" + thr.ID);
 		lblBulider.setFont(new Font("Tahoma", Font.PLAIN, 16));
@@ -30,11 +30,22 @@ public class BuilderPanel extends JPanel {
 		JLabel lblStatus = new JLabel(thr.Status.title);
 		add(lblStatus, "cell 1 1");
 
-		JLabel lblTotalProcessed = new JLabel("Total processed:");
+		JLabel lblTotalProcessed = new JLabel("Tests evaluated:");
 		add(lblTotalProcessed, "cell 3 1,alignx right");
 
-		JLabel lblTotal = new JLabel("" + thr.TotalJobsFinished);
-		add(lblTotal, "cell 4 1");
+		JLabel lblPassed = new JLabel(thr.Stats.getTotalJobsPassed() + "");
+		lblPassed.setForeground(new Color(0, 153, 102));
+		add(lblPassed, "cell 4 1");
+
+		JLabel label = new JLabel("/");
+		add(label, "cell 5 1");
+
+		JLabel lblAll = new JLabel("" + (thr.Stats.getTotalJobsFinished() - thr.Stats.getTotalJobsPassed()));
+		lblAll.setForeground(new Color(204, 0, 0));
+		add(lblAll, "cell 6 1");
+
+		JLabel lblNewLabel = new JLabel("Resource load:");
+		add(lblNewLabel, "cell 8 1,alignx right");
 
 		JLabel lblQueueSize = new JLabel("Queue size:");
 		add(lblQueueSize, "cell 0 2,alignx right");
@@ -42,11 +53,20 @@ public class BuilderPanel extends JPanel {
 		JLabel lblQueue = new JLabel("" + thr.QueueSize);
 		add(lblQueue, "cell 1 2");
 
-		JLabel lblPastHours = new JLabel("Past 24 hours:");
-		add(lblPastHours, "cell 3 2,alignx right");
+		JLabel lblPageLoaded = new JLabel("Page loads:");
+		add(lblPageLoaded, "cell 3 2,alignx right");
 
-		JLabel lblRecent = new JLabel("<recent>");
-		add(lblRecent, "cell 4 2");
+		JLabel lblPageLoad = new JLabel(thr.Stats.getHTMLJobs() + "");
+		add(lblPageLoad, "cell 4 2 3 1");
+
+		JLabel lblNewLabel_1 = new JLabel("Hack attempts:");
+		add(lblNewLabel_1, "cell 8 2,alignx right,aligny baseline");
+
+		JLabel lblResLoad = new JLabel(thr.Stats.getTotalResourceJobs() + "");
+		add(lblResLoad, "cell 9 1");
+
+		JLabel lblHacks = new JLabel(thr.Stats.getHTMLJobs() + "");
+		add(lblHacks, "cell 9 2,aligny bottom");
 	}
 
 }

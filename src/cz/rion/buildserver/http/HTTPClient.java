@@ -12,10 +12,7 @@ import java.util.Map;
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.MyDB;
 import cz.rion.buildserver.exceptions.DatabaseException;
-import cz.rion.buildserver.exceptions.GoLinkExecutionException;
 import cz.rion.buildserver.exceptions.HTTPClientException;
-import cz.rion.buildserver.exceptions.NasmExecutionException;
-import cz.rion.buildserver.exceptions.RuntimeExecutionException;
 import cz.rion.buildserver.exceptions.SwitchClientException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
@@ -26,10 +23,12 @@ import cz.rion.buildserver.test.AsmTest;
 import cz.rion.buildserver.test.TestManager;
 import cz.rion.buildserver.wrappers.FileReadException;
 import cz.rion.buildserver.wrappers.MyFS;
-import cz.rion.buildserver.wrappers.NasmWrapper;
-import cz.rion.buildserver.wrappers.NasmWrapper.RunResult;
 
 public class HTTPClient {
+
+	public static enum HTTPClientIntentType {
+		GET_RESOURCE, GET_HTML, PERFORM_TEST, HACK, ADMIN
+	}
 
 	public static class HTTPResponse {
 		public final String protocol;
@@ -82,17 +81,36 @@ public class HTTPClient {
 	private JsonObject returnValue = null;
 	private String asm = "";
 	private String test_id = "";
+	private HTTPClientIntentType intentType = HTTPClientIntentType.HACK;
+	private boolean testsPassed = false;
+
+	private String getReducedResult() {
+		if (returnValue != null) {
+			JsonObject nobj = new JsonObject();
+			nobj.add("code", returnValue.asObject().getNumber("code"));
+			nobj.add("result", returnValue.asObject().getString("result"));
+			return nobj.getJsonString();
+		} else {
+			return "{\"code\":1, \"result\":\"compilation failure\"}";
+		}
+	}
 
 	public void run(MyDB db, int builderID) throws SwitchClientException, DatabaseException {
 		this.builderID = builderID;
+		boolean keepAlive = false;
 		try {
 			try {
 				handle(handle(handle()));
 			} catch (HTTPClientException e) {
+			} catch (SwitchClientException e) {
+				keepAlive = true;
+				throw e;
 			}
-			db.storeCompilation(client.getRemoteSocketAddress().toString(), new Date(), asm, returnValue.getJsonString());
+			db.storeCompilation(client.getRemoteSocketAddress().toString(), new Date(), asm, getReducedResult());
 		} finally {
-			close();
+			if (!keepAlive) {
+				close();
+			}
 		}
 	}
 
@@ -148,13 +166,16 @@ public class HTTPClient {
 				endPoint = "index.html";
 			}
 			String[] allowed = new String[] { "index.html", "index.css", "index.js" };
+			boolean isAllowed = false;
 			for (String allow : allowed) {
 				if (allow.equals(endPoint)) {
 					try {
 						String fileContents = MyFS.readFile("./web/" + endPoint);
 						data = fileContents.getBytes();
+						intentType = HTTPClientIntentType.GET_RESOURCE;
 						if (allow.endsWith(".html")) {
 							type = "text/html; charset=UTF-8";
+							intentType = HTTPClientIntentType.GET_HTML;
 						} else if (allow.endsWith(".js")) {
 							type = "text/js; charset=UTF-8";
 						} else if (allow.endsWith(".css")) {
@@ -165,11 +186,14 @@ public class HTTPClient {
 						returnCodeDescription = "Not Found";
 						data = ("Nemuzu precist: " + endPoint).getBytes();
 					}
+					isAllowed = true;
 					break;
 				}
 			}
+			if (!isAllowed) {
+				intentType = HTTPClientIntentType.GET_RESOURCE;
+			}
 		}
-
 		return new HTTPResponse(request.protocol, returnCode, returnCodeDescription, data, type);
 	}
 
@@ -227,6 +251,7 @@ public class HTTPClient {
 			System.arraycopy(data, 2, newData, 0, data.length - 2);
 			data = newData;
 		}
+		intentType = HTTPClientIntentType.PERFORM_TEST;
 		returnValue = new JsonObject();
 		returnValue.add("code", new JsonNumber(1));
 		returnValue.add("result", new JsonString("Internal error"));
@@ -242,6 +267,7 @@ public class HTTPClient {
 						asm = obj.getString("asm").Value;
 
 						returnValue = tests.run(builderID, test_id, asm);
+						testsPassed = returnValue.containsNumber("code") ? returnValue.getNumber("code").Value == 0 : false;
 
 						/*
 						 * String stdin = ""; if (obj.containsString("stdin")) { stdin =
@@ -330,17 +356,19 @@ public class HTTPClient {
 			String value = headerData[1].trim();
 			header.put(name.toLowerCase(), value);
 		}
-		if (method.equals("AUTH"))
+		if (method.equals("AUTH")) {
 			if (path.equals(Settings.getPasscode())) {
 				try {
 					client.getOutputStream().write(42);
 				} catch (IOException e) {
 					throw new HTTPClientException("Socket write error", e);
 				}
+				intentType = HTTPClientIntentType.ADMIN;
 				throw new SwitchClientException(client);
 			} else {
 				throw new HTTPClientException("Invalid authentication");
 			}
+		}
 		if ((!method.equals("GET") && !method.equals("POST")) || !protocol.equals("HTTP/1.1")) {
 			throw new HTTPClientException("Invalid method or protocol");
 		}
@@ -382,6 +410,14 @@ public class HTTPClient {
 		String path = header.substring(method.length() + 1);
 		path = path.substring(0, path.length() - (protocol.length() + 1));
 		return handle(method, path, protocol);
+	}
+
+	public HTTPClientIntentType getIntent() {
+		return intentType;
+	}
+
+	public boolean haveTestsPassed() {
+		return testsPassed;
 	}
 
 }

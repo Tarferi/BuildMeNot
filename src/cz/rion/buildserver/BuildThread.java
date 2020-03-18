@@ -13,7 +13,55 @@ public class BuildThread {
 
 	private final int ID;
 	private final HTTPServer server;
-	int totalJobsFinished = 0;
+
+	public static final class BuilderStats {
+		private int totalJobsFinished = 0;
+		private int totalHackJobs = 0;
+		private int totalResourceJobs = 0;
+		private int totalHTMLJobs = 0;
+		private int totalAdminJobs = 0;
+		private int totalJobsPassed = 0;
+
+		public int getTotalJobsFinished() {
+			return totalJobsFinished;
+		}
+
+		public int getTotalJobsPassed() {
+			return totalJobsPassed;
+		}
+
+		public int getTotlaHackJobs() {
+			return totalHackJobs;
+		}
+
+		public int getTotalResourceJobs() {
+			return totalResourceJobs;
+		}
+
+		public int getHTMLJobs() {
+			return totalHTMLJobs;
+		}
+
+		public int getTotalAdminJobs() {
+			return totalAdminJobs;
+		}
+		
+		private BuilderStats() {
+			this(0, 0, 0, 0, 0, 0);
+		}
+
+		public BuilderStats(int totalJobsFinished, int totalHackJobs, int totalResourceJobs, int totalHTMLJobs, int totalAdminJobs, int totalJobsPassed) {
+			this.totalAdminJobs = totalAdminJobs;
+			this.totalHackJobs = totalHackJobs;
+			this.totalHTMLJobs = totalHTMLJobs;
+			this.totalJobsFinished = totalJobsFinished;
+			this.totalResourceJobs = totalResourceJobs;
+			this.totalJobsPassed = totalJobsPassed;
+
+		}
+	}
+
+	private final BuilderStats stats = new BuilderStats();
 
 	private final List<HTTPClient> jobs = new ArrayList<>();
 	private boolean waiting = false;
@@ -33,6 +81,26 @@ public class BuildThread {
 		thread.start();
 	}
 
+	private void account(HTTPClient.HTTPClientIntentType type) {
+		switch (type) {
+		case ADMIN:
+			stats.totalAdminJobs++;
+			break;
+		case GET_HTML:
+			stats.totalHTMLJobs++;
+			break;
+		case GET_RESOURCE:
+			stats.totalResourceJobs++;
+			break;
+		case HACK:
+			stats.totalHackJobs++;
+			break;
+		case PERFORM_TEST:
+			stats.totalJobsFinished++;
+			break;
+		}
+	}
+
 	private void async() {
 		thread.setName("Worker " + ID);
 		while (true) {
@@ -46,13 +114,14 @@ public class BuildThread {
 					}
 				}
 				client = jobs.remove(0);
-				totalJobsFinished++;
 			}
 			try {
 				client.run(db, ID);
 			} catch (SwitchClientException e) {
 				server.addRemoteUIClient(e.socket);
 			} catch (Exception | Error e) {
+			} finally {
+				account(client.getIntent());
 			}
 		}
 	}
@@ -63,9 +132,9 @@ public class BuildThread {
 		}
 	}
 
-	public int getTotalFinishedJobs() {
+	public BuilderStats getBuilderStats() {
 		synchronized (jobs) {
-			return totalJobsFinished;
+			return stats;
 		}
 	}
 

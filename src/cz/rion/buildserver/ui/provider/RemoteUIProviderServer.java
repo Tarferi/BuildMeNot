@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import cz.rion.buildserver.BuildThread;
+import cz.rion.buildserver.BuildThread.BuilderStats;
 import cz.rion.buildserver.http.HTTPServer;
 
 public class RemoteUIProviderServer {
@@ -13,7 +14,7 @@ public class RemoteUIProviderServer {
 	public static int readInt(Socket sock) throws IOException {
 		byte[] data = new byte[4];
 		sock.getInputStream().read(data);
-		return (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | (data[3]);
+		return ((data[0] & 0xff) << 24) | ((data[1] & 0xff) << 16) | ((data[2] & 0xff) << 8) | (data[3] & 0xff) & 0xffffffff;
 	}
 
 	public static void writeInt(Socket sock, int x) throws IOException {
@@ -73,8 +74,14 @@ public class RemoteUIProviderServer {
 			int totalBuilders = server.builders.size();
 			writeInt(client, totalBuilders);
 			for (BuildThread builder : server.builders) {
+				BuilderStats stats = builder.getBuilderStats();
 				writeInt(client, builder.getQueueSize());
-				writeInt(client, builder.getTotalFinishedJobs());
+				writeInt(client, stats.getTotalJobsFinished());
+				writeInt(client, stats.getTotalAdminJobs());
+				writeInt(client, stats.getHTMLJobs());
+				writeInt(client, stats.getTotalResourceJobs());
+				writeInt(client, stats.getTotlaHackJobs());
+				writeInt(client, stats.getTotalJobsPassed());
 				writeInt(client, builder.getBuilderStatus().code);
 			}
 		}

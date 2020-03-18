@@ -68,7 +68,7 @@ public class TestManager {
 	}
 
 	public List<AsmTest> getAllTests() {
-		//reloadTests();
+		reloadTests();
 		return tests;
 	}
 

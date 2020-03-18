@@ -24,7 +24,8 @@ public class JsonTestManager {
 		private final List<TestVerificationData> tests;
 		private final String description;
 		private final String title;
-		private final String concat;
+		private final String prepend;
+		private final String append;
 
 		@Override
 		public String getID() {
@@ -39,6 +40,8 @@ public class JsonTestManager {
 				try {
 					MyExecResult result = input.execute(test.stdin, test.arguments, test.timeout);
 					if (!result.stdout.equals(test.stdout) || !result.stderr.equals(test.stderr) || result.returnCode != test.code) {
+						passed++;
+						passed--;
 					} else {
 						passed++;
 					}
@@ -54,13 +57,14 @@ public class JsonTestManager {
 			}
 		}
 
-		private JsonTest(String id, String title, String description, List<TestVerificationData> tests, String initialASM, String concat) {
+		private JsonTest(String id, String title, String description, List<TestVerificationData> tests, String initialASM, String append, String prepend) {
 			this.id = id;
 			this.title = title;
 			this.description = description;
 			this.tests = tests;
 			this.initialASM = initialASM;
-			this.concat = concat;
+			this.prepend = prepend;
+			this.append = append;
 		}
 
 		@Override
@@ -80,9 +84,9 @@ public class JsonTestManager {
 
 		@Override
 		public String CodeValid(String asm) {
-			if (concat.contains("_main:") || concat.contains("CMAIN")) {
+			if (prepend.contains("_main:") || prepend.contains("CMAIN") || append.contains("_main:") || append.contains("CMAIN")) {
 				if (!asm.contains("_main:") && !asm.contains("CMAIN")) {
-					return asm + "\r\n" + concat;
+					return prepend + "\r\n" + asm + "\r\n" + append;
 				} else {
 					return null;
 				}
@@ -187,10 +191,11 @@ public class JsonTestManager {
 							String id = obj.getString("id").Value;
 							String description = obj.getString("description").Value;
 							String title = obj.getString("title").Value;
-							String concat = obj.containsString("concat") ? obj.getString("concat").Value : "";
+							String prepend = obj.containsString("prepend") ? obj.getString("prepend").Value : "";
+							String append = obj.containsString("append") ? obj.getString("append").Value : "";
 
 							String initialASM = obj.containsString("init") ? obj.getString("init").Value : "";
-							lst.add(new JsonTest(id, title, description, tvd, initialASM, concat));
+							lst.add(new JsonTest(id, title, description, tvd, initialASM, append, prepend));
 						}
 					}
 				}

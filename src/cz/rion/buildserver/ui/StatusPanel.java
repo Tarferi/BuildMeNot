@@ -7,7 +7,6 @@ import net.miginfocom.swing.MigLayout;
 import javax.swing.JScrollPane;
 import javax.swing.border.TitledBorder;
 
-import cz.rion.buildserver.BuildThread;
 import cz.rion.buildserver.ui.UIDriver.BuildThreadInfo;
 import cz.rion.buildserver.ui.UIDriver.GetBuilderCallback;
 import cz.rion.buildserver.ui.UIDriver.Status;
@@ -42,6 +41,7 @@ public class StatusPanel extends JPanel {
 		setLayout(new MigLayout("", "[grow]", "[grow][grow]"));
 
 		JScrollPane scrollPane = new JScrollPane();
+		scrollPane.getVerticalScrollBar().setUnitIncrement(16);
 		scrollPane.setBorder(new TitledBorder(null, "Builders", TitledBorder.LEADING, TitledBorder.TOP, null, null));
 		add(scrollPane, "cell 0 0,grow");
 
@@ -50,6 +50,7 @@ public class StatusPanel extends JPanel {
 		pnlBuilders.setLayout(new MigLayout("", "[grow]", "[][][][][]"));
 
 		JScrollPane scrollPane_1 = new JScrollPane();
+		scrollPane_1.getVerticalScrollBar().setUnitIncrement(16);
 		scrollPane_1.setBorder(new TitledBorder(null, "Status", TitledBorder.LEADING, TitledBorder.TOP, null, null));
 		add(scrollPane_1, "cell 0 1,grow");
 
@@ -78,7 +79,7 @@ public class StatusPanel extends JPanel {
 				@Override
 				public void noBuildersBecauseOfError() {
 					// TODO Auto-generated method stub
-					
+
 				}
 			});
 		} else if (status == UIDriver.Status.DISCONNECTED) {

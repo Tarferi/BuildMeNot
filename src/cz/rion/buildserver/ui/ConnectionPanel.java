@@ -6,7 +6,6 @@ import javax.swing.JLabel;
 import javax.swing.JTextField;
 
 import cz.rion.buildserver.Settings;
-import cz.rion.buildserver.ui.UIDriver.LoginCallback;
 import cz.rion.buildserver.ui.UIDriver.Status;
 
 import javax.swing.JButton;
@@ -61,7 +60,7 @@ public class ConnectionPanel extends JPanel implements UIDriver.LoginCallback {
 		txtAuth = new JTextField();
 		add(txtAuth, "cell 1 1,growx,aligny top");
 		txtAuth.setColumns(10);
-		txtServer.setText("127.0.0.1:8000");
+		txtServer.setText("127.0.0.1:" + Settings.GetHTTPServerPort());
 		txtAuth.setText(Settings.getPasscode());
 	}
 

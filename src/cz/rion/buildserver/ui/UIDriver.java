@@ -9,7 +9,7 @@ import java.util.List;
 
 import javax.swing.SwingUtilities;
 
-import cz.rion.buildserver.BuildThread;
+import cz.rion.buildserver.BuildThread.BuilderStats;
 import cz.rion.buildserver.ui.provider.RemoteUIProviderServer;
 import cz.rion.buildserver.ui.provider.RemoteUIProviderServer.BuilderStatus;
 
@@ -27,13 +27,13 @@ public class UIDriver {
 	public static class BuildThreadInfo {
 		public final int ID;
 		public final int QueueSize;
-		public final int TotalJobsFinished;
+		public final BuilderStats Stats;
 		public final BuilderStatus Status;
 
-		public BuildThreadInfo(int id, int size, int total, BuilderStatus bs) {
+		public BuildThreadInfo(int id, int size, BuilderStats stats, BuilderStatus bs) {
 			this.ID = id;
 			this.QueueSize = size;
-			this.TotalJobsFinished = total;
+			this.Stats = stats;
 			this.Status = bs;
 		}
 	}
@@ -210,9 +210,16 @@ public class UIDriver {
 								int totalBuilders = RemoteUIProviderServer.readInt(client);
 								for (int i = 0; i < totalBuilders; i++) {
 									int queueSize = RemoteUIProviderServer.readInt(client);
-									int totalJobs = RemoteUIProviderServer.readInt(client);
+
+									int totalJobsFinished = RemoteUIProviderServer.readInt(client);
+									int totalAdminJobs = RemoteUIProviderServer.readInt(client);
+									int totalHTMLJobs = RemoteUIProviderServer.readInt(client);
+									int totalResourceJobs = RemoteUIProviderServer.readInt(client);
+									int totalHackJobs = RemoteUIProviderServer.readInt(client);
+									int totalJobsPassed = RemoteUIProviderServer.readInt(client);
+									BuilderStats stats = new BuilderStats(totalJobsFinished, totalHackJobs, totalResourceJobs, totalHTMLJobs, totalAdminJobs, totalJobsPassed);
 									BuilderStatus bs = BuilderStatus.values()[RemoteUIProviderServer.readInt(client)];
-									builders.add(new BuildThreadInfo(i, queueSize, totalJobs, bs));
+									builders.add(new BuildThreadInfo(i, queueSize, stats, bs));
 								}
 								SwingUtilities.invokeLater(nonfailer);
 							} catch (IOException e) {
