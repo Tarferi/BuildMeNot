@@ -16,8 +16,9 @@ public class Settings {
 	private final boolean showUI;
 	private final int httpPort;
 	private final String passcode;
+	private final int buildThreads;
 
-	private Settings(String objExt, String rtExt, String nasm, String golink, String[] golinkparams, String[] nasmparams, boolean showUI, String nasmPath, String golinkPath, int httpPort, String passcode) {
+	private Settings(String objExt, String rtExt, String nasm, String golink, String[] golinkparams, String[] nasmparams, boolean showUI, String nasmPath, String golinkPath, int httpPort, String passcode, int buildThreads) {
 		this.objName = objExt;
 		this.rtName = rtExt;
 		this.nasmExecutable = nasm;
@@ -29,6 +30,7 @@ public class Settings {
 		this.golinkPath = golinkPath;
 		this.httpPort = httpPort;
 		this.passcode = passcode;
+		this.buildThreads = buildThreads;
 	}
 
 	private static Settings load() {
@@ -40,6 +42,7 @@ public class Settings {
 		String golinkPath = "";
 		int httpPort = 8000;
 		String passcode = "abc";
+		int buildThreads = 8;
 
 		boolean showUI = true;
 		String[] golinkparams = new String[] { "/mix", "msvcrt.dll", "kernel32.dll" };
@@ -89,10 +92,16 @@ public class Settings {
 					}
 				} else if (key.equals("passcode")) {
 					passcode = val;
+				} else if (key.equals("buildThreads")) {
+					try {
+						buildThreads = Integer.parseInt(val);
+					} catch (Exception e) {
+
+					}
 				}
 			}
 		}
-		return new Settings(objName, rtName, nasm, golink, golinkparams, nasmparams, showUI, nasmPath, golinkPath, httpPort, passcode);
+		return new Settings(objName, rtName, nasm, golink, golinkparams, nasmparams, showUI, nasmPath, golinkPath, httpPort, passcode, buildThreads);
 	}
 
 	private static Settings instance = load();
@@ -136,8 +145,12 @@ public class Settings {
 	public static int GetHTTPServerPort() {
 		return instance.httpPort;
 	}
-	
+
 	public static String getPasscode() {
 		return instance.passcode;
+	}
+
+	public static int getBuildersCount() {
+		return instance.buildThreads;
 	}
 }

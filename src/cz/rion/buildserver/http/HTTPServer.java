@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import cz.rion.buildserver.BuildThread;
+import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.MyDB;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.exceptions.HTTPServerException;
@@ -14,8 +15,6 @@ import cz.rion.buildserver.test.TestManager;
 import cz.rion.buildserver.ui.provider.RemoteUIProviderServer;
 
 public class HTTPServer {
-
-	private static final int TOTAL_BUILDERS = 8;
 
 	private final int port;
 	public final List<BuildThread> builders = new ArrayList<>();
@@ -45,7 +44,7 @@ public class HTTPServer {
 	public HTTPServer(int port) throws DatabaseException {
 		this.db = new MyDB("data.sqlite");
 		this.port = port;
-		for (int i = 0; i < TOTAL_BUILDERS; i++) {
+		for (int i = 0; i < Settings.getBuildersCount(); i++) {
 			builders.add(new BuildThread(this, i));
 		}
 	}
