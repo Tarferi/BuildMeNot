@@ -5,6 +5,8 @@ import cz.rion.buildserver.test.TestManager.TestResult;
 
 public interface AsmTest {
 
+	public String CodeValid(String asm);
+	
 	public String getID();
 
 	public String getDescription();

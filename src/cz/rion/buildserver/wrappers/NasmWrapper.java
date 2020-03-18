@@ -1,5 +1,6 @@
 package cz.rion.buildserver.wrappers;
 
+import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.exceptions.CommandLineExecutionException;
 import cz.rion.buildserver.exceptions.FileWriteException;
 import cz.rion.buildserver.exceptions.GoLinkExecutionException;
@@ -40,7 +41,14 @@ public class NasmWrapper {
 		}
 		MyExecResult nasmResult;
 		try {
-			nasmResult = MyExec.execute(workingDir, "", NASM_PATH + "/nasm.exe", new String[] { "-f", "win32", "run.asm", "-o", "run.obj" }, 5000);
+			String[] nparams = Settings.getNasmExecutableParams();
+			String[] params = new String[3 + nparams.length];
+			params[0] = "run.asm";
+			params[1] = "-o";
+			params[2] = Settings.getObjectFileName();
+			System.arraycopy(nparams, 0, params, 3, nparams.length);
+
+			nasmResult = MyExec.execute(workingDir, "", Settings.getNasmPath() + "/" + Settings.getNasmExecutableName(), params, 5000);
 		} catch (CommandLineExecutionException e) {
 			throw new NasmExecutionException("Failed to run NASM on source file", e);
 		}
@@ -50,7 +58,12 @@ public class NasmWrapper {
 
 		MyExecResult linkResult;
 		try {
-			linkResult = MyExec.execute(workingDir, "", NASM_PATH + "/GoLink.exe", new String[] { "run.obj", "/console", "/mix", "msvcrt.dll", "kernel32.dll" }, 5000);
+			String[] nparams = Settings.getGoLinkExecutableParams();
+			String[] params = new String[1 + nparams.length];
+			params[0] = Settings.getObjectFileName();
+			System.arraycopy(nparams, 0, params, 1, nparams.length);
+
+			linkResult = MyExec.execute(workingDir, "", Settings.getGoLinkPath() + "/" + Settings.getGoLinkExecutableName(), params, 5000);
 		} catch (CommandLineExecutionException e) {
 			throw new GoLinkExecutionException("Failed to run GoLink on object file", e);
 		}
@@ -60,19 +73,19 @@ public class NasmWrapper {
 		if (runExe) {
 			MyExecResult runtime;
 			try {
-				runtime = MyExec.execute(workingDir, stdin, workingDir + "/run.exe", new String[0], timeout);
+				runtime = MyExec.execute(workingDir, stdin, workingDir + "/" + Settings.getExecutableFileName(), new String[0], timeout);
 			} catch (CommandLineExecutionException e) {
 				throw new RuntimeExecutionException("Failed to run result file", e);
 			}
-			return new RunResult(nasmResult, linkResult, runtime, workingDir, "/run.exe");
+			return new RunResult(nasmResult, linkResult, runtime, workingDir, "/" + Settings.getExecutableFileName());
 		}
-		return new RunResult(nasmResult, linkResult, null, workingDir, "/run.exe");
+		return new RunResult(nasmResult, linkResult, null, workingDir, "/" + Settings.getExecutableFileName());
 	}
 
 	public static void clean(String workingDir) {
 		MyFS.deleteFileSilent(workingDir + "/run.asm");
-		MyFS.deleteFileSilent(workingDir + "/run.obj");
-		MyFS.deleteFileSilent(workingDir + "/run.exe");
+		MyFS.deleteFileSilent(workingDir + "/" + Settings.getObjectFileName());
+		MyFS.deleteFileSilent(workingDir + "/" + Settings.getExecutableFileName());
 		MyFS.deleteFileSilent(workingDir + "/rw32-2018.inc");
 	}
 

@@ -35,12 +35,14 @@ public class HTTPClient {
 		public final int code;
 		public final String codeDescription;
 		public final byte[] data;
+		public final String contentType;
 
-		private HTTPResponse(String protocol, int code, String codeDescription, byte[] data) {
+		private HTTPResponse(String protocol, int code, String codeDescription, byte[] data, String contentType) {
 			this.protocol = protocol;
 			this.code = code;
 			this.codeDescription = codeDescription;
 			this.data = data;
+			this.contentType = contentType;
 		}
 	}
 
@@ -121,6 +123,7 @@ public class HTTPClient {
 		try {
 			client.getOutputStream().write((response.protocol + " " + response.code + " " + response.codeDescription + "\r\n").getBytes());
 			client.getOutputStream().write(("Connection: close\r\n").getBytes());
+			client.getOutputStream().write(("Content-Type: " + response.contentType + "\r\n").getBytes());
 			client.getOutputStream().write(("Content-Length: " + response.data.length + "\r\n").getBytes());
 			client.getOutputStream().write(("\r\n").getBytes());
 			client.getOutputStream().write(response.data);
@@ -131,6 +134,7 @@ public class HTTPClient {
 
 	private HTTPResponse handle(HTTPRequest request) throws HTTPClientException {
 		int returnCode = 200;
+		String type = "multipart/form-data;";
 		String returnCodeDescription = "OK";
 		byte[] data = ("\"" + request.path + "\" neumim!").getBytes();
 		if (request.path.equals("/test") && request.method.equals("POST") && request.data.length > 0) {
@@ -146,6 +150,13 @@ public class HTTPClient {
 					try {
 						String fileContents = MyFS.readFile("./web/" + endPoint);
 						data = fileContents.getBytes();
+						if (allow.endsWith(".html")) {
+							type = "text/html; charset=UTF-8";
+						} else if (allow.endsWith(".js")) {
+							type = "text/js; charset=UTF-8";
+						} else if (allow.endsWith(".css")) {
+							type = "text/css";
+						}
 					} catch (FileReadException e) {
 						returnCode = 404;
 						returnCodeDescription = "Not Found";
@@ -156,7 +167,7 @@ public class HTTPClient {
 			}
 		}
 
-		return new HTTPResponse(request.protocol, returnCode, returnCodeDescription, data);
+		return new HTTPResponse(request.protocol, returnCode, returnCodeDescription, data, type);
 	}
 
 	private static int fromHex(char c) throws HTTPClientException {
@@ -224,87 +235,74 @@ public class HTTPClient {
 					JsonObject obj = json.asObject();
 					if (obj.containsString("asm") && obj.containsString("id")) {
 
-						test_id  = obj.getString("id").Value;
+						test_id = obj.getString("id").Value;
 						asm = obj.getString("asm").Value;
-						
+
 						returnValue = tests.run(builderID, test_id, asm);
-						
+
 						/*
-						String stdin = "";
-						if (obj.containsString("stdin")) {
-							stdin = obj.getString("stdin").Value;
-						}
-
-						returnValue = new JsonObject();
-
-						int code = 0;
-						String codeDescription = "OK";
-
-						JsonObject nasm = new JsonObject();
-						JsonObject link = new JsonObject();
-						JsonObject run = new JsonObject();
-
-						run.add("stdin", new JsonString(stdin));
-						try {
-							RunResult result = NasmWrapper.run("./test" + builderID, asm, stdin, 2000);
-							run.add("returnCode", new JsonNumber(result.runtime.returnCode));
-							run.add("stdout", new JsonString(result.runtime.stdout));
-							run.add("stderr", new JsonString(result.runtime.stderr));
-
-							nasm.add("returnCode", new JsonNumber(result.nasm.returnCode));
-							nasm.add("stdout", new JsonString(result.nasm.stdout));
-							nasm.add("stderr", new JsonString(result.nasm.stderr));
-
-							link.add("returnCode", new JsonNumber(result.golink.returnCode));
-							link.add("stdout", new JsonString(result.golink.stdout));
-							link.add("stderr", new JsonString(result.golink.stderr));
-
-							returnValue.add("run", run);
-							returnValue.add("nasm", nasm);
-							returnValue.add("link", link);
-
-						} catch (NasmExecutionException e) {
-							code = 1;
-							codeDescription = "Failed to run NASM";
-							nasm.add("error", new JsonString(e.description));
-							returnValue.add("nasm", nasm);
-						} catch (GoLinkExecutionException e) {
-							code = 1;
-							codeDescription = "Failed to run GoLink";
-							link.add("error", new JsonString(e.description));
-							returnValue.add("link", link);
-						} catch (RuntimeExecutionException e) {
-							code = 1;
-							codeDescription = "Failed to run compiled binary";
-							run.add("error", new JsonString(e.description));
-							returnValue.add("run", run);
-						}
-
-						returnValue.add("code", new JsonNumber(code));
-						returnValue.add("result", new JsonString(codeDescription));
-						*/
-					} else if(obj.containsString("action")) {
+						 * String stdin = ""; if (obj.containsString("stdin")) { stdin =
+						 * obj.getString("stdin").Value; }
+						 * 
+						 * returnValue = new JsonObject();
+						 * 
+						 * int code = 0; String codeDescription = "OK";
+						 * 
+						 * JsonObject nasm = new JsonObject(); JsonObject link = new JsonObject();
+						 * JsonObject run = new JsonObject();
+						 * 
+						 * run.add("stdin", new JsonString(stdin)); try { RunResult result =
+						 * NasmWrapper.run("./test" + builderID, asm, stdin, 2000);
+						 * run.add("returnCode", new JsonNumber(result.runtime.returnCode));
+						 * run.add("stdout", new JsonString(result.runtime.stdout)); run.add("stderr",
+						 * new JsonString(result.runtime.stderr));
+						 * 
+						 * nasm.add("returnCode", new JsonNumber(result.nasm.returnCode));
+						 * nasm.add("stdout", new JsonString(result.nasm.stdout)); nasm.add("stderr",
+						 * new JsonString(result.nasm.stderr));
+						 * 
+						 * link.add("returnCode", new JsonNumber(result.golink.returnCode));
+						 * link.add("stdout", new JsonString(result.golink.stdout)); link.add("stderr",
+						 * new JsonString(result.golink.stderr));
+						 * 
+						 * returnValue.add("run", run); returnValue.add("nasm", nasm);
+						 * returnValue.add("link", link);
+						 * 
+						 * } catch (NasmExecutionException e) { code = 1; codeDescription =
+						 * "Failed to run NASM"; nasm.add("error", new JsonString(e.description));
+						 * returnValue.add("nasm", nasm); } catch (GoLinkExecutionException e) { code =
+						 * 1; codeDescription = "Failed to run GoLink"; link.add("error", new
+						 * JsonString(e.description)); returnValue.add("link", link); } catch
+						 * (RuntimeExecutionException e) { code = 1; codeDescription =
+						 * "Failed to run compiled binary"; run.add("error", new
+						 * JsonString(e.description)); returnValue.add("run", run); }
+						 * 
+						 * returnValue.add("code", new JsonNumber(code)); returnValue.add("result", new
+						 * JsonString(codeDescription));
+						 */
+					} else if (obj.containsString("action")) {
 						String act = obj.getString("action").Value;
-						if(act.equals("COLLECT")) {
-							
+						if (act.equals("COLLECT")) {
+
 							List<AsmTest> tsts = tests.getAllTests();
-							List<JsonValue> d =new ArrayList<>();
-							
-							for(AsmTest tst:tsts) {
+							List<JsonValue> d = new ArrayList<>();
+
+							for (AsmTest tst : tsts) {
 								JsonObject tobj = new JsonObject();
-								// {"title":"TEST1", "init": "tohle je uvodni cast", "zadani":"Implementujte XXX YYY", "id": "test01"}
+								// {"title":"TEST1", "init": "tohle je uvodni cast", "zadani":"Implementujte XXX
+								// YYY", "id": "test01"}
 								tobj.add("title", new JsonString(tst.getTitle()));
 								tobj.add("zadani", new JsonString(tst.getDescription()));
 								tobj.add("init", new JsonString(tst.getInitialCode()));
 								tobj.add("id", new JsonString(tst.getID()));
 								d.add(tobj);
 							}
-							
+
 							returnValue.add("code", new JsonNumber(0));
 							returnValue.add("tests", new JsonArray(d));
 						}
 					}
-				} 
+				}
 			}
 		}
 		String resutJson = returnValue.getJsonString();

@@ -1,4 +1,7 @@
-﻿function toHex(c) {
+
+var allTests = [];
+
+function toHex(c) {
 	if (c >= 0 && c <= 9) {
 		return (c + '0'.charCodeAt(0));
 	} else if (c >= 10 && c <= 15) {
@@ -13,7 +16,7 @@ function encode(bdata) {
 	for (var i = 0; i < bdata.length; i++) {
 		var c = bdata.charCodeAt(i);
 		var c1 = toHex(c >> 4);
-		var c2 = toHex(c & 0b1111);
+		var c2 = toHex(c & 15);
 		if (c1 === false || c2 === false) {
 			return false;
 		}
@@ -160,7 +163,7 @@ function testI(data) {
 		this.rs.innerHTML = data;
 	}
 	
-	var getNewElement = function(parent, tagName, className = false, contents = false) {
+	var getNewElement2 = function(parent, tagName, className, contents) {
 		var wr = document.createElement(tagName);
 		if (className !== false) {
 			if(typeof(className) == typeof("str")){
@@ -176,6 +179,14 @@ function testI(data) {
 		}
 		parent.appendChild(wr);
 		return wr;
+	}
+	
+	var getNewElement1 = function(parent, tagName, className) {
+		return getNewElement2(parent, tagName, className, false);
+	}
+	
+	var getNewElement0 = function(parent, tagName) {
+		return getNewElement1(parent, tagName, false);
 	}
 	
 	var setup = function() {
@@ -202,24 +213,25 @@ function testI(data) {
 		el.classList.add("txtTest");
 		
 		
-		getNewElement(el, "div", "txtTestLbl", data.title);
+		getNewElement2(el, "div", "txtTestLbl", data.title);
 		
-		var wr = getNewElement(el, "div", "txtWrap");
+		var wr = getNewElement1(el, "div", "txtWrap");
 		
-		self.ta = getNewElement(wr, "textarea", "txtAsm", data.init);
-		var pc = getNewElement(wr, "div", "pnlControls");
-		self.b1 = getNewElement(pc, "button", false, "Otestovat řešení");
+		self.ta = getNewElement2(wr, "textarea", "txtAsm", data.init);
+		
+		var pc = getNewElement1(wr, "div", "pnlControls");
+		self.b1 = getNewElement2(pc, "button", false, "Otestovat řešení");
 			
 
 		// Zadani
-		var pz = getNewElement(el, "div", "txtDescr");
-		getNewElement(pz, "div", "txtDescrName", "Popis");
-		getNewElement(pz, "span", "txtDescrTxt", data.zadani)
+		var pz = getNewElement1(el, "div", "txtDescr");
+		getNewElement2(pz, "div", "txtDescrName", "Popis");
+		getNewElement2(pz, "span", "txtDescrTxt", data.zadani)
 		
 		// Reseni
-		var sl = getNewElement(el, "div", "txtDescr");
-		getNewElement(sl, "div", ["txtDescrName", "txtDescrNameSolution"], "&#344;ešení");
-		self.rs = getNewElement(sl, "span", "txtDescrSolutionLog", "Zde se objevi detaily testů tvého řešení")
+		var sl = getNewElement1(el, "div", "txtDescr");
+		getNewElement2(sl, "div", ["txtDescrName", "txtDescrNameSolution"], "&#344;ešení");
+		self.rs = getNewElement2(sl, "span", "txtDescrSolutionLog", "Zde se objevi detaily testů tvého řešení")
 		setup();
 		return el;
 	};
@@ -290,11 +302,54 @@ function runTest(tesx) {
 	};
 	
 	var cbFail = function(descr) {
-		console.log(descr);
 		descr = dec(descr);
 		tesx.setSolution(descr);
 		setAllTestsEnabled(true);
 	}
 	tesx.setSolution(dec("Vyhodnocuji test..."));
 	submit(tesx.getID(), tesx.getASM(), cbOK, cbFail);
+}
+
+function materialize(data) {
+	id_indiv.innerHTML = "";
+	allTests = [];
+	for(var i = 0; i <data.length; i++) {
+		data[i].title = dec(data[i].title);
+		data[i].id = dec(data[i].id);
+		data[i].zadani = dec(data[i].zadani);
+		data[i].init = dec(data[i].init);
+		var dataI = new testI(data[i]);
+		allTests[allTests.length] = dataI;
+		id_indiv.appendChild(dataI.getElement());
+	}
+}
+
+function loadRemoteTests() {
+	var cbFail = function(data) {
+		id_loader.innerHTML = dec(data);
+		id_loader.classList.remove("loader");
+		id_loader.classList.add("loader_error");
+	};
+	var cbOk = function(data) {
+		var deco = decode(data);
+		if(deco!==false){
+			var jsn = JSON.parse(deco);
+			if(jsn!==false){
+				if(jsn.code === 0) {
+					materialize(jsn.tests);		
+				} else {
+					cbFail(dec("Nepodařilo se nahrát testy: <br />" + jsn.result));
+				}
+				return;
+			}
+		}
+		cbFail(dec("Nepodařilo se dekódovat testy"));
+	};
+	var data = {"action":"COLLECT"}
+	var txtEnc = "q=" + encode(JSON.stringify(data));
+	async(txtEnc, cbOk, cbFail);
+}
+
+function aload() {
+	loadRemoteTests();
 }

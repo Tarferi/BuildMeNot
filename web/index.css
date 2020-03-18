@@ -4,6 +4,27 @@
 .log_ok {
 	color: green;
 }
+.in_code {
+	display: inline-block;
+	margin-top: 5px;
+	padding-left: 5px;
+	padding-right: 5px;
+	background: #eeeeee;
+	border: 1px solid #cccccc;
+	font-family: courier;
+}
+.in_code_line {
+	display: block;
+	margin-top: 8px;
+	margin-bottom: 8px;
+	padding-top: 5px;
+	padding-left: 5px;
+	margin-right: 5px;
+	padding-bottom: 5px;
+	background: #eeeeee;
+	border: 1px solid #cccccc;
+	font-family: courier;
+}
 
 .txtWrap {
 	display: inline-block;
@@ -45,6 +66,13 @@
 	width: 500px;
 	height: 380px;
 	padding-bottom: 10px;
+}
+
+.txtDescrTxt {
+	display: inline-block;
+	padding-left: 5px;
+	padding-top: 5px;
+	padding-right: 8px;
 }
 
 .txtDescrName {
@@ -92,3 +120,22 @@
 	padding-left: 20px;
 	padding-top: 5px;
 }
+
+.loader {
+	position: fixed;
+	left:calc(50% - 120px);
+	top:calc(50% - 80px);
+	width: 120px;
+	border: 5px solid green;
+	padding: 80px;
+}
+
+.loader_error {
+	position: fixed;
+	left:calc(50% - 240px);
+	top:calc(50% - 80px);
+	width: 240px;
+	border: 5px solid red;
+	padding: 80px;
+}
+

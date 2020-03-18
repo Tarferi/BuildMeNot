@@ -8,6 +8,10 @@ public class NasmExecutionException extends Exception {
 	private final Exception exception;
 	private final MyExecResult execResult;
 
+	public String getDescription() {
+		return execResult == null ? description : description + ": " + execResult.stdout + "\n" + execResult.stderr;
+	}
+
 	public NasmExecutionException(String description) {
 		this(description, null);
 	}

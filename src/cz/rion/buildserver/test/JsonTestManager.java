@@ -24,6 +24,7 @@ public class JsonTestManager {
 		private final List<TestVerificationData> tests;
 		private final String description;
 		private final String title;
+		private final String concat;
 
 		@Override
 		public String getID() {
@@ -32,25 +33,34 @@ public class JsonTestManager {
 
 		@Override
 		public TestResult perform(TestInput input) {
+			int total = tests.size();
+			int passed = 0;
 			for (TestVerificationData test : tests) {
 				try {
 					MyExecResult result = input.execute(test.stdin, test.arguments, test.timeout);
 					if (!result.stdout.equals(test.stdout) || !result.stderr.equals(test.stderr) || result.returnCode != test.code) {
-						return new TestResult(false, "<span class='log_err'>Chyba: pro testovací vstupy nesouhlasí výstupy!</span>");
+					} else {
+						passed++;
 					}
 				} catch (CommandLineExecutionException e) {
 					return new TestResult(false, "<span class='log_err'>Nepodaøilo se spustit test</span>");
 				}
 			}
-			return new TestResult(true, "<span class='log_ok'>Test prošel :)</span>");
+			if (passed == total) {
+				return new TestResult(true, "<span class='log_ok'>Test prošel :)</span>");
+			} else {
+				int perc = (passed * 100) / total;
+				return new TestResult(false, "<span class='log_err'>Chyba: Prošlo " + perc + "% testù!</span>");
+			}
 		}
 
-		private JsonTest(String id, String title, String description, List<TestVerificationData> tests, String initialASM) {
+		private JsonTest(String id, String title, String description, List<TestVerificationData> tests, String initialASM, String concat) {
 			this.id = id;
 			this.title = title;
 			this.description = description;
 			this.tests = tests;
 			this.initialASM = initialASM;
+			this.concat = concat;
 		}
 
 		@Override
@@ -66,6 +76,18 @@ public class JsonTestManager {
 		@Override
 		public String getTitle() {
 			return id + ": " + title;
+		}
+
+		@Override
+		public String CodeValid(String asm) {
+			if (concat.contains("_main:") || concat.contains("CMAIN")) {
+				if (!asm.contains("_main:") && !asm.contains("CMAIN")) {
+					return asm + "\r\n" + concat;
+				} else {
+					return null;
+				}
+			}
+			return asm;
 		}
 	}
 
@@ -165,9 +187,10 @@ public class JsonTestManager {
 							String id = obj.getString("id").Value;
 							String description = obj.getString("description").Value;
 							String title = obj.getString("title").Value;
+							String concat = obj.containsString("concat") ? obj.getString("concat").Value : "";
 
 							String initialASM = obj.containsString("init") ? obj.getString("init").Value : "";
-							lst.add(new JsonTest(id, title, description, tvd, initialASM));
+							lst.add(new JsonTest(id, title, description, tvd, initialASM, concat));
 						}
 					}
 				}

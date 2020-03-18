@@ -68,6 +68,7 @@ public class TestManager {
 	}
 
 	public List<AsmTest> getAllTests() {
+		//reloadTests();
 		return tests;
 	}
 
@@ -84,29 +85,32 @@ public class TestManager {
 			code = 1;
 			message = "<span class='log_err'>Uvedený test nebyl nalezen</span>";
 		} else {
-
-			RunResult result = null;
-			try {
-				result = NasmWrapper.run("./test" + builderID, asm, "", 2000, false, false);
-			} catch (NasmExecutionException e) {
-				code = 1;
-				message = "<span class='log_err'>Nepodaøilo se pøeložit kód</span>";
-			} catch (GoLinkExecutionException e) {
-				message = "<span class='log_err'>Nepodaøilo se pøeložit kód</span>";
-			} catch (RuntimeExecutionException e) { // Should never happen
-				message = "<span class='log_err'>Nepodaøilo se pøeložit kód</span>";
+			asm = test.CodeValid(asm);
+			if (asm == null) {
+				message = "<span class='log_err'>Neplatný kód. Pravdìpodobnì nesmí být definované návìští _main ani CMAIN</span>";
+			} else {
+				RunResult result = null;
+				try {
+					result = NasmWrapper.run("./test" + builderID, asm, "", 2000, false, false);
+				} catch (NasmExecutionException e) {
+					code = 1;
+					message = "<span class='log_err'>Nepodaøilo se pøeložit kód<br />" + e.getDescription().replaceAll("\n", "<br />") + "</span>";
+				} catch (GoLinkExecutionException e) {
+					message = "<span class='log_err'>Nepodaøilo se pøeložit kód</span>";
+				} catch (RuntimeExecutionException e) { // Should never happen
+					message = "<span class='log_err'>Nepodaøilo se pøeložit kód</span>";
+				}
+				TestResult testResult = null;
+				if (result != null) {
+					TestInput input = new TestInput(result.exePath, result.exeName);
+					testResult = test.perform(input);
+					NasmWrapper.clean(result.exePath);
+				}
+				if (testResult != null) {
+					code = testResult.passed ? 0 : 1;
+					message = testResult.data;
+				}
 			}
-			TestResult testResult = null;
-			if (result != null) {
-				TestInput input = new TestInput(result.exePath, result.exeName);
-				testResult = test.perform(input);
-				NasmWrapper.clean(result.exePath);
-			}
-			if (testResult != null) {
-				code = testResult.passed ? 0 : 1;
-				message = testResult.data;
-			}
-
 		}
 		JsonObject obj = new JsonObject();
 		obj.add("code", new JsonNumber(code));
