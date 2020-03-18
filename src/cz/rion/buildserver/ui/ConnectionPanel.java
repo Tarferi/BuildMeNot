@@ -5,6 +5,7 @@ import net.miginfocom.swing.MigLayout;
 import javax.swing.JLabel;
 import javax.swing.JTextField;
 
+import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.ui.UIDriver.LoginCallback;
 import cz.rion.buildserver.ui.UIDriver.Status;
 
@@ -61,7 +62,7 @@ public class ConnectionPanel extends JPanel implements UIDriver.LoginCallback {
 		add(txtAuth, "cell 1 1,growx,aligny top");
 		txtAuth.setColumns(10);
 		txtServer.setText("127.0.0.1:8000");
-		txtAuth.setText("abc");
+		txtAuth.setText(Settings.getPasscode());
 	}
 
 	public String getTabName() {

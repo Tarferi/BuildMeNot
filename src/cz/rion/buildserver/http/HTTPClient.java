@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.MyDB;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.exceptions.GoLinkExecutionException;
@@ -64,7 +65,6 @@ public class HTTPClient {
 
 	private final Socket client;
 	private int builderID;
-	private final String SECRET_PASSWORD = "abc";
 	private final TestManager tests;
 
 	private void close() {
@@ -86,11 +86,14 @@ public class HTTPClient {
 	public void run(MyDB db, int builderID) throws SwitchClientException, DatabaseException {
 		this.builderID = builderID;
 		try {
-			handle(handle(handle()));
-		} catch (HTTPClientException e) {
+			try {
+				handle(handle(handle()));
+			} catch (HTTPClientException e) {
+			}
+			db.storeCompilation(client.getRemoteSocketAddress().toString(), new Date(), asm, returnValue.getJsonString());
+		} finally {
+			close();
 		}
-		db.storeCompilation(client.getRemoteSocketAddress().toString(), new Date(), asm, returnValue.getJsonString());
-		close();
 	}
 
 	private String readLine() throws HTTPClientException {
@@ -328,7 +331,7 @@ public class HTTPClient {
 			header.put(name.toLowerCase(), value);
 		}
 		if (method.equals("AUTH"))
-			if (path.equals(SECRET_PASSWORD)) {
+			if (path.equals(Settings.getPasscode())) {
 				try {
 					client.getOutputStream().write(42);
 				} catch (IOException e) {

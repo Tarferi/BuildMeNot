@@ -15,8 +15,9 @@ public class Settings {
 	private final String golinkPath;
 	private final boolean showUI;
 	private final int httpPort;
+	private final String passcode;
 
-	private Settings(String objExt, String rtExt, String nasm, String golink, String[] golinkparams, String[] nasmparams, boolean showUI, String nasmPath, String golinkPath, int httpPort) {
+	private Settings(String objExt, String rtExt, String nasm, String golink, String[] golinkparams, String[] nasmparams, boolean showUI, String nasmPath, String golinkPath, int httpPort, String passcode) {
 		this.objName = objExt;
 		this.rtName = rtExt;
 		this.nasmExecutable = nasm;
@@ -27,6 +28,7 @@ public class Settings {
 		this.nasmPath = nasmPath;
 		this.golinkPath = golinkPath;
 		this.httpPort = httpPort;
+		this.passcode = passcode;
 	}
 
 	private static Settings load() {
@@ -37,6 +39,7 @@ public class Settings {
 		String nasmPath = "";
 		String golinkPath = "";
 		int httpPort = 8000;
+		String passcode = "abc";
 
 		boolean showUI = true;
 		String[] golinkparams = new String[] { "/mix", "msvcrt.dll", "kernel32.dll" };
@@ -84,10 +87,12 @@ public class Settings {
 						httpPort = Integer.parseInt(val);
 					} catch (Exception e) {
 					}
+				} else if (key.equals("passcode")) {
+					passcode = val;
 				}
 			}
 		}
-		return new Settings(objName, rtName, nasm, golink, golinkparams, nasmparams, showUI, nasmPath, golinkPath, httpPort);
+		return new Settings(objName, rtName, nasm, golink, golinkparams, nasmparams, showUI, nasmPath, golinkPath, httpPort, passcode);
 	}
 
 	private static Settings instance = load();
@@ -130,5 +135,9 @@ public class Settings {
 
 	public static int GetHTTPServerPort() {
 		return instance.httpPort;
+	}
+	
+	public static String getPasscode() {
+		return instance.passcode;
 	}
 }
