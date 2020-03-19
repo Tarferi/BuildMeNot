@@ -20,7 +20,7 @@ public class BuilderPanel extends JPanel {
 		this.setOpaque(false);
 		setLayout(new MigLayout("", "[][][80:n,grow][][][][][80:n,grow][][][grow]", "[][][][grow]"));
 
-		JLabel lblBulider = new JLabel("Bulider#" + thr.ID);
+		JLabel lblBulider = new JLabel("Builder#" + thr.ID);
 		lblBulider.setFont(new Font("Tahoma", Font.PLAIN, 16));
 		add(lblBulider, "cell 0 0");
 

@@ -45,7 +45,7 @@ public class BuildThread {
 		public int getTotalAdminJobs() {
 			return totalAdminJobs;
 		}
-		
+
 		private BuilderStats() {
 			this(0, 0, 0, 0, 0, 0);
 		}
@@ -81,7 +81,7 @@ public class BuildThread {
 		thread.start();
 	}
 
-	private void account(HTTPClient.HTTPClientIntentType type) {
+	private void account(boolean ok, HTTPClient.HTTPClientIntentType type) {
 		switch (type) {
 		case ADMIN:
 			stats.totalAdminJobs++;
@@ -96,6 +96,9 @@ public class BuildThread {
 			stats.totalHackJobs++;
 			break;
 		case PERFORM_TEST:
+			if (ok) {
+				stats.totalJobsPassed++;
+			}
 			stats.totalJobsFinished++;
 			break;
 		}
@@ -121,7 +124,7 @@ public class BuildThread {
 				server.addRemoteUIClient(e.socket);
 			} catch (Exception | Error e) {
 			} finally {
-				account(client.getIntent());
+				account(client.haveTestsPassed(), client.getIntent());
 			}
 		}
 	}

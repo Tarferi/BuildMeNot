@@ -89,6 +89,7 @@ public class HTTPClient {
 			JsonObject nobj = new JsonObject();
 			nobj.add("code", returnValue.asObject().getNumber("code"));
 			nobj.add("result", returnValue.asObject().getString("result"));
+			nobj.add("test_id", new JsonString("test_id"));
 			return nobj.getJsonString();
 		} else {
 			return "{\"code\":1, \"result\":\"compilation failure\"}";
