@@ -110,7 +110,16 @@ public class HTTPClient {
 			db.storeCompilation(client.getRemoteSocketAddress().toString(), new Date(), asm, getReducedResult());
 		} finally {
 			if (!keepAlive) {
-				close();
+				try {
+					synchronized (this) {
+						this.wait(1000);
+					}
+					client.getOutputStream().flush();
+				} catch (IOException e) {
+				} catch (InterruptedException e) {
+				} finally {
+					close();
+				}
 			}
 		}
 	}
@@ -158,42 +167,60 @@ public class HTTPClient {
 		int returnCode = 200;
 		String type = "multipart/form-data;";
 		String returnCodeDescription = "OK";
-		byte[] data = ("\"" + request.path + "\" neumim!").getBytes();
-		if (request.path.startsWith("/test?cache=") && request.method.equals("POST") && request.data.length > 0) {
-			data = handleTest(request.data);
-		} else if (request.path.startsWith("/") && request.method.equals("GET")) {
-			String endPoint = request.path.substring(1);
-			if (endPoint.equals("")) {
-				endPoint = "index.html";
+
+		boolean supportedClient = false;
+		if (request.headers.containsKey("user-agent")) {
+			String agent = request.headers.get("user-agent");
+			if (agent.contains("Chrome")) {
+				supportedClient = true;
+			} else if (agent.contains("Trident")) {
+				supportedClient = true;
 			}
-			String[] allowed = new String[] { "index.html", "index.css", "index.js" };
-			boolean isAllowed = false;
-			for (String allow : allowed) {
-				if (allow.equals(endPoint)) {
-					try {
-						String fileContents = MyFS.readFile("./web/" + endPoint);
-						data = fileContents.getBytes();
-						intentType = HTTPClientIntentType.GET_RESOURCE;
-						if (allow.endsWith(".html")) {
-							type = "text/html; charset=UTF-8";
-							intentType = HTTPClientIntentType.GET_HTML;
-						} else if (allow.endsWith(".js")) {
-							type = "text/js; charset=UTF-8";
-						} else if (allow.endsWith(".css")) {
-							type = "text/css";
+		}
+
+		byte[] data = ("\"" + request.path + "\" neumim!").getBytes();
+		if (supportedClient) {
+			if (request.path.startsWith("/test?cache=") && request.method.equals("POST") && request.data.length > 0) {
+				data = handleTest(request.data);
+			} else if (request.path.startsWith("/") && request.method.equals("GET")) {
+				String endPoint = request.path.substring(1);
+				if (endPoint.equals("")) {
+					endPoint = "index.html";
+				}
+				String[] allowed = new String[] { "index.html", "index.css", "index.js" };
+				boolean isAllowed = false;
+				for (String allow : allowed) {
+					if (allow.equals(endPoint)) {
+						try {
+							String fileContents = MyFS.readFile("./web/" + endPoint);
+							data = fileContents.getBytes();
+							intentType = HTTPClientIntentType.GET_RESOURCE;
+							if (allow.endsWith(".html")) {
+								type = "text/html; charset=UTF-8";
+								intentType = HTTPClientIntentType.GET_HTML;
+							} else if (allow.endsWith(".js")) {
+								type = "text/js; charset=UTF-8";
+							} else if (allow.endsWith(".css")) {
+								type = "text/css";
+							}
+						} catch (FileReadException e) {
+							returnCode = 404;
+							returnCodeDescription = "Not Found";
+							data = ("Nemuzu precist: " + endPoint).getBytes();
 						}
-					} catch (FileReadException e) {
-						returnCode = 404;
-						returnCodeDescription = "Not Found";
-						data = ("Nemuzu precist: " + endPoint).getBytes();
+						isAllowed = true;
+						break;
 					}
-					isAllowed = true;
-					break;
+				}
+				if (!isAllowed) {
+					intentType = HTTPClientIntentType.GET_RESOURCE;
 				}
 			}
-			if (!isAllowed) {
-				intentType = HTTPClientIntentType.GET_RESOURCE;
-			}
+		} else {
+			type = "text/html; charset=UTF-8";
+			returnCode = 200;
+			returnCodeDescription = "Meh";
+			data = "Nepodporovany prohlizec! Pouzij Internet Explorer nebo Google Chrome!".getBytes();
 		}
 		return new HTTPResponse(request.protocol, returnCode, returnCodeDescription, data, type);
 	}
