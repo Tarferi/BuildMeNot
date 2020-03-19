@@ -159,7 +159,7 @@ public class HTTPClient {
 		String type = "multipart/form-data;";
 		String returnCodeDescription = "OK";
 		byte[] data = ("\"" + request.path + "\" neumim!").getBytes();
-		if (request.path.equals("/test") && request.method.equals("POST") && request.data.length > 0) {
+		if (request.path.startsWith("/test?cache=") && request.method.equals("POST") && request.data.length > 0) {
 			data = handleTest(request.data);
 		} else if (request.path.startsWith("/") && request.method.equals("GET")) {
 			String endPoint = request.path.substring(1);

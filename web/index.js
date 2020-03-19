@@ -239,9 +239,19 @@ function testI(data) {
 	return this;
 }
 
+function generateRandomString(length) {
+	var result = "";
+	var characters  = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+	var charactersLength = characters.length;
+	for (var i = 0; i < length; i++ ) {
+		result += characters.charAt(Math.floor(Math.random() * charactersLength));
+	}
+	return result;
+}
+
 function async(data, callbackOK, callbackFail) {
 	var http = new XMLHttpRequest();
-	var url = window.location.href+"test";
+	var url = window.location.href+"test?cache="+generateRandomString(10);
 	http.open("POST", url, true);
 	http.onreadystatechange = function(e) {
 		if(e.target.readyState == 4) {
