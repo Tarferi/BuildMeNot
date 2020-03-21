@@ -9,12 +9,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.regex.Matcher;
-
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.RuntimeDB;
-import cz.rion.buildserver.db.SQLiteDB;
 import cz.rion.buildserver.db.StaticDB;
+import cz.rion.buildserver.exceptions.ChangeOfSessionAddressException;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.exceptions.HTTPClientException;
 import cz.rion.buildserver.exceptions.SwitchClientException;
@@ -31,7 +29,7 @@ import cz.rion.buildserver.wrappers.MyFS;
 public class HTTPClient {
 
 	public static enum HTTPClientIntentType {
-		GET_RESOURCE, GET_HTML, PERFORM_TEST, HACK, ADMIN
+		GET_RESOURCE, GET_HTML, PERFORM_TEST, HACK, ADMIN, COLLECT_TESTS
 	}
 
 	public static class HTTPResponse {
@@ -290,14 +288,20 @@ public class HTTPClient {
 			for (String cookieSession : cookieSeessions) {
 				if (goodCookie == null) {
 					try {
-						String login = db.getLogin(cookieSession);
+						String login = db.getLogin(client.getRemoteSocketAddress().toString(), cookieSession);
 						if (login != null) { // Valid session
-							this.session_id = db.getSessionIDFromSession(cookieSession);
+							this.session_id = db.getSessionIDFromSession(client.getRemoteSocketAddress().toString(), cookieSession);
 							this.login = login;
 							this.user_id = db.getUserIDFromLogin(login);
 							goodCookie = cookieSession;
 							continue;
 						}
+					} catch (ChangeOfSessionAddressException e) { // Compromised session, delete
+						try {
+							this.db.deleteSession(cookieSession);
+						} catch (DatabaseException e1) {
+						}
+						toDelete.add(cookieSession);
 					} catch (DatabaseException e) {
 					}
 					toDelete.add(cookieSession);
@@ -318,7 +322,7 @@ public class HTTPClient {
 		// Validate token session (right after login)
 		if (request.authData != null) {
 			try {
-				String session = db.storeSession(request.authData);
+				String session = db.storeSession(client.getRemoteSocketAddress().toString(), request.authData);
 				if (session != null) { // Logged in, set cookie and redirect once more to here
 					String host = request.headers.containsKey("host") ? request.headers.get("host") : null;
 					if (host != null) {
@@ -506,8 +510,9 @@ public class HTTPClient {
 
 						} else if (obj.containsString("action")) {
 							String act = obj.getString("action").Value;
-							if (act.equals("COLLECT")) {
 
+							if (act.equals("COLLECT")) {
+								intentType = HTTPClientIntentType.COLLECT_TESTS;
 								List<AsmTest> tsts = tests.getAllTests();
 								List<JsonValue> d = new ArrayList<>();
 

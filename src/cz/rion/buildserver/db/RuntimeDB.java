@@ -5,6 +5,7 @@ import java.util.Date;
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.crypto.Crypto;
 import cz.rion.buildserver.db.crypto.CryptoManager;
+import cz.rion.buildserver.exceptions.ChangeOfSessionAddressException;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
@@ -19,7 +20,7 @@ public class RuntimeDB extends SQLiteDB {
 	public RuntimeDB(String fileName) throws DatabaseException {
 		super(fileName);
 		makeTable("users", KEY("ID"), TEXT("login"));
-		makeTable("session", KEY("ID"), TEXT("hash"), TEXT("secret"), NUMBER("live"), NUMBER("user_id"), NUMBER("last_action"), NUMBER("creation_time"));
+		makeTable("session", KEY("ID"), TEXT("address"), TEXT("hash"), NUMBER("live"), NUMBER("user_id"), NUMBER("last_action"), NUMBER("creation_time"));
 		makeTable("compilations", KEY("ID"), NUMBER("session_id"), TEXT("test_id"), NUMBER("user_id"), TEXT("address"), NUMBER("port"), TEXT("asm"), NUMBER("creation_time"), NUMBER("code"), TEXT("result"), TEXT("full"));
 		makeTable("pageLoads", KEY("ID"), NUMBER("session_id"), TEXT("address"), NUMBER("port"), TEXT("target"), NUMBER("creation_time"), NUMBER("result"));
 		makeTable("dbV1", KEY("ID"), TEXT("address"), NUMBER("port"), TEXT("asm"), TEXT("test_id"), NUMBER("creation_time"), NUMBER("code"), TEXT("result"), TEXT("full"));
@@ -100,7 +101,18 @@ public class RuntimeDB extends SQLiteDB {
 		return sb.toString();
 	}
 
-	public String storeSession(String authToken) throws DatabaseException {
+	private String getAddress(String address) {
+		String[] add = address.replaceAll("/", "").split(":");
+		if (add.length == 2) { // IPv4 ?
+			address = add[0];
+		} else { // IPv6 ?
+		}
+		return address;
+	}
+
+	public String storeSession(String address, String authToken) throws DatabaseException {
+		address = getAddress(address);
+
 		if (crypto == null) {
 			return null;
 		}
@@ -123,7 +135,7 @@ public class RuntimeDB extends SQLiteDB {
 					}
 					long now = new Date().getTime();
 					// Get live sessions
-					JsonArray res = this.select("SELECT * FROM session WHERE user_id = ? AND live = ?", user_id, 1).getJSON();
+					JsonArray res = this.select("SELECT * FROM session WHERE user_id = ? AND live = ? AND address = ?", user_id, 1, address).getJSON();
 					if (res.Value.size() == 0) { // No such session, create new
 						String newSessionToken = randomstr(32);
 						while (true) { // Must not exist already
@@ -133,14 +145,14 @@ public class RuntimeDB extends SQLiteDB {
 							}
 							newSessionToken = randomstr(32);
 						}
-						if (!this.execute("INSERT INTO session (hash, secret, live, user_id, last_action, creation_time) VALUES ('?', '?', ?, ?, ?, ?)", newSessionToken, "", 1, user_id, now, now)) {
+						if (!this.execute("INSERT INTO session (hash, address, live, user_id, last_action, creation_time) VALUES ('?', '?', ?, ?, ?, ?)", newSessionToken, address, 1, user_id, now, now)) {
 							return null;
 						}
 						res = this.select("SELECT * FROM session WHERE user_id = ?", user_id).getJSON();
 						if (res.Value.size() == 0) {
 							return null;
 						}
-					} else { // Already exists, update last_action
+					} else {
 						this.execute("UPDATE session SET last_action = ? WHERE user_id = ?", now, user_id);
 					}
 					val = res.Value.get(0);
@@ -157,15 +169,22 @@ public class RuntimeDB extends SQLiteDB {
 		return null;
 	}
 
-	public int getSessionIDFromSession(String session) throws DatabaseException {
+	public int getSessionIDFromSession(String address, String session) throws DatabaseException, ChangeOfSessionAddressException {
+		address = getAddress(address);
 		synchronized (syncer) {
 			JsonArray res = this.select("SELECT * FROM session WHERE hash = '?' AND live = ?", session, 1).getJSON();
 			if (res.Value.size() == 1) {
 				JsonValue val = res.Value.get(0);
 				if (val.isObject()) {
 					JsonObject obj = val.asObject();
-					if (obj.containsNumber("ID")) {
-						return obj.getNumber("ID").Value;
+					if (obj.containsString("address")) {
+						String addr = obj.getString("address").Value;
+						if (!addr.equals(address)) {
+							throw new ChangeOfSessionAddressException();
+						}
+						if (obj.containsNumber("ID")) {
+							return obj.getNumber("ID").Value;
+						}
 					}
 				}
 			}
@@ -173,24 +192,31 @@ public class RuntimeDB extends SQLiteDB {
 		return -1;
 	}
 
-	public String getLogin(String sessionToken) throws DatabaseException {
+	public String getLogin(String address, String sessionToken) throws DatabaseException, ChangeOfSessionAddressException {
+		address = getAddress(address);
 		synchronized (syncer) {
 			JsonArray res = this.select("SELECT * FROM session WHERE hash = '?' AND live = ?", sessionToken, 1).getJSON();
 			if (res.Value.size() == 1) {
 				JsonValue val = res.Value.get(0);
 				if (val.isObject()) {
 					JsonObject obj = val.asObject();
-					if (obj.containsNumber("user_id")) {
-						int user_id = obj.getNumber("user_id").Value;
-						res = this.select("SELECT * FROM users WHERE ID = ?", user_id).getJSON();
-						if (res.Value.size() == 1) {
-							val = res.Value.get(0);
-							if (val.isObject()) {
-								obj = val.asObject();
-								if (obj.containsString("login")) {
-									String login = obj.getString("login").Value;
-									if (login != null) {
-										return login;
+					if (obj.containsString("address")) {
+						String addr = obj.getString("address").Value;
+						if (!addr.equals(address)) {
+							throw new ChangeOfSessionAddressException();
+						}
+						if (obj.containsNumber("user_id")) {
+							int user_id = obj.getNumber("user_id").Value;
+							res = this.select("SELECT * FROM users WHERE ID = ?", user_id).getJSON();
+							if (res.Value.size() == 1) {
+								val = res.Value.get(0);
+								if (val.isObject()) {
+									obj = val.asObject();
+									if (obj.containsString("login")) {
+										String login = obj.getString("login").Value;
+										if (login != null) {
+											return login;
+										}
 									}
 								}
 							}
