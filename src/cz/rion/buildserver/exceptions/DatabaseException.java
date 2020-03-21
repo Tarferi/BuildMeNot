@@ -10,4 +10,8 @@ public class DatabaseException extends Exception {
 		this.exception = exception;
 	}
 
+	public DatabaseException(String string) {
+		this(string, null);
+	}
+
 }

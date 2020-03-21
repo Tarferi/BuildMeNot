@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import cz.rion.buildserver.db.MyDB;
+import cz.rion.buildserver.db.SQLiteDB;
 import cz.rion.buildserver.exceptions.SwitchClientException;
 import cz.rion.buildserver.http.HTTPClient;
 import cz.rion.buildserver.http.HTTPServer;
@@ -72,7 +73,7 @@ public class BuildThread {
 			async();
 		}
 	};
-	private MyDB db;
+	private final SQLiteDB db;
 
 	public BuildThread(HTTPServer server, int myID) {
 		this.ID = myID;
@@ -119,10 +120,11 @@ public class BuildThread {
 				client = jobs.remove(0);
 			}
 			try {
-				client.run(db, ID);
+				client.run(ID);
 			} catch (SwitchClientException e) {
 				server.addRemoteUIClient(e.socket);
 			} catch (Exception | Error e) {
+				e.printStackTrace();
 			} finally {
 				account(client.haveTestsPassed(), client.getIntent());
 			}

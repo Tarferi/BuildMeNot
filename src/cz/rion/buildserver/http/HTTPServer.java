@@ -9,6 +9,9 @@ import java.util.List;
 import cz.rion.buildserver.BuildThread;
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.MyDB;
+import cz.rion.buildserver.db.RuntimeDB;
+import cz.rion.buildserver.db.SQLiteDB;
+import cz.rion.buildserver.db.StaticDB;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.exceptions.HTTPServerException;
 import cz.rion.buildserver.test.TestManager;
@@ -22,7 +25,8 @@ public class HTTPServer {
 
 	private final TestManager tests = new TestManager("./web/tests");
 
-	public final MyDB db;
+	public final RuntimeDB db;
+	public final StaticDB sdb;
 
 	private BuildThread getBuilder() {
 		int min = -1;
@@ -42,7 +46,8 @@ public class HTTPServer {
 	}
 
 	public HTTPServer(int port) throws DatabaseException {
-		this.db = new MyDB("data.sqlite");
+		this.db = new RuntimeDB(Settings.getMainDB());
+		this.sdb = new StaticDB(Settings.getStaticDB());
 		this.port = port;
 		for (int i = 0; i < Settings.getBuildersCount(); i++) {
 			builders.add(new BuildThread(this, i));
@@ -67,7 +72,7 @@ public class HTTPServer {
 			} catch (IOException e) {
 				throw new HTTPServerException("Failed to accept client on port " + port, e);
 			}
-			HTTPClient myClient = new HTTPClient(tests, client);
+			HTTPClient myClient = new HTTPClient(db, sdb, tests, client);
 			getBuilder().addJob(myClient);
 		}
 	}

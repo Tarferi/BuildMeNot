@@ -48,8 +48,9 @@ public class RemoteUIProviderServer {
 		}
 	}
 
-	private final List<Socket> clients = new ArrayList<>();
+	private Socket client = null;
 	private final HTTPServer server;
+	private final Object syncer = new Object();
 
 	private final Thread thread = new Thread() {
 		@Override
@@ -63,9 +64,22 @@ public class RemoteUIProviderServer {
 		thread.start();
 	}
 
+	private void closeClient() {
+		synchronized (syncer) {
+			if (client != null) {
+				try {
+					client.close();
+				} catch (Exception e) {
+				}
+				client = null;
+			}
+		}
+	}
+
 	public void addClient(Socket socket) {
-		synchronized (clients) {
-			clients.add(socket);
+		synchronized (syncer) {
+			closeClient();
+			client = socket;
 		}
 	}
 
@@ -88,41 +102,19 @@ public class RemoteUIProviderServer {
 	}
 
 	private void async() {
-		Object syncer = new Object();
 		while (true) {
 			List<Socket> toRemove = new ArrayList<>();
-			synchronized (clients) {
-				for (Socket client : clients) {
-					int available;
-					int code = 0;
-					try {
-						available = client.getInputStream().available();
-						if (available > 0) {
-							code = client.getInputStream().read();
-							if (code >= 0 && code < Operation.values().length) {
-								handle(Operation.values()[code], client);
-							} else {
-								toRemove.add(client);
-								continue;
-							}
-						}
-					} catch (IOException e) {
+			synchronized (syncer) {
+				try {
+					int code = client.getInputStream().read();
+					if (code >= 0 && code < Operation.values().length) {
+						handle(Operation.values()[code], client);
+					} else {
 						toRemove.add(client);
 						continue;
 					}
-				}
-				for (Socket sock : toRemove) {
-					clients.remove(sock);
-					try {
-						sock.close();
-					} catch (IOException e) {
-					}
-				}
-			}
-			synchronized (syncer) {
-				try {
-					syncer.wait(200);
-				} catch (InterruptedException e) {
+				} catch (Exception e) {
+					closeClient();
 				}
 			}
 		}
