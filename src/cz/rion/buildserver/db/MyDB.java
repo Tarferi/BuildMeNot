@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
+import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
@@ -210,8 +211,8 @@ public class MyDB {
 	}
 
 	private void writeString(String str) throws IOException {
-		writeInt(str.getBytes().length);
-		fo.write(str.getBytes());
+		writeInt(str.getBytes(Settings.getDefaultCharset()).length);
+		fo.write(str.getBytes(Settings.getDefaultCharset()));
 	}
 
 	private String readString() throws IOException {

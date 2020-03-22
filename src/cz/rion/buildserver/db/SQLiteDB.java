@@ -52,9 +52,6 @@ public class SQLiteDB {
 		try {
 			String url = "jdbc:sqlite:" + fileName;
 			c = DriverManager.getConnection(url);
-
-			System.out.println("Connection to SQLite has been established.");
-
 		} catch (SQLException e) {
 			throw new DatabaseException("Failed to open database file: " + fileName, e);
 		}

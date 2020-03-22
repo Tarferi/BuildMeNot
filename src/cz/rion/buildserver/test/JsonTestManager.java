@@ -13,6 +13,7 @@ import cz.rion.buildserver.test.TestManager.TestInput;
 import cz.rion.buildserver.test.TestManager.TestResult;
 import cz.rion.buildserver.wrappers.FileReadException;
 import cz.rion.buildserver.wrappers.MyExec.MyExecResult;
+import cz.rion.buildserver.wrappers.MyExec.TestResultsExpectations;
 import cz.rion.buildserver.wrappers.MyFS;
 
 public class JsonTestManager {
@@ -36,24 +37,30 @@ public class JsonTestManager {
 		public TestResult perform(TestInput input) {
 			int total = tests.size();
 			int passed = 0;
+			TestResultsExpectations[] results = new TestResultsExpectations[tests.size()];
+			int index = 0;
 			for (TestVerificationData test : tests) {
 				try {
 					MyExecResult result = input.execute(test.stdin, test.arguments, test.timeout);
-					if (!result.stdout.equals(test.stdout) || !result.stderr.equals(test.stderr) || result.returnCode != test.code) {
+					TestResultsExpectations data = new TestResultsExpectations(test.code, result.returnCode, test.stdout, result.stdout, test.stderr, result.stderr);
+					results[index] = data;
+					if (!data.passed) {
 						passed++;
 						passed--;
 					} else {
 						passed++;
 					}
 				} catch (CommandLineExecutionException e) {
-					return new TestResult(false, "<span class='log_err'>Nepodaøilo se spustit test</span>");
+					e.printStackTrace();
+					return new TestResult(false, "<span class='log_err'>Nepodaøilo se spustit test</span>", results);
 				}
+				index++;
 			}
 			if (passed == total) {
-				return new TestResult(true, "<span class='log_ok'>Test prošel :)</span>");
+				return new TestResult(true, "<span class='log_ok'>Test prošel :)</span>", results);
 			} else {
 				int perc = (passed * 100) / total;
-				return new TestResult(false, "<span class='log_err'>Chyba: Prošlo " + perc + "% testù!</span>");
+				return new TestResult(false, "<span class='log_err'>Chyba: Prošlo " + perc + "% testù!</span>", results);
 			}
 		}
 

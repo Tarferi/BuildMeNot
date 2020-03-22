@@ -9,6 +9,7 @@ import java.util.List;
 
 import javax.swing.SwingUtilities;
 
+import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.BuildThread.BuilderStats;
 import cz.rion.buildserver.ui.provider.RemoteUIProviderServer;
 import cz.rion.buildserver.ui.provider.RemoteUIProviderServer.BuilderStatus;
@@ -154,7 +155,7 @@ public class UIDriver {
 								}
 								client = new Socket(server, port);
 								OutputStream out = client.getOutputStream();
-								out.write(("AUTH " + auth + " HTTP/1.1\r\n\r\n").getBytes());
+								out.write(("AUTH " + auth + " HTTP/1.1\r\n\r\n").getBytes(Settings.getDefaultCharset()));
 								InputStream in = client.getInputStream();
 								int code = in.read();
 								if (code != 42) {

@@ -210,16 +210,16 @@ public class HTTPClient {
 
 	private void handle(HTTPResponse response) throws HTTPClientException {
 		try {
-			client.getOutputStream().write((response.protocol + " " + response.code + " " + response.codeDescription + "\r\n").getBytes());
-			client.getOutputStream().write(("Connection: close\r\n").getBytes());
+			client.getOutputStream().write((response.protocol + " " + response.code + " " + response.codeDescription + "\r\n").getBytes(Settings.getDefaultCharset()));
+			client.getOutputStream().write(("Connection: close\r\n").getBytes(Settings.getDefaultCharset()));
 			if (response.contentType != null) {
-				client.getOutputStream().write(("Content-Type: " + response.contentType + "\r\n").getBytes());
+				client.getOutputStream().write(("Content-Type: " + response.contentType + "\r\n").getBytes(Settings.getDefaultCharset()));
 			}
 			for (Entry<String, String> entry : response.additionalHeaderFields) {
-				client.getOutputStream().write((entry.getKey() + ": " + entry.getValue() + "\r\n").getBytes());
+				client.getOutputStream().write((entry.getKey() + ": " + entry.getValue() + "\r\n").getBytes(Settings.getDefaultCharset()));
 			}
-			client.getOutputStream().write(("Content-Length: " + response.data.length + "\r\n").getBytes());
-			client.getOutputStream().write(("\r\n").getBytes());
+			client.getOutputStream().write(("Content-Length: " + response.data.length + "\r\n").getBytes(Settings.getDefaultCharset()));
+			client.getOutputStream().write(("\r\n").getBytes(Settings.getDefaultCharset()));
 			client.getOutputStream().write(response.data);
 		} catch (IOException e) {
 			throw new HTTPClientException("Failed to write response", e);
@@ -365,7 +365,7 @@ public class HTTPClient {
 			}
 		}
 
-		byte[] data = ("\"" + request.path + "\" neumim!").getBytes();
+		byte[] data = ("\"" + request.path + "\" neumim!").getBytes(Settings.getDefaultCharset());
 		if (supportedClient) {
 			if (request.path.startsWith("/test?cache=") && request.method.equals("POST") && request.data.length > 0) {
 				data = handleTest(request.data, authRedirect != null, request.authData);
@@ -387,7 +387,7 @@ public class HTTPClient {
 					if (allow.equals(endPoint)) {
 						try {
 							String fileContents = MyFS.readFile("./web/" + endPoint);
-							data = fileContents.getBytes();
+							data = fileContents.getBytes(Settings.getDefaultCharset());
 							intentType = HTTPClientIntentType.GET_RESOURCE;
 							if (allow.endsWith(".html")) {
 								type = "text/html; charset=UTF-8";
@@ -398,12 +398,12 @@ public class HTTPClient {
 								type = "text/css";
 							}
 							if (allow.equals("index.js")) {
-								data = fileContents.replace("$IDENTITY_TOKEN$", login).getBytes();
+								data = fileContents.replace("$IDENTITY_TOKEN$", login).getBytes(Settings.getDefaultCharset());
 							}
 						} catch (FileReadException e) {
 							returnCode = 404;
 							returnCodeDescription = "Not Found";
-							data = ("Nemuzu precist: " + endPoint).getBytes();
+							data = ("Nemuzu precist: " + endPoint).getBytes(Settings.getDefaultCharset());
 						}
 						isAllowed = true;
 						break;
@@ -417,7 +417,7 @@ public class HTTPClient {
 			type = "text/html; charset=UTF-8";
 			returnCode = 200;
 			returnCodeDescription = "Meh";
-			data = "Nepodporovany prohlizec! Pouzij Internet Explorer nebo Google Chrome!".getBytes();
+			data = "Nepodporovany prohlizec! Pouzij Internet Explorer nebo Google Chrome!".getBytes(Settings.getDefaultCharset());
 		}
 		if (authRedirect != null) {
 			return authRedirect;
@@ -460,7 +460,7 @@ public class HTTPClient {
 	}
 
 	private static byte[] encode(String data) throws HTTPClientException {
-		byte[] bdata = data.getBytes();
+		byte[] bdata = data.getBytes(Settings.getDefaultCharset());
 		byte[] result = new byte[bdata.length * 2];
 
 		for (int i = 0; i < bdata.length; i++) {
@@ -507,6 +507,9 @@ public class HTTPClient {
 
 							returnValue = tests.run(builderID, test_id, asm);
 							testsPassed = returnValue.containsNumber("code") ? returnValue.getNumber("code").Value == 0 : false;
+							if (!obj.containsArray("show_details") && returnValue.containsArray("details")) {
+								returnValue.remove("details");
+							}
 
 						} else if (obj.containsString("action")) {
 							String act = obj.getString("action").Value;

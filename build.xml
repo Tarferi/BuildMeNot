@@ -14,6 +14,7 @@
             </manifest>
             <fileset dir="${dir.jarfile}/bin"/>
             <zipfileset excludes="META-INF/*.SF" src="${dir.jarfile}/miglayout15-swing.jar"/>
+            <zipfileset excludes="META-INF/*.SF" src="${dir.jarfile}/sqlite.jar"/>
         </jar>
     </target>
 </project>

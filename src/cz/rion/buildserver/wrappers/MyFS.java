@@ -4,8 +4,10 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.charset.Charset;
 import java.nio.file.Files;
 
+import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.exceptions.FileWriteException;
 
 public class MyFS {
@@ -32,7 +34,7 @@ public class MyFS {
 			throw new FileWriteException("Failed to open " + fileName);
 		}
 		try {
-			fo.write(fileContents.getBytes());
+			fo.write(fileContents.getBytes(Settings.getDefaultCharset()));
 		} catch (IOException e1) {
 			try {
 				fo.close();
@@ -54,7 +56,7 @@ public class MyFS {
 		}
 		try {
 			byte[] data = Files.readAllBytes(f.toPath());
-			return new String(data);
+			return new String(data, Settings.getDefaultCharset());
 		} catch (IOException e) {
 			throw new FileReadException("Failed to read file: " + fileName, e);
 		}

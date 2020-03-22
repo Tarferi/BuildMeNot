@@ -5,9 +5,32 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.concurrent.TimeUnit;
 
+import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.exceptions.CommandLineExecutionException;
 
 public class MyExec {
+
+	public static class TestResultsExpectations {
+		public final int expectedCode;
+		public final int returnedCode;
+		public final String expectedSTDOUT;
+		public final String returnedSTDOUT;
+		public final String expectedSTDERR;
+		public final String returnedSTDERR;
+
+		public final boolean passed;
+		
+		public TestResultsExpectations(int expectedCode, int returnedCode, String expectedSTDOUT, String returnedSTDOUT, String expectedSTDERR, String returnedSTDERR) {
+			this.expectedCode = expectedCode;
+			this.returnedCode = returnedCode;
+			this.expectedSTDOUT = expectedSTDOUT;
+			this.returnedSTDOUT = returnedSTDOUT;
+			this.expectedSTDERR = expectedSTDERR;
+			this.returnedSTDERR = returnedSTDERR;
+			
+			this.passed = expectedCode == returnedCode && expectedSTDOUT.equals(returnedSTDOUT) && expectedSTDERR.equals(returnedSTDERR);
+		}
+	}
 
 	public static class MyExecResult {
 		public final int returnCode;
@@ -37,7 +60,9 @@ public class MyExec {
 				sbstdout.append(new String(buffer));
 			}
 		} catch (IOException e) {
-			throw new CommandLineExecutionException("Failed while reading STDOUT", e);
+			if (!e.getMessage().equals("Stream closed")) {
+				throw new CommandLineExecutionException("Failed while reading STDOUT", e);
+			}
 		}
 		return sbstdout.toString();
 	}
@@ -57,7 +82,7 @@ public class MyExec {
 			throw new CommandLineExecutionException("Failed to execute " + command, e);
 		}
 		try {
-			p.getOutputStream().write(stdin.getBytes());
+			p.getOutputStream().write(stdin.getBytes(Settings.getDefaultCharset()));
 			p.getOutputStream().close();
 		} catch (IOException e) {
 			throw new CommandLineExecutionException("Failed to write to STDIN", e);

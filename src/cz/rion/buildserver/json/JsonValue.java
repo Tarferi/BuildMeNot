@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
+import cz.rion.buildserver.Settings;
+
 public abstract class JsonValue {
 
 	@Override
@@ -328,7 +330,7 @@ public abstract class JsonValue {
 			
 			StringBuilder sb = new StringBuilder();
 			sb.append("\"");
-			for (byte b : newValue.getBytes()) {
+			for (byte b : newValue.getBytes(Settings.getDefaultCharset())) {
 				int c = (int) (b & 0xff);
 				if (c == '\n') {
 					sb.append("\\n");
@@ -555,6 +557,12 @@ public abstract class JsonValue {
 				sb.setLength(sb.length() - 1);
 				sb.append("}");
 				return sb.toString();
+			}
+		}
+
+		public void remove(String key) {
+			if(Value.containsKey(key)) {
+				Value.remove(key);
 			}
 		}
 	}

@@ -1,5 +1,6 @@
 package cz.rion.buildserver;
 
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -14,6 +15,7 @@ public class Settings {
 	private final SettingsValue golinkexecutable = new SettingsValue("GoLink", ValueType.STRING, "GoLink.exe");
 	private final SettingsValue golinkparams = new SettingsValue("GoLinkParams", ValueType.STRING_ARRAY, new String[] { "/mix", "msvcrt.dll", "kernel32.dll" });
 	private final SettingsValue nasmparams = new SettingsValue("NasmParams", ValueType.STRING_ARRAY, new String[] { "-f", "win32" });
+	private final SettingsValue execParams = new SettingsValue("ExecParams", ValueType.STRING_ARRAY, new String[] {});
 	private final SettingsValue nasmPath = new SettingsValue("nasmPath", ValueType.STRING, "");
 	private final SettingsValue golinkPath = new SettingsValue("GoLinkPath", ValueType.STRING, "");
 	private final SettingsValue showUI = new SettingsValue("UI", ValueType.BOOLEAN, 1);
@@ -25,6 +27,7 @@ public class Settings {
 	private final SettingsValue static_db = new SettingsValue("main_db", ValueType.STRING, "static.sqlite");
 	private final SettingsValue cookieName = new SettingsValue("cookieName", ValueType.STRING, "ISUSession");
 	private final SettingsValue authKeyFilename = new SettingsValue("authKeyFilename", ValueType.STRING, "enc.key");
+	private final SettingsValue noExecPath = new SettingsValue("noExecPath", ValueType.BOOLEAN, 0);
 
 	private List<SettingsValue> settings;
 
@@ -146,6 +149,10 @@ public class Settings {
 		return instance.golinkparams.asStringArray();
 	}
 
+	public static String[] getGExecutableParams() {
+		return instance.execParams.asStringArray();
+	}
+
 	public static boolean showUI() {
 		return instance.showUI.asBoolean();
 	}
@@ -192,5 +199,28 @@ public class Settings {
 
 	public static String getAuthKeyFilename() {
 		return instance.authKeyFilename.asString();
+	}
+
+	public static boolean hasNoExecPath() {
+		return instance.noExecPath.asBoolean();
+	}
+
+	public static Charset getDefaultCharset() {
+		/*
+		 * return new Charset(null, null) {
+		 * 
+		 * @Override public boolean contains(Charset cs) { // TODO Auto-generated method
+		 * stub return false; }
+		 * 
+		 * @Override public CharsetDecoder newDecoder() { // TODO Auto-generated method
+		 * stub return null; }
+		 * 
+		 * @Override public CharsetEncoder newEncoder() { // TODO Auto-generated method
+		 * stub return null; }
+		 * 
+		 * };
+		 */
+		// return Charset.forName("UTF-8");
+		return Charset.forName("windows-1250");
 	}
 }

@@ -1,5 +1,7 @@
 package cz.rion.buildserver.wrappers;
 
+import java.io.File;
+
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.exceptions.CommandLineExecutionException;
 import cz.rion.buildserver.exceptions.FileWriteException;
@@ -29,6 +31,10 @@ public class NasmWrapper {
 	}
 
 	public static RunResult runRaw(String workingDir, String asm, String stdin, int timeout, boolean runExe) throws NasmExecutionException, GoLinkExecutionException, RuntimeExecutionException {
+		if (asm.contains("_main:") && !asm.contains("CMAIN:")) {
+			asm = asm.replace("_main:", "CMAIN:");
+		}
+		workingDir = new File(workingDir).getAbsolutePath();
 		try {
 			MyFS.writeFile(workingDir + "/run.asm", asm);
 		} catch (FileWriteException e) {
@@ -42,14 +48,15 @@ public class NasmWrapper {
 		MyExecResult nasmResult;
 		try {
 			String[] nparams = Settings.getNasmExecutableParams();
-			String[] params = new String[3 + nparams.length];
-			params[0] = "run.asm";
-			params[1] = "-o";
-			params[2] = Settings.getObjectFileName();
-			System.arraycopy(nparams, 0, params, 3, nparams.length);
-
+			String[] params = new String[1 + nparams.length];
+			params[0] = workingDir + "/run.asm";
+			System.arraycopy(nparams, 0, params, 1, nparams.length);
+			for (int i = 0; i < params.length; i++) {
+				params[i] = params[i].replace("$CWD$", workingDir);
+			}
 			nasmResult = MyExec.execute(workingDir, "", Settings.getNasmPath() + "/" + Settings.getNasmExecutableName(), params, 5000);
 		} catch (CommandLineExecutionException e) {
+			e.printStackTrace();
 			throw new NasmExecutionException("Failed to run NASM on source file", e);
 		}
 		if (nasmResult.returnCode != 0) {
@@ -59,12 +66,15 @@ public class NasmWrapper {
 		MyExecResult linkResult;
 		try {
 			String[] nparams = Settings.getGoLinkExecutableParams();
-			String[] params = new String[1 + nparams.length];
-			params[0] = Settings.getObjectFileName();
-			System.arraycopy(nparams, 0, params, 1, nparams.length);
+			String[] params = new String[nparams.length];
+			System.arraycopy(nparams, 0, params, 0, nparams.length);
+			for (int i = 0; i < params.length; i++) {
+				params[i] = params[i].replace("$CWD$", workingDir);
+			}
 
 			linkResult = MyExec.execute(workingDir, "", Settings.getGoLinkPath() + "/" + Settings.getGoLinkExecutableName(), params, 5000);
 		} catch (CommandLineExecutionException e) {
+			e.printStackTrace();
 			throw new GoLinkExecutionException("Failed to run GoLink on object file", e);
 		}
 		if (linkResult.returnCode != 0) {
@@ -75,6 +85,7 @@ public class NasmWrapper {
 			try {
 				runtime = MyExec.execute(workingDir, stdin, workingDir + "/" + Settings.getExecutableFileName(), new String[0], timeout);
 			} catch (CommandLineExecutionException e) {
+				e.printStackTrace();
 				throw new RuntimeExecutionException("Failed to run result file", e);
 			}
 			return new RunResult(nasmResult, linkResult, runtime, workingDir, "/" + Settings.getExecutableFileName());
