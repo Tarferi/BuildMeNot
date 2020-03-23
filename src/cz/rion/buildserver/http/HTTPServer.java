@@ -8,9 +8,7 @@ import java.util.List;
 
 import cz.rion.buildserver.BuildThread;
 import cz.rion.buildserver.Settings;
-import cz.rion.buildserver.db.MyDB;
 import cz.rion.buildserver.db.RuntimeDB;
-import cz.rion.buildserver.db.SQLiteDB;
 import cz.rion.buildserver.db.StaticDB;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.exceptions.HTTPServerException;
@@ -21,7 +19,7 @@ public class HTTPServer {
 
 	private final int port;
 	public final List<BuildThread> builders = new ArrayList<>();
-	private final RemoteUIProviderServer remoteUI = new RemoteUIProviderServer(this);
+	private final RemoteUIProviderServer remoteUI;
 
 	private final TestManager tests = new TestManager("./web/tests");
 
@@ -48,6 +46,7 @@ public class HTTPServer {
 	public HTTPServer(int port) throws DatabaseException {
 		this.db = new RuntimeDB(Settings.getMainDB());
 		this.sdb = new StaticDB(Settings.getStaticDB());
+		this.remoteUI = new RemoteUIProviderServer(this);
 		this.port = port;
 		for (int i = 0; i < Settings.getBuildersCount(); i++) {
 			builders.add(new BuildThread(this, i));
@@ -72,7 +71,7 @@ public class HTTPServer {
 			} catch (IOException e) {
 				throw new HTTPServerException("Failed to accept client on port " + port, e);
 			}
-			HTTPClient myClient = new HTTPClient(db, sdb, tests, client);
+			HTTPClient myClient = new HTTPClient(db, sdb, tests, client, remoteUI);
 			getBuilder().addJob(myClient);
 		}
 	}

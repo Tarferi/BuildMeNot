@@ -28,6 +28,11 @@ public class Settings {
 	private final SettingsValue cookieName = new SettingsValue("cookieName", ValueType.STRING, "ISUSession");
 	private final SettingsValue authKeyFilename = new SettingsValue("authKeyFilename", ValueType.STRING, "enc.key");
 	private final SettingsValue noExecPath = new SettingsValue("noExecPath", ValueType.BOOLEAN, 0);
+	private final SettingsValue onlyUI = new SettingsValue("onlyUI", ValueType.BOOLEAN, 0);
+	private final SettingsValue onlyUITarget = new SettingsValue("onlyUITarget", ValueType.STRING, "127.0.0.1");
+	private final SettingsValue onlyUITargetPort = new SettingsValue("onlyUITargetPort", ValueType.INTEGER, 8000);
+	private final SettingsValue onlyUITargetPasscode = new SettingsValue("onlyUITargetPasscode", ValueType.STRING, "abc");
+	private final SettingsValue RemoteUserDatabaseURL = new SettingsValue("RemoteUserDatabaseURL", ValueType.STRING, null);
 
 	private List<SettingsValue> settings;
 
@@ -206,21 +211,30 @@ public class Settings {
 	}
 
 	public static Charset getDefaultCharset() {
-		/*
-		 * return new Charset(null, null) {
-		 * 
-		 * @Override public boolean contains(Charset cs) { // TODO Auto-generated method
-		 * stub return false; }
-		 * 
-		 * @Override public CharsetDecoder newDecoder() { // TODO Auto-generated method
-		 * stub return null; }
-		 * 
-		 * @Override public CharsetEncoder newEncoder() { // TODO Auto-generated method
-		 * stub return null; }
-		 * 
-		 * };
-		 */
-		// return Charset.forName("UTF-8");
 		return Charset.forName("windows-1250");
+	}
+
+	public static boolean RunOnlyUI() {
+		return instance.onlyUI.asBoolean();
+	}
+
+	public static String GetOnlyUIAddress() {
+		return instance.onlyUITarget.asString();
+	}
+
+	public static int GetOnlyUIPort() {
+		return instance.onlyUITargetPort.asInt();
+	}
+
+	public static String GetOnlyUIPasscode() {
+		return instance.onlyUITargetPasscode.asString();
+	}
+
+	public static boolean UsersRemoteUserDB() {
+		return instance.RemoteUserDatabaseURL.asString() != null;
+	}
+
+	public static String GetRemoteUserDB() {
+		return instance.RemoteUserDatabaseURL.asString();
 	}
 }

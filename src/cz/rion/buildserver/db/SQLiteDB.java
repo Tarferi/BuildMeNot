@@ -151,7 +151,7 @@ public class SQLiteDB {
 						String colName = colNames[i];
 						int colType = colTypes[i];
 						if (colType == Types.INTEGER) {
-							obj.add(colName, new JsonNumber(rs.getInt(i + 1)));
+							obj.add(colName, new JsonNumber(rs.getInt(i + 1), rs.getLong(i + 1) + ""));
 						} else if (colType == Types.VARCHAR) {
 							obj.add(colName, new JsonString(rs.getString(i + 1)));
 						}

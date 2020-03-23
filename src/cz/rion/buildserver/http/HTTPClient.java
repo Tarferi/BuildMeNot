@@ -23,6 +23,7 @@ import cz.rion.buildserver.json.JsonValue.JsonNumber;
 import cz.rion.buildserver.json.JsonValue.JsonString;
 import cz.rion.buildserver.test.AsmTest;
 import cz.rion.buildserver.test.TestManager;
+import cz.rion.buildserver.ui.provider.RemoteUIProviderServer;
 import cz.rion.buildserver.wrappers.FileReadException;
 import cz.rion.buildserver.wrappers.MyFS;
 
@@ -114,6 +115,7 @@ public class HTTPClient {
 	private final TestManager tests;
 	private final RuntimeDB db;
 	private final StaticDB sdb;
+	private final RemoteUIProviderServer remoteAdmin;
 
 	private void close() {
 		try {
@@ -122,8 +124,9 @@ public class HTTPClient {
 		}
 	}
 
-	public HTTPClient(RuntimeDB db, StaticDB sdb, TestManager tests, Socket client) {
+	public HTTPClient(RuntimeDB db, StaticDB sdb, TestManager tests, Socket client, RemoteUIProviderServer remoteAdmin) {
 		this.client = client;
+		this.remoteAdmin = remoteAdmin;
 		this.tests = tests;
 		this.db = db;
 		this.sdb = sdb;
@@ -137,6 +140,7 @@ public class HTTPClient {
 	private int user_id = 0;
 	private int session_id = 0;
 	private String login = null;
+	private String endPoint = null;
 
 	private String getReducedResult() {
 		if (returnValue != null) {
@@ -315,7 +319,7 @@ public class HTTPClient {
 			}
 		}
 
-		String redirectLocation = Settings.getAuthURL();
+		String redirectLocation = Settings.getAuthURL() + "?cache=" + RuntimeDB.randomstr(32);
 		String redirectMessage = "OK but login first";
 		List<String> cookieLines = request.cookiesLines;
 
@@ -377,7 +381,7 @@ public class HTTPClient {
 					return authRedirect;
 				}
 
-				String endPoint = request.path.substring(1);
+				endPoint = request.path.substring(1);
 				if (endPoint.equals("")) {
 					endPoint = "index.html";
 				}
@@ -634,5 +638,37 @@ public class HTTPClient {
 
 	public int getUserID() {
 		return user_id;
+	}
+
+	public RemoteUIProviderServer getRemoteAdmin() {
+		return remoteAdmin;
+	}
+
+	public String getAddress() {
+		return client.getRemoteSocketAddress().toString();
+	}
+
+	public String getLogin() {
+		return login;
+	}
+
+	public int getBuilderID() {
+		return builderID;
+	}
+
+	public JsonObject getReturnValue() {
+		return returnValue;
+	}
+
+	public String getASM() {
+		return asm;
+	}
+
+	public String getTestID() {
+		return test_id;
+	}
+
+	public String getDownloadedDocumentPath() {
+		return endPoint;
 	}
 }

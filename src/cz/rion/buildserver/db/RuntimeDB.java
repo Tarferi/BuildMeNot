@@ -1,6 +1,8 @@
 package cz.rion.buildserver.db;
 
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.crypto.Crypto;
@@ -92,7 +94,7 @@ public class RuntimeDB extends SQLiteDB {
 		}
 	}
 
-	private String randomstr(int length) {
+	public static String randomstr(int length) {
 		String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvxyz";
 		StringBuilder sb = new StringBuilder(length);
 		for (int i = 0; i < length; i++) {
@@ -126,14 +128,20 @@ public class RuntimeDB extends SQLiteDB {
 		}
 		if (val.isObject()) {
 			JsonObject obj = val.asObject();
-			if (obj.containsString("login")) {
+			if (obj.containsString("login") && obj.containsNumber("time")) {
+				long time = (obj.getNumber("time").Value & 0xffffffff);
+				long now = new Date().getTime() / 1000;
+				long diff = now - time;
+				if (diff > 5 || diff < 0) { // Auth generated in the future or 15 seconds ago, too old
+					return null;
+				}
+
 				String login = obj.getString("login").Value;
 				synchronized (syncer) {
 					int user_id = getUserIDFromLogin(login);
 					if (user_id == -1) {
 						return null;
 					}
-					long now = new Date().getTime();
 					// Get live sessions
 					JsonArray res = this.select("SELECT * FROM session WHERE user_id = ? AND live = ? AND address = ?", user_id, 1, address).getJSON();
 					if (res.Value.size() == 0) { // No such session, create new
@@ -232,5 +240,72 @@ public class RuntimeDB extends SQLiteDB {
 		synchronized (syncer) {
 			execute("UPDATE session SET live = ? WHERE hash = '?'", 0, cookiSeession);
 		}
+	}
+
+	public final class RuntimeUserStats {
+		public final int UserID;
+		public final String Login;
+
+		public final Date RegistrationDate;
+		public final Date LastActiveDate;
+		public final Date lastLoginDate;
+		public final int TotalTestsSubmitted;
+		public final String LastTestID;
+		public final Date LastTestDate;
+
+		private RuntimeUserStats(int userID, String login, int totalCompilations, Date registrationDate, Date lastLoginDate, Date lastActiveDate, String lastTestID, Date LastTestDate) {
+			this.UserID = userID;
+			this.Login = login;
+			this.RegistrationDate = registrationDate;
+			this.LastActiveDate = lastActiveDate;
+			this.lastLoginDate = lastLoginDate;
+			this.TotalTestsSubmitted = totalCompilations;
+			this.LastTestID = lastTestID;
+			this.LastTestDate = LastTestDate;
+		}
+	}
+
+	private static final String getUserStatsSQL = "SELECT\r\n" + "	users.id as UserID,\r\n" + "	users.login as Login,\r\n" + "	s1.creation_time as RegistrationTime,\r\n" + "	s2.creation_time as LastLoginTime,\r\n" + "	cmpLast.test_id as LastTestID,\r\n" + "	cmpLast.creation_time as LastTestTime,\r\n" + "	s2.last_action as LastActionTime,\r\n" + "	count(*) as TotalCompilations\r\n" + "\r\n" + "FROM\r\n" + "	users,\r\n" + "	compilations as cmpAggr,\r\n" + "	compilations as cmpLast,\r\n" + "	session as s1,\r\n" + "	session as s2\r\n" + "\r\n" + "WHERE\r\n" + "	userID = cmpAggr.user_id\r\n" + "AND\r\n" + "	userID = cmpLast.user_id\r\n" + "AND\r\n" + "	cmpLast.ID = (SELECT cmpC.ID FROM compilations as cmpC WHERE user_id = userID ORDER BY creation_time DESC LIMIT 1)\r\n"
+			+ "AND\r\n" + "	userID = s1.user_id\r\n" + "AND\r\n" + "	userID = s2.user_id\r\n" + "AND\r\n" + "	s1.ID = (SELECT sc.ID FROM session as sc WHERE user_id = userID ORDER BY sc.last_action ASC LIMIT 1)\r\n" + "AND\r\n" + "	s2.ID = (SELECT sc.ID FROM session as sc WHERE user_id = userID ORDER BY sc.last_action DESC LIMIT 1)\r\n" + "\r\n" + "GROUP BY Login";
+
+	private Date fromInt(long l) {
+		int numLen = (l + "").length();
+		int msLen = "0000000000000".length();
+		if (numLen < msLen) { // stored in seconds, convert to ms
+			l *= 1000;
+		}
+		return new Date(l);
+	}
+
+	public List<RuntimeUserStats> getUserStats() {
+		List<RuntimeUserStats> stats = new ArrayList<>();
+		synchronized (syncer) {
+			try {
+				DatabaseResult res = select(getUserStatsSQL);
+				JsonArray ar = res.getJSON();
+				if (ar != null) {
+					for (JsonValue val : ar.Value) {
+						if (val.isObject()) {
+							JsonObject obj = val.asObject();
+							if (obj.containsNumber("UserID") && obj.containsString("Login") && obj.containsNumber("RegistrationTime") && obj.containsNumber("LastLoginTime") && obj.containsString("LastTestID") && obj.containsNumber("LastTestTime") && obj.containsNumber("LastActionTime") && obj.containsNumber("TotalCompilations")) {
+								int UserID = obj.getNumber("UserID").Value;
+								String Login = obj.getString("Login").Value;
+								Date RegistrationTime = fromInt(obj.getNumber("RegistrationTime").asLong());
+								Date LastLoginTime = fromInt(obj.getNumber("LastLoginTime").asLong());
+								String LastTestID = obj.getString("LastTestID").Value;
+								Date LastTestTime = fromInt(obj.getNumber("LastTestTime").asLong());
+								Date LastActionTime = fromInt(obj.getNumber("LastActionTime").asLong());
+								int TotalCompilations = obj.getNumber("TotalCompilations").Value;
+								stats.add(new RuntimeUserStats(UserID, Login, TotalCompilations, RegistrationTime, LastLoginTime, LastActionTime, LastTestID, LastTestTime));
+							}
+						}
+					}
+				}
+			} catch (DatabaseException e) {
+				e.printStackTrace();
+				return stats;
+			}
+		}
+		return stats;
 	}
 }

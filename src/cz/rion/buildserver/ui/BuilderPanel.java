@@ -2,8 +2,7 @@ package cz.rion.buildserver.ui;
 
 import javax.swing.JPanel;
 
-import cz.rion.buildserver.BuildThread;
-import cz.rion.buildserver.ui.UIDriver.BuildThreadInfo;
+import cz.rion.buildserver.ui.events.BuildersLoadedEvent.BuildThreadInfo;
 import net.miginfocom.swing.MigLayout;
 import javax.swing.JLabel;
 import java.awt.Font;
@@ -12,11 +11,33 @@ import java.awt.Color;
 
 public class BuilderPanel extends JPanel {
 
-	private final BuildThreadInfo thr;
+	private BuildThreadInfo thr;
+	private JLabel lblQueue;
+	private JLabel lblPageLoad;
+	private JLabel lblResourcesLoaded;
+	private JLabel lblHackAttempts;
+	private JLabel lblAll;
+	private JLabel lblPassed;
+
+	public final int getID() {
+		return thr.ID;
+	}
+
+	public void updateBuilder(BuildThreadInfo thr) {
+		this.thr = thr;
+
+		lblQueue.setText("" + thr.QueueSize);
+		lblPageLoad.setText(thr.Stats.getHTMLJobs() + "");
+		lblResourcesLoaded.setText(thr.Stats.getTotalResourceJobs() + "");
+		lblHackAttempts.setText(thr.Stats.getTotlaHackJobs() + "");
+		lblAll.setText("" + (thr.Stats.getTotalJobsFinished() - thr.Stats.getTotalJobsPassed()));
+		lblPassed.setText(thr.Stats.getTotalJobsPassed() + "");
+
+	}
 
 	public BuilderPanel(BuildThreadInfo thr) {
-		setBorder(new LineBorder(new Color(0, 0, 0)));
 		this.thr = thr;
+		setBorder(new LineBorder(new Color(0, 0, 0)));
 		this.setOpaque(false);
 		setLayout(new MigLayout("", "[][][80:n,grow][][][][][80:n,grow][][][grow]", "[][][][grow]"));
 
@@ -33,14 +54,14 @@ public class BuilderPanel extends JPanel {
 		JLabel lblTotalProcessed = new JLabel("Tests evaluated:");
 		add(lblTotalProcessed, "cell 3 1,alignx right");
 
-		JLabel lblPassed = new JLabel(thr.Stats.getTotalJobsPassed() + "");
+		lblPassed = new JLabel("<Passed>");
 		lblPassed.setForeground(new Color(0, 153, 102));
 		add(lblPassed, "cell 4 1");
 
 		JLabel label = new JLabel("/");
 		add(label, "cell 5 1");
 
-		JLabel lblAll = new JLabel("" + (thr.Stats.getTotalJobsFinished() - thr.Stats.getTotalJobsPassed()));
+		lblAll = new JLabel("<All>");
 		lblAll.setForeground(new Color(204, 0, 0));
 		add(lblAll, "cell 6 1");
 
@@ -50,23 +71,24 @@ public class BuilderPanel extends JPanel {
 		JLabel lblQueueSize = new JLabel("Queue size:");
 		add(lblQueueSize, "cell 0 2,alignx right");
 
-		JLabel lblQueue = new JLabel("" + thr.QueueSize);
+		lblQueue = new JLabel("<Queue size>");
 		add(lblQueue, "cell 1 2");
 
 		JLabel lblPageLoaded = new JLabel("Page loads:");
 		add(lblPageLoaded, "cell 3 2,alignx right");
 
-		JLabel lblPageLoad = new JLabel(thr.Stats.getHTMLJobs() + "");
+		lblPageLoad = new JLabel("<Page loads>");
 		add(lblPageLoad, "cell 4 2 3 1");
 
-		JLabel lblNewLabel_1 = new JLabel("Hack attempts:");
-		add(lblNewLabel_1, "cell 8 2,alignx right,aligny baseline");
+		JLabel lblNHack = new JLabel("Hack attempts:");
+		add(lblNHack, "cell 8 2,alignx right,aligny baseline");
 
-		JLabel lblResLoad = new JLabel(thr.Stats.getTotalResourceJobs() + "");
-		add(lblResLoad, "cell 9 1");
+		lblResourcesLoaded = new JLabel("<Resources loaded>");
+		add(lblResourcesLoaded, "cell 9 1");
 
-		JLabel lblHacks = new JLabel(thr.Stats.getHTMLJobs() + "");
-		add(lblHacks, "cell 9 2,aligny bottom");
+		lblHackAttempts = new JLabel("<Hack attempts>");
+		add(lblHackAttempts, "cell 9 2,aligny bottom");
+		updateBuilder(thr);
 	}
 
 }

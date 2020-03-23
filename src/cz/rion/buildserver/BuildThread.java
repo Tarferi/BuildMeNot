@@ -3,11 +3,11 @@ package cz.rion.buildserver;
 import java.util.ArrayList;
 import java.util.List;
 
-import cz.rion.buildserver.db.MyDB;
-import cz.rion.buildserver.db.SQLiteDB;
 import cz.rion.buildserver.exceptions.SwitchClientException;
 import cz.rion.buildserver.http.HTTPClient;
 import cz.rion.buildserver.http.HTTPServer;
+import cz.rion.buildserver.json.JsonValue.JsonObject;
+import cz.rion.buildserver.ui.provider.RemoteUIProviderServer;
 import cz.rion.buildserver.ui.provider.RemoteUIProviderServer.BuilderStatus;
 
 public class BuildThread {
@@ -73,30 +73,35 @@ public class BuildThread {
 			async();
 		}
 	};
-	private final SQLiteDB db;
 
 	public BuildThread(HTTPServer server, int myID) {
 		this.ID = myID;
 		this.server = server;
-		this.db = server.db;
 		thread.start();
 	}
 
-	private void account(boolean ok, HTTPClient.HTTPClientIntentType type) {
+	private void account(boolean ok, RemoteUIProviderServer remoteAdmin, HTTPClient.HTTPClientIntentType type, String address, String login, int code, String codeDescription, String path, String asm, String testResult, String test_id) {
 		switch (type) {
 		case ADMIN:
 			stats.totalAdminJobs++;
 			break;
 		case GET_HTML:
 			stats.totalHTMLJobs++;
+			remoteAdmin.writeGetHTML(address, login, code, codeDescription, path);
 			break;
 		case GET_RESOURCE:
 			stats.totalResourceJobs++;
+			remoteAdmin.writeGetResource(address, login, code, codeDescription, path);
 			break;
 		case HACK:
 			stats.totalHackJobs++;
 			break;
+		case COLLECT_TESTS:
+			remoteAdmin.writeTestCollect(address, login);
+			break;
 		case PERFORM_TEST:
+			remoteAdmin.writeTestResult(address, login, code, codeDescription, asm, test_id);
+			remoteAdmin.writeBuliderDataUpdate(this.ID, this);
 			if (ok) {
 				stats.totalJobsPassed++;
 			}
@@ -126,7 +131,14 @@ public class BuildThread {
 			} catch (Exception | Error e) {
 				e.printStackTrace();
 			} finally {
-				account(client.haveTestsPassed(), client.getIntent());
+				JsonObject result = client.getReturnValue();
+				int code = result == null ? 1 : (result.containsNumber("code") ? result.getNumber("code").Value : 1);
+				String codeDescription = result == null ? null : result.containsString("result") ? result.getString("result").Value : null;
+				String path = client.getDownloadedDocumentPath();
+				String runtimeResult = result == null ? null : result.getJsonString();
+				String test_id = client.getTestID();
+				String asm = client.getASM();
+				account(client.haveTestsPassed(), client.getRemoteAdmin(), client.getIntent(), client.getAddress(), client.getLogin(), code, codeDescription, path, asm, runtimeResult, test_id);
 			}
 		}
 	}

@@ -19,7 +19,7 @@ public class MyExec {
 		public final String returnedSTDERR;
 
 		public final boolean passed;
-		
+
 		public TestResultsExpectations(int expectedCode, int returnedCode, String expectedSTDOUT, String returnedSTDOUT, String expectedSTDERR, String returnedSTDERR) {
 			this.expectedCode = expectedCode;
 			this.returnedCode = returnedCode;
@@ -27,7 +27,7 @@ public class MyExec {
 			this.returnedSTDOUT = returnedSTDOUT;
 			this.expectedSTDERR = expectedSTDERR;
 			this.returnedSTDERR = returnedSTDERR;
-			
+
 			this.passed = expectedCode == returnedCode && expectedSTDOUT.equals(returnedSTDOUT) && expectedSTDERR.equals(returnedSTDERR);
 		}
 	}
@@ -57,7 +57,7 @@ public class MyExec {
 				if (stream.read(buffer) != available) {
 					throw new CommandLineExecutionException("Buffer underflow");
 				}
-				sbstdout.append(new String(buffer));
+				sbstdout.append(new String(buffer, Settings.getDefaultCharset()));
 			}
 		} catch (IOException e) {
 			if (!e.getMessage().equals("Stream closed")) {

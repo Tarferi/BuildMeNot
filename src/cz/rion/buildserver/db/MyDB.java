@@ -219,7 +219,7 @@ public class MyDB {
 		int length = readInt();
 		byte[] str = new byte[length];
 		fi.read(str);
-		return new String(str);
+		return new String(str, Settings.getDefaultCharset());
 	}
 
 	public MyDB(String fileName) throws DatabaseException {

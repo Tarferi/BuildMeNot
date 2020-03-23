@@ -5,21 +5,21 @@ import net.miginfocom.swing.MigLayout;
 import javax.swing.JLabel;
 import javax.swing.JTextField;
 
-import cz.rion.buildserver.Settings;
-import cz.rion.buildserver.ui.UIDriver.Status;
+import cz.rion.buildserver.ui.events.EventManager;
+import cz.rion.buildserver.ui.events.EventManager.Status;
 
 import javax.swing.JButton;
 import java.awt.event.ActionListener;
 import java.awt.event.ActionEvent;
 
-public class ConnectionPanel extends JPanel implements UIDriver.LoginCallback {
+public class ConnectionPanel extends JPanel {
 	private JTextField txtServer;
 	private JTextField txtAuth;
-	private final UIDriver driver;
 	private JButton btnConnect;
+	private Status status;
 
-	public ConnectionPanel(final UIDriver driver) {
-		this.driver = driver;
+	public ConnectionPanel(final UIDriver driver, String remoteAddress, int remotePort, String remotePasscode) {
+
 		setOpaque(false);
 		setLayout(new MigLayout("", "[133.00][300:300:300][]", "[][]"));
 
@@ -33,10 +33,9 @@ public class ConnectionPanel extends JPanel implements UIDriver.LoginCallback {
 		btnConnect = new JButton("Connect");
 		btnConnect.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
-				Status status = driver.getStatus();
-				if (status == UIDriver.Status.CONNECTED) {
-					// driver.disconnect();
-				} else if (status == UIDriver.Status.DISCONNECTED) {
+				if (status == EventManager.Status.CONNECTED) {
+					driver.disconnect();
+				} else if (status == EventManager.Status.DISCONNECTED) {
 					String serverStr = txtServer.getText();
 					String[] serverData = serverStr.split(":");
 					int serverPort = 0;
@@ -46,8 +45,8 @@ public class ConnectionPanel extends JPanel implements UIDriver.LoginCallback {
 						return;
 					}
 					disableComponents();
-					driver.login(serverData[0], serverPort, txtAuth.getText(), ConnectionPanel.this);
-				} else if (status == UIDriver.Status.CONNECTING) {
+					driver.login(serverData[0], serverPort, txtAuth.getText());
+				} else if (status == EventManager.Status.CONNECTING) {
 					btnConnect.setText("Disconnect");
 				}
 			}
@@ -60,8 +59,8 @@ public class ConnectionPanel extends JPanel implements UIDriver.LoginCallback {
 		txtAuth = new JTextField();
 		add(txtAuth, "cell 1 1,growx,aligny top");
 		txtAuth.setColumns(10);
-		txtServer.setText("127.0.0.1:" + Settings.GetHTTPServerPort());
-		txtAuth.setText(Settings.getPasscode());
+		txtServer.setText(remoteAddress + ":" + remotePort);
+		txtAuth.setText(remotePasscode);
 	}
 
 	public String getTabName() {
@@ -74,31 +73,19 @@ public class ConnectionPanel extends JPanel implements UIDriver.LoginCallback {
 		btnConnect.setEnabled(false);
 	}
 
-	public void update() {
+	public void update(Status status) {
+		this.status = status;
 		disableComponents();
-		Status status = driver.getStatus();
-		if (status == UIDriver.Status.CONNECTED) {
+		if (status == EventManager.Status.CONNECTED) {
 			btnConnect.setText("Disconnect");
 			btnConnect.setEnabled(true);
-		} else if (status == UIDriver.Status.DISCONNECTED) {
+		} else if (status == EventManager.Status.DISCONNECTED) {
 			btnConnect.setText("Connect");
 			txtAuth.setEnabled(true);
 			txtServer.setEnabled(true);
 			btnConnect.setEnabled(true);
-		} else if (status == UIDriver.Status.CONNECTING) {
+		} else if (status == EventManager.Status.CONNECTING) {
 			btnConnect.setText("Disconnect");
 		}
 	}
-
-	@Override
-	public void loggedIn() {
-		update();
-		driver.wnd.onLoggedIn();
-	}
-
-	@Override
-	public void loginFailed() {
-		update();
-	}
-
 }

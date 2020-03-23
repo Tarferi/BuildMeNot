@@ -135,17 +135,20 @@ public abstract class JsonValue {
 				return new JsonString(sb.toString());
 			} else if (c >= '0' && c <= '9') {
 				int num = c - '0';
+				StringBuilder sb = new StringBuilder();
+				sb.append(c);
 				while (!inst.isDone()) {
 					inst.nextChar(false);
 					char next = inst.getCurrentChar();
 					if (next >= '0' && next <= '9') {
+						sb.append(next);
 						num *= 10;
-						num += c - '0';
+						num += next - '0';
 					} else {
 						break;
 					}
 				}
-				return new JsonNumber(num);
+				return new JsonNumber(num, sb.toString());
 			} else if (c == '{') {
 				inst.nextChar(true);
 				boolean foundEnd = false;
@@ -284,50 +287,50 @@ public abstract class JsonValue {
 
 		@Override
 		public String getJsonString() {
-			String newValue = Value;
-			newValue=newValue.replaceAll("Á", "&#193;");
-			newValue=newValue.replaceAll("á", "&#225;");
-			newValue=newValue.replaceAll("é", "&#233;");
-			newValue=newValue.replaceAll("É", "&#201;");
-			newValue=newValue.replaceAll("Í", "&#205;");
-			newValue=newValue.replaceAll("í", "&#237;");
-			newValue=newValue.replaceAll("Ó", "&#211;");
-			newValue=newValue.replaceAll("ó", "&#243;");
-			newValue=newValue.replaceAll("Ú", "&#218;");
-			newValue=newValue.replaceAll("ú", "&#250;");
-			newValue=newValue.replaceAll("Ý", "&#221;");
-			newValue=newValue.replaceAll("ý", "&#253;");
-			//newValue=newValue.replaceAll("Ä", "&#196;");
-			newValue=newValue.replaceAll("ä", "&#228;");
-			newValue=newValue.replaceAll("Ë", "&#203;");
-			newValue=newValue.replaceAll("ë", "&#235;");
-			newValue=newValue.replaceAll("Ï", "&#207;");
-			newValue=newValue.replaceAll("ï", "&#239;");
-			newValue=newValue.replaceAll("Ö", "&#214;");
-			newValue=newValue.replaceAll("ö", "&#246;");
-			newValue=newValue.replaceAll("Ü", "&#220;");
-			newValue=newValue.replaceAll("ü", "&#252;");
-			newValue=newValue.replaceAll("ÿ", "&#255;");
-			newValue=newValue.replaceAll("Č", "&#268;");
-			newValue=newValue.replaceAll("č", "&#269;");
-			newValue=newValue.replaceAll("Ď", "&#270;");
-			newValue=newValue.replaceAll("ď", "&#271;");
-			newValue=newValue.replaceAll("ě", "&#283;");
-			newValue=newValue.replaceAll("Ě", "&#282;");
-			newValue=newValue.replaceAll("Ň", "&#327;");
-			newValue=newValue.replaceAll("ň", "&#328;");
-			newValue=newValue.replaceAll("Ř", "&#344;");
-			newValue=newValue.replaceAll("ř", "&#345;");
-			newValue=newValue.replaceAll("Š", "&#352;");
-			newValue=newValue.replaceAll("š", "&#353;");
-			//newValue=newValue.replaceAll("Ť", "&#356;");
-			newValue=newValue.replaceAll("ť", "&#357;");
-			newValue=newValue.replaceAll("Ů", "&#366;");
-			newValue=newValue.replaceAll("ů", "&#367;");
-			newValue=newValue.replaceAll("Ž", "&#381;");
-			newValue=newValue.replaceAll("ž", "&#382;");
-			newValue=newValue.replaceAll("Ÿ", "&#376;");
-			
+			String newValue = Value == null ? "null" : Value;
+			newValue = newValue.replaceAll("Á", "&#193;");
+			newValue = newValue.replaceAll("á", "&#225;");
+			newValue = newValue.replaceAll("é", "&#233;");
+			newValue = newValue.replaceAll("É", "&#201;");
+			newValue = newValue.replaceAll("Í", "&#205;");
+			newValue = newValue.replaceAll("í", "&#237;");
+			newValue = newValue.replaceAll("Ó", "&#211;");
+			newValue = newValue.replaceAll("ó", "&#243;");
+			newValue = newValue.replaceAll("Ú", "&#218;");
+			newValue = newValue.replaceAll("ú", "&#250;");
+			newValue = newValue.replaceAll("Ý", "&#221;");
+			newValue = newValue.replaceAll("ý", "&#253;");
+			// newValue=newValue.replaceAll("Ä", "&#196;");
+			newValue = newValue.replaceAll("ä", "&#228;");
+			newValue = newValue.replaceAll("Ë", "&#203;");
+			newValue = newValue.replaceAll("ë", "&#235;");
+			newValue = newValue.replaceAll("Ï", "&#207;");
+			newValue = newValue.replaceAll("ï", "&#239;");
+			newValue = newValue.replaceAll("Ö", "&#214;");
+			newValue = newValue.replaceAll("ö", "&#246;");
+			newValue = newValue.replaceAll("Ü", "&#220;");
+			newValue = newValue.replaceAll("ü", "&#252;");
+			newValue = newValue.replaceAll("ÿ", "&#255;");
+			newValue = newValue.replaceAll("Č", "&#268;");
+			newValue = newValue.replaceAll("č", "&#269;");
+			newValue = newValue.replaceAll("Ď", "&#270;");
+			newValue = newValue.replaceAll("ď", "&#271;");
+			newValue = newValue.replaceAll("ě", "&#283;");
+			newValue = newValue.replaceAll("Ě", "&#282;");
+			newValue = newValue.replaceAll("Ň", "&#327;");
+			newValue = newValue.replaceAll("ň", "&#328;");
+			newValue = newValue.replaceAll("Ř", "&#344;");
+			newValue = newValue.replaceAll("ř", "&#345;");
+			newValue = newValue.replaceAll("Š", "&#352;");
+			newValue = newValue.replaceAll("š", "&#353;");
+			// newValue=newValue.replaceAll("Ť", "&#356;");
+			newValue = newValue.replaceAll("ť", "&#357;");
+			newValue = newValue.replaceAll("Ů", "&#366;");
+			newValue = newValue.replaceAll("ů", "&#367;");
+			newValue = newValue.replaceAll("Ž", "&#381;");
+			newValue = newValue.replaceAll("ž", "&#382;");
+			newValue = newValue.replaceAll("Ÿ", "&#376;");
+
 			StringBuilder sb = new StringBuilder();
 			sb.append("\"");
 			for (byte b : newValue.getBytes(Settings.getDefaultCharset())) {
@@ -368,15 +371,26 @@ public abstract class JsonValue {
 		}
 
 		public final int Value;
+		private final String txtValue;
 
 		public JsonNumber(int value) {
+			this(value, value + "");
+		}
+
+		public JsonNumber(int value, String txtValue) {
 			this.Value = value;
+			this.txtValue = txtValue;
+		}
+
+		public long asLong() {
+			return Long.parseLong(txtValue);
 		}
 
 		@Override
 		public String getJsonString() {
 			return Value + "";
 		}
+
 	}
 
 	public static final class JsonBoolean extends JsonValue {
@@ -561,7 +575,7 @@ public abstract class JsonValue {
 		}
 
 		public void remove(String key) {
-			if(Value.containsKey(key)) {
+			if (Value.containsKey(key)) {
 				Value.remove(key);
 			}
 		}

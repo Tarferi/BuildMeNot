@@ -302,7 +302,7 @@ function getErrorSolution(code) {
 	} else if(code == 1){
 		return dec("<span class=\"log_err\">Nepodařilo se dekódovat odpověď sestavovacího serveru</span>");
 	}else if(code == 53){
-		return dec("<span class=\"log_err\">Byl jsi odhlášen. Pro přihlášení si obnov stránku (nezapomeň si někam bokem uložit kód, který se právě snažíš přeloži)</span>");
+		return dec("<span class=\"log_err\">Byl jsi odhlášen. Pro přihlášení si obnov stránku (nezapome&#328; si někam bokem uložit kód, který se právě snažíš přeloži)</span>");
 	} else {
 		return dec("<span class=\"log_err\">Neznámá chyba</span>");
 	}
@@ -366,7 +366,7 @@ function loadRemoteTests() {
 					showLoginPanel();
 				} else {
 					if(jsn.code == 53){
-						cbFail(dec(cbFail(getErrorSolution(53))))
+						document.location.reload();
 					} else {
 						cbFail(dec("Nepodařilo se nahrát testy: <br />" + jsn.result));
 					}
