@@ -121,7 +121,7 @@ public class MyDB {
 
 		private TestIdDetector() throws DatabaseException, InterruptedException {
 			MyDB db = new MyDB("dbV1.sqlite");
-			RuntimeDB db2 = new RuntimeDB("data.sqlite");
+			RuntimeDB db2 = new RuntimeDB("data.sqlite", null);
 			List<CompilationResult> data = db.getResults();
 			List<String> tests = new ArrayList<>();
 			for (AsmTest test : tm.getAllTests()) {

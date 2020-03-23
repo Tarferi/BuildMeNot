@@ -44,8 +44,8 @@ public class HTTPServer {
 	}
 
 	public HTTPServer(int port) throws DatabaseException {
-		this.db = new RuntimeDB(Settings.getMainDB());
 		this.sdb = new StaticDB(Settings.getStaticDB());
+		this.db = new RuntimeDB(Settings.getMainDB(), sdb);
 		this.tests = new TestManager(sdb, "./web/tests");
 		this.remoteUI = new RemoteUIProviderServer(this);
 		this.port = port;

@@ -15,12 +15,13 @@ import cz.rion.buildserver.json.JsonValue.JsonObject;
 
 public class RuntimeDB extends SQLiteDB {
 
-	private final Crypto crypto = CryptoManager.getCrypto();
+	private final Crypto crypto;
 
 	private final Object syncer = new Object();
 
-	public RuntimeDB(String fileName) throws DatabaseException {
+	public RuntimeDB(String fileName, StaticDB sdb) throws DatabaseException {
 		super(fileName);
+		crypto = CryptoManager.getCrypto(sdb);
 		makeTable("users", KEY("ID"), TEXT("login"));
 		makeTable("session", KEY("ID"), TEXT("address"), TEXT("hash"), NUMBER("live"), NUMBER("user_id"), NUMBER("last_action"), NUMBER("creation_time"));
 		makeTable("compilations", KEY("ID"), NUMBER("session_id"), TEXT("test_id"), NUMBER("user_id"), TEXT("address"), NUMBER("port"), TEXT("asm"), NUMBER("creation_time"), NUMBER("code"), TEXT("result"), TEXT("full"));
@@ -112,19 +113,19 @@ public class RuntimeDB extends SQLiteDB {
 		return address;
 	}
 
-	public String storeSession(String address, String authToken) throws DatabaseException {
+	public String storeSession(String address, String authToken) throws Exception {
 		address = getAddress(address);
 
 		if (crypto == null) {
-			return null;
+			throw new Exception("No crypto");
 		}
 		String dec = crypto.decrypt(Settings.getAuthKeyFilename(), authToken);
 		if (dec == null) {
-			return null;
+			throw new Exception("Crypto failed");
 		}
 		JsonValue val = JsonValue.parse(dec);
 		if (val == null) {
-			return null;
+			throw new Exception("Auth data not in JSON: " + dec);
 		}
 		if (val.isObject()) {
 			JsonObject obj = val.asObject();
@@ -133,14 +134,14 @@ public class RuntimeDB extends SQLiteDB {
 				long now = new Date().getTime() / 1000;
 				long diff = now - time;
 				if (diff > 5 || diff < 0) { // Auth generated in the future or 15 seconds ago, too old
-					return null;
+					throw new Exception("Crypto auth too old (" + diff + " seconds)");
 				}
 
 				String login = obj.getString("login").Value;
 				synchronized (syncer) {
 					int user_id = getUserIDFromLogin(login);
 					if (user_id == -1) {
-						return null;
+						throw new Exception("Invalid user (looking for " + login + ")");
 					}
 					// Get live sessions
 					JsonArray res = this.select("SELECT * FROM session WHERE user_id = ? AND live = ? AND address = ?", user_id, 1, address).getJSON();
@@ -158,7 +159,7 @@ public class RuntimeDB extends SQLiteDB {
 						}
 						res = this.select("SELECT * FROM session WHERE user_id = ?", user_id).getJSON();
 						if (res.Value.size() == 0) {
-							return null;
+							throw new Exception("Failed to update session in database");
 						}
 					} else {
 						this.execute("UPDATE session SET last_action = ? WHERE user_id = ?", now, user_id);
@@ -171,10 +172,14 @@ public class RuntimeDB extends SQLiteDB {
 							return hash;
 						}
 					}
+					throw new Exception("Database error?");
 				}
+			} else {
+				throw new Exception("Invalid auth structure: missing fields");
 			}
+		} else {
+			throw new Exception("No crypto");
 		}
-		return null;
 	}
 
 	public int getSessionIDFromSession(String address, String session) throws DatabaseException, ChangeOfSessionAddressException {

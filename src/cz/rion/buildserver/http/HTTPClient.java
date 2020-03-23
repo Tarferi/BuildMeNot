@@ -25,7 +25,6 @@ import cz.rion.buildserver.test.AsmTest;
 import cz.rion.buildserver.test.TestManager;
 import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 import cz.rion.buildserver.ui.provider.RemoteUIProviderServer;
-import cz.rion.buildserver.wrappers.FileReadException;
 
 public class HTTPClient {
 
@@ -338,6 +337,7 @@ public class HTTPClient {
 					}
 				}
 			} catch (Exception e) {
+				e.printStackTrace();
 			}
 		}
 

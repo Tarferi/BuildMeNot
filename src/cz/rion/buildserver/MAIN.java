@@ -22,7 +22,7 @@ public class MAIN {
 			}
 		});
 	}
-
+	
 	public static void main(String[] args) throws InvocationTargetException, InterruptedException {
 		if (Settings.RunOnlyUI()) {
 			onlyUI();
