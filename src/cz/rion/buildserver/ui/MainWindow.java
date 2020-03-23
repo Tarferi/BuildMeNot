@@ -27,6 +27,7 @@ public class MainWindow extends JFrame implements StatusChangeListener {
 	}
 
 	public MainWindow(String remoteAddress, int remotePort, String remotePasscode) {
+		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		setSize(new Dimension(640, 480));
 		this.driver = new UIDriver(this);
 

@@ -2,5 +2,3 @@ eclipse.preferences.version=1
 encoding//src/cz/rion/buildserver/MAIN.java=UTF-8
 encoding//src/cz/rion/buildserver/http/HTTPClient.java=UTF-8
 encoding//src/cz/rion/buildserver/json/JsonValue.java=UTF-8
-encoding//web/index.html=UTF-8
-encoding//web/index.js=UTF-8

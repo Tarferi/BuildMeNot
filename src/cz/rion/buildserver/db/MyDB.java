@@ -143,7 +143,7 @@ public class MyDB {
 			return;
 		}
 
-		private final TestManager tm = new TestManager("./web/tests/");
+		private final TestManager tm = new TestManager(null, "./web/tests/");
 
 		private String getTestID(int builderID, int totalTests, List<String> tests, CompilationResult d) {
 			if (d.resultCode != 0 || (!d.resultText.equals("OK") && !d.resultText.contains(":)"))) {

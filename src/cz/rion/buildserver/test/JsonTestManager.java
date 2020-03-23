@@ -5,12 +5,16 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
+import cz.rion.buildserver.db.StaticDB;
+import cz.rion.buildserver.db.layers.LayeredFilesDB.DatabaseFile;
 import cz.rion.buildserver.exceptions.CommandLineExecutionException;
+import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.test.TestManager.TestInput;
 import cz.rion.buildserver.test.TestManager.TestResult;
+import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 import cz.rion.buildserver.wrappers.FileReadException;
 import cz.rion.buildserver.wrappers.MyExec.MyExecResult;
 import cz.rion.buildserver.wrappers.MyExec.TestResultsExpectations;
@@ -27,6 +31,7 @@ public class JsonTestManager {
 		private final String title;
 		private final String prepend;
 		private final String append;
+		private String finalASM;
 
 		@Override
 		public String getID() {
@@ -52,15 +57,15 @@ public class JsonTestManager {
 					}
 				} catch (CommandLineExecutionException e) {
 					e.printStackTrace();
-					return new TestResult(false, "<span class='log_err'>Nepodaøilo se spustit test</span>", results);
+					return new TestResult(finalASM, false, "<span class='log_err'>Nepodaøilo se spustit test</span>", results);
 				}
 				index++;
 			}
 			if (passed == total) {
-				return new TestResult(true, "<span class='log_ok'>Test prošel :)</span>", results);
+				return new TestResult(finalASM, true, "<span class='log_ok'>Test prošel :)</span>", results);
 			} else {
 				int perc = (passed * 100) / total;
-				return new TestResult(false, "<span class='log_err'>Chyba: Prošlo " + perc + "% testù!</span>", results);
+				return new TestResult(finalASM, false, "<span class='log_err'>Chyba: Prošlo " + perc + "% testù!</span>", results);
 			}
 		}
 
@@ -72,6 +77,7 @@ public class JsonTestManager {
 			this.initialASM = initialASM;
 			this.prepend = prepend;
 			this.append = append;
+			this.finalASM = prepend + "\r\n" + initialASM + "\r\n" + append;
 		}
 
 		@Override
@@ -98,6 +104,7 @@ public class JsonTestManager {
 					return null;
 				}
 			}
+			this.finalASM = asm;
 			return asm;
 		}
 	}
@@ -131,11 +138,10 @@ public class JsonTestManager {
 		}
 	}
 
-	public static List<AsmTest> load(String testDirectory) {
-		List<AsmTest> lst = new ArrayList<>();
+	private static void fillFSTests(List<JsonObject> data, String directory) {
 		Collection<File> all = new ArrayList<File>();
 		try {
-			collectDir(new File(testDirectory), all);
+			collectDir(new File(directory), all);
 		} catch (Exception | Error e) {
 		}
 		for (File f : all) {
@@ -149,63 +155,103 @@ public class JsonTestManager {
 				JsonValue val = JsonValue.parse(test);
 				if (val != null) {
 					if (val.isObject()) {
-						JsonObject obj = val.asObject();
-						if (obj.containsArray("tests") && obj.containsString("id") && obj.containsString("description") && obj.containsString("title")) {
-							List<JsonValue> tests = obj.getArray("tests").Value;
-
-							List<TestVerificationData> tvd = new ArrayList<>();
-							boolean testOk = true;
-							for (JsonValue tst : tests) {
-								if (!tst.isObject()) {
-									testOk = false;
-									break;
-								}
-								JsonObject tsto = tst.asObject();
-								if (tsto.containsString("stdin") && tsto.containsString("stdout") && tsto.containsNumber("code") && tsto.containsString("stderr") && tsto.containsNumber("timeout")) {
-									String stdin = tsto.getString("stdin").Value;
-									String stdout = tsto.getString("stdout").Value;
-									String stderr = tsto.getString("stderr").Value;
-									int timeout = tsto.getNumber("timeout").Value;
-									int code = tsto.getNumber("code").Value;
-									String[] arguments = new String[0];
-									if (obj.containsArray("arguments")) {
-										JsonArray args = obj.getArray("arguments").asArray();
-										int argsNum = 0;
-										for (JsonValue arg : args.Value) {
-											if (arg.isString() || arg.isBoolean() || arg.isNumber()) {
-												argsNum++;
-											}
-										}
-										arguments = new String[argsNum];
-										int argsI = 0;
-										for (JsonValue arg : args.Value) {
-											if (arg.isString() || arg.isBoolean() || arg.isNumber()) {
-												arguments[argsI] = arg.getJsonString();
-												argsI++;
-											}
-										}
-									}
-									tvd.add(new TestVerificationData(stdin, stdout, stderr, code, timeout, arguments));
-								} else {
-									testOk = false;
-									break;
-								}
-							}
-							if (!testOk) {
-								continue;
-							}
-
-							String id = obj.getString("id").Value;
-							String description = obj.getString("description").Value;
-							String title = obj.getString("title").Value;
-							String prepend = obj.containsString("prepend") ? obj.getString("prepend").Value : "";
-							String append = obj.containsString("append") ? obj.getString("append").Value : "";
-
-							String initialASM = obj.containsString("init") ? obj.getString("init").Value : "";
-							lst.add(new JsonTest(id, title, description, tvd, initialASM, append, prepend));
-						}
+						data.add(val.asObject());
 					}
 				}
+			}
+		}
+	}
+
+	private static void fillDBTests(StaticDB sdb, List<JsonObject> data) {
+		if (sdb == null) {
+			return;
+		}
+		List<DatabaseFile> files = sdb.getFiles();
+		for (DatabaseFile file : files) {
+			String fname = file.FileName;
+			if (fname.startsWith("tests/") && fname.endsWith(".json")) {
+				try {
+					FileInfo fileData = sdb.getFile(file.ID);
+					JsonValue val = JsonValue.parse(fileData.Contents);
+					if (val != null) {
+						if (val.isObject()) {
+							data.add(val.asObject());
+						}
+					}
+				} catch (DatabaseException e) {
+					continue;
+				}
+			}
+		}
+	}
+
+	private static AsmTest ConvertJsonToTest(JsonObject obj) {
+		if (obj.containsArray("tests") && obj.containsString("id") && obj.containsString("description") && obj.containsString("title")) {
+			List<JsonValue> tests = obj.getArray("tests").Value;
+
+			List<TestVerificationData> tvd = new ArrayList<>();
+			boolean testOk = true;
+			for (JsonValue tst : tests) {
+				if (!tst.isObject()) {
+					testOk = false;
+					break;
+				}
+				JsonObject tsto = tst.asObject();
+				if (tsto.containsString("stdin") && tsto.containsString("stdout") && tsto.containsNumber("code") && tsto.containsString("stderr") && tsto.containsNumber("timeout")) {
+					String stdin = tsto.getString("stdin").Value;
+					String stdout = tsto.getString("stdout").Value;
+					String stderr = tsto.getString("stderr").Value;
+					int timeout = tsto.getNumber("timeout").Value;
+					int code = tsto.getNumber("code").Value;
+					String[] arguments = new String[0];
+					if (obj.containsArray("arguments")) {
+						JsonArray args = obj.getArray("arguments").asArray();
+						int argsNum = 0;
+						for (JsonValue arg : args.Value) {
+							if (arg.isString() || arg.isBoolean() || arg.isNumber()) {
+								argsNum++;
+							}
+						}
+						arguments = new String[argsNum];
+						int argsI = 0;
+						for (JsonValue arg : args.Value) {
+							if (arg.isString() || arg.isBoolean() || arg.isNumber()) {
+								arguments[argsI] = arg.getJsonString();
+								argsI++;
+							}
+						}
+					}
+					tvd.add(new TestVerificationData(stdin, stdout, stderr, code, timeout, arguments));
+				} else {
+					testOk = false;
+					break;
+				}
+			}
+			if (!testOk) {
+				return null;
+			}
+
+			String id = obj.getString("id").Value;
+			String description = obj.getString("description").Value;
+			String title = obj.getString("title").Value;
+			String prepend = obj.containsString("prepend") ? obj.getString("prepend").Value : "";
+			String append = obj.containsString("append") ? obj.getString("append").Value : "";
+
+			String initialASM = obj.containsString("init") ? obj.getString("init").Value : "";
+			return new JsonTest(id, title, description, tvd, initialASM, append, prepend);
+		}
+		return null;
+	}
+
+	public static List<AsmTest> load(StaticDB sdb, String testDirectory) {
+		List<AsmTest> lst = new ArrayList<>();
+		List<JsonObject> tests = new ArrayList<>();
+		fillFSTests(tests, testDirectory);
+		fillDBTests(sdb, tests);
+		for (JsonObject obj : tests) {
+			AsmTest test = ConvertJsonToTest(obj);
+			if (test != null) {
+				lst.add(test);
 			}
 		}
 		return lst;

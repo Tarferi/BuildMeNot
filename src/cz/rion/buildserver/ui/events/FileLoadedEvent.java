@@ -2,7 +2,7 @@ package cz.rion.buildserver.ui.events;
 
 import javax.swing.SwingUtilities;
 
-import cz.rion.buildserver.db.StaticDB.DatabaseFile;
+import cz.rion.buildserver.db.layers.LayeredFilesDB.DatabaseFile;
 
 public class FileLoadedEvent extends Event {
 

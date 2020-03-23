@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 
 import cz.rion.buildserver.Settings;
+import cz.rion.buildserver.db.StaticDB;
 import cz.rion.buildserver.exceptions.CommandLineExecutionException;
 import cz.rion.buildserver.exceptions.GoLinkExecutionException;
 import cz.rion.buildserver.exceptions.NasmExecutionException;
@@ -28,15 +29,20 @@ public class TestManager {
 		public final boolean passed;
 		public final String data;
 		private final TestResultsExpectations[] full;
+		private String finalASM;
 
-		public TestResult(boolean passed, String data, TestResultsExpectations[] full) {
+		public TestResult(String finalASM, boolean passed, String data, TestResultsExpectations[] full) {
+			this.finalASM = finalASM;
 			this.passed = passed;
 			this.data = data;
 			this.full = full;
 		}
 
-		public JsonArray getFailedDescriptionData() {
+		public JsonObject getFailedDescriptionData() {
+			JsonObject res = new JsonObject();
 			JsonArray result = new JsonArray(new ArrayList<JsonValue>());
+			res.add("final_code", new JsonString(finalASM));
+			res.add("failed_tests", result);
 			for (int i = 0; i < full.length; i++) {
 				if (full[i] != null) {
 					if (!full[i].passed) {
@@ -63,7 +69,7 @@ public class TestManager {
 					}
 				}
 			}
-			return result;
+			return res;
 		}
 	}
 
@@ -93,9 +99,11 @@ public class TestManager {
 	private Map<String, AsmTest> mtest = new HashMap<>();
 
 	private final String testDirectory;
+	private final StaticDB sdb;
 
-	public TestManager(String testDirectory) {
+	public TestManager(StaticDB sdb, String testDirectory) {
 		this.testDirectory = testDirectory;
+		this.sdb = sdb;
 		reloadTests();
 	}
 
@@ -103,7 +111,7 @@ public class TestManager {
 		synchronized (tests) {
 			tests.clear();
 			mtest.clear();
-			List<AsmTest> jsonTests = JsonTestManager.load(testDirectory);
+			List<AsmTest> jsonTests = JsonTestManager.load(sdb, testDirectory);
 			tests.addAll(jsonTests);
 
 			for (AsmTest t : tests) {

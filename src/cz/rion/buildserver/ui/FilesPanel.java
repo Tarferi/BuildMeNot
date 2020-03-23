@@ -2,7 +2,7 @@ package cz.rion.buildserver.ui;
 
 import javax.swing.JPanel;
 
-import cz.rion.buildserver.db.StaticDB.DatabaseFile;
+import cz.rion.buildserver.db.layers.LayeredFilesDB.DatabaseFile;
 import cz.rion.buildserver.ui.events.EventManager.Status;
 import cz.rion.buildserver.ui.events.FileCreatedEvent;
 import cz.rion.buildserver.ui.events.FileCreatedEvent.FileCreatedListener;
@@ -14,6 +14,8 @@ import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 import cz.rion.buildserver.ui.events.FileLoadedEvent.FileLoadedListener;
 import cz.rion.buildserver.ui.events.FileSavedEvent;
 import cz.rion.buildserver.ui.events.FileSavedEvent.FileSavedListener;
+import cz.rion.buildserver.ui.utils.BetterListCellRenderer;
+import cz.rion.buildserver.ui.utils.FilterModel;
 import net.miginfocom.swing.MigLayout;
 import java.awt.BorderLayout;
 import javax.swing.JSplitPane;
@@ -42,7 +44,7 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 
 	private final UIDriver driver;
 	private Status status;
-	private JTextField txtUserFilter;
+	private JTextField txtFileFilter;
 	JList<DatabaseFile> list;
 	private JPanel pnlOverview;
 	private JTextArea txtContents;
@@ -58,7 +60,7 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 
 	private void setComponentsEnabled(boolean enabled) {
 		list.setEnabled(enabled);
-		txtUserFilter.setEnabled(enabled);
+		txtFileFilter.setEnabled(enabled);
 		btnReload.setEnabled(enabled);
 		btnCreate.setEnabled(enabled);
 		txtCreate.setEnabled(enabled);
@@ -114,8 +116,8 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 		});
 		panel.add(btnReload, "cell 0 1 2 1,grow");
 
-		txtUserFilter = new JTextField();
-		txtUserFilter.getDocument().addDocumentListener(new DocumentListener() {
+		txtFileFilter = new JTextField();
+		txtFileFilter.getDocument().addDocumentListener(new DocumentListener() {
 			public void changedUpdate(DocumentEvent e) {
 				filter();
 			}
@@ -131,8 +133,8 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 			private String prevTxt = "";
 
 			private void filter() {
-				if (txtUserFilter != null) {
-					String ntext = txtUserFilter.getText();
+				if (txtFileFilter != null) {
+					String ntext = txtFileFilter.getText();
 					if (!prevTxt.equals(ntext)) {
 						prevTxt = ntext;
 						refilter(ntext);
@@ -140,27 +142,30 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 				}
 			}
 		});
-		txtUserFilter.setBorder(new MatteBorder(1, 1, 1, 1, (Color) new Color(0, 0, 0)));
-		panel.add(txtUserFilter, "cell 0 2,grow");
-		txtUserFilter.setColumns(10);
+		txtFileFilter.setBorder(new MatteBorder(1, 1, 1, 1, (Color) new Color(0, 0, 0)));
+		panel.add(txtFileFilter, "cell 0 2,grow");
+		txtFileFilter.setColumns(10);
 
 		JButton btnClear = new JButton("Clear");
 		btnClear.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
-				txtUserFilter.setText("");
+				txtFileFilter.setText("");
 				refilter("");
 			}
 		});
 		panel.add(btnClear, "cell 1 2,grow");
 
-		JScrollPane scrollUsers = new JScrollPane();
-		panel.add(scrollUsers, "cell 0 3 2 1,grow");
+		JScrollPane scrollFiles = new JScrollPane();
+		scrollFiles.getVerticalScrollBar().setUnitIncrement(16);
+		panel.add(scrollFiles, "cell 0 3 2 1,grow");
 
-		JPanel pnlUsers = new JPanel();
-		scrollUsers.setViewportView(pnlUsers);
-		pnlUsers.setLayout(new BorderLayout(0, 0));
+		JPanel pnlFiles = new JPanel();
+		scrollFiles.setViewportView(pnlFiles);
+		pnlFiles.setLayout(new BorderLayout(0, 0));
 
 		list = new JList<>();
+		list.setCellRenderer(new BetterListCellRenderer());
+		list.setFont(new Font("Tahoma", Font.PLAIN, 17));
 		list.addListSelectionListener(new ListSelectionListener() {
 			public void valueChanged(ListSelectionEvent e) {
 				int selIndex = list.getSelectedIndex();
@@ -173,7 +178,7 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 		});
 		setListItems(new DatabaseFile[0]);
 		list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-		pnlUsers.add(list, BorderLayout.CENTER);
+		pnlFiles.add(list, BorderLayout.CENTER);
 
 		txtCreate = new JTextField();
 		panel.add(txtCreate, "cell 0 4,grow");
@@ -204,8 +209,10 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 		pnlOverview.setLayout(new MigLayout("", "[grow]", "[grow][]"));
 
 		txtContents = new JTextArea();
-		txtContents.setFont(new Font("Monospaced", Font.PLAIN, 11));
-		pnlOverview.add(txtContents, "cell 0 0,grow");
+		txtContents.setFont(new Font("Monospaced", Font.PLAIN, 17));
+		JScrollPane scrollContents = new JScrollPane(txtContents);
+		scrollContents.getVerticalScrollBar().setUnitIncrement(16);
+		pnlOverview.add(scrollContents, "cell 0 0,grow");
 		txtContents.getDocument().addDocumentListener(new DocumentListener() {
 			public void changedUpdate(DocumentEvent e) {
 				filter();

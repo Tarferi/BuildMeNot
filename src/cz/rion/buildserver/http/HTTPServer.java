@@ -21,7 +21,7 @@ public class HTTPServer {
 	public final List<BuildThread> builders = new ArrayList<>();
 	private final RemoteUIProviderServer remoteUI;
 
-	private final TestManager tests = new TestManager("./web/tests");
+	private final TestManager tests;
 
 	public final RuntimeDB db;
 	public final StaticDB sdb;
@@ -46,6 +46,7 @@ public class HTTPServer {
 	public HTTPServer(int port) throws DatabaseException {
 		this.db = new RuntimeDB(Settings.getMainDB());
 		this.sdb = new StaticDB(Settings.getStaticDB());
+		this.tests = new TestManager(sdb, "./web/tests");
 		this.remoteUI = new RemoteUIProviderServer(this);
 		this.port = port;
 		for (int i = 0; i < Settings.getBuildersCount(); i++) {

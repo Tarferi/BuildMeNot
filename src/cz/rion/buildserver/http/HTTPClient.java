@@ -23,9 +23,9 @@ import cz.rion.buildserver.json.JsonValue.JsonNumber;
 import cz.rion.buildserver.json.JsonValue.JsonString;
 import cz.rion.buildserver.test.AsmTest;
 import cz.rion.buildserver.test.TestManager;
+import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 import cz.rion.buildserver.ui.provider.RemoteUIProviderServer;
 import cz.rion.buildserver.wrappers.FileReadException;
-import cz.rion.buildserver.wrappers.MyFS;
 
 public class HTTPClient {
 
@@ -389,9 +389,10 @@ public class HTTPClient {
 				boolean isAllowed = false;
 				for (String allow : allowed) {
 					if (allow.equals(endPoint)) {
-						try {
-							String fileContents = MyFS.readFile("./web/" + endPoint);
-							data = fileContents.getBytes(Settings.getDefaultCharset());
+						FileInfo dbf = sdb.loadFile("web/" + endPoint);
+						if (dbf != null) {
+							// String fileContents = MyFS.readFile("./web/" + endPoint);
+							data = dbf.Contents.getBytes(Settings.getDefaultCharset());
 							intentType = HTTPClientIntentType.GET_RESOURCE;
 							if (allow.endsWith(".html")) {
 								type = "text/html; charset=UTF-8";
@@ -402,12 +403,13 @@ public class HTTPClient {
 								type = "text/css";
 							}
 							if (allow.equals("index.js")) {
-								data = fileContents.replace("$IDENTITY_TOKEN$", login).getBytes(Settings.getDefaultCharset());
+								data = dbf.Contents.replace("$IDENTITY_TOKEN$", login).getBytes(Settings.getDefaultCharset());
 							}
-						} catch (FileReadException e) {
+						} else {
 							returnCode = 404;
 							returnCodeDescription = "Not Found";
 							data = ("Nemuzu precist: " + endPoint).getBytes(Settings.getDefaultCharset());
+
 						}
 						isAllowed = true;
 						break;
@@ -511,8 +513,23 @@ public class HTTPClient {
 
 							returnValue = tests.run(builderID, test_id, asm);
 							testsPassed = returnValue.containsNumber("code") ? returnValue.getNumber("code").Value == 0 : false;
-							if (!obj.containsArray("show_details") && returnValue.containsArray("details")) {
-								returnValue.remove("details");
+							if (returnValue.containsArray("details")) {
+								boolean keepDetails = false;
+								if (obj.containsString("show_details")) {
+									String detailsPassword = obj.getString("show_details").Value;
+									try {
+										FileInfo dbDetailsPassword = sdb.getFile("PasswordForDetailedView.cfg");
+										if (dbDetailsPassword != null) {
+											if (dbDetailsPassword.Contents.equals(detailsPassword)) {
+												keepDetails = true;
+											}
+										}
+									} catch (DatabaseException e) {
+									}
+								}
+								if (!keepDetails) {
+									returnValue.remove("details");
+								}
 							}
 
 						} else if (obj.containsString("action")) {
@@ -607,7 +624,8 @@ public class HTTPClient {
 			}
 			data = new byte[dataLength];
 			try {
-				client.getInputStream().read(data);
+				RemoteUIProviderServer.read(client, data);
+				// client.getInputStream().read(data);
 			} catch (IOException e) {
 				throw new HTTPClientException("Failed to read request", e);
 			}

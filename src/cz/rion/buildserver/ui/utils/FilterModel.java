@@ -1,4 +1,4 @@
-package cz.rion.buildserver.ui;
+package cz.rion.buildserver.ui.utils;
 
 import java.util.ArrayList;
 import java.util.List;

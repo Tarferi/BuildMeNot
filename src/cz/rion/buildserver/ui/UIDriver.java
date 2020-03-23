@@ -3,11 +3,12 @@ package cz.rion.buildserver.ui;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.Socket;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import cz.rion.buildserver.Settings;
-import cz.rion.buildserver.db.StaticDB.DatabaseFile;
+import cz.rion.buildserver.db.layers.LayeredFilesDB.DatabaseFile;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.BuildThread.BuilderStats;
@@ -214,6 +215,8 @@ public class UIDriver {
 				return new FileSavedEvent(readFileSave(client));
 			} else if (code == FileCreatedEvent.ID) {
 				return new FileCreatedEvent(readFileCreate(client));
+			} else {
+				throw new IOException("Invalid OP code: " + code);
 			}
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -243,6 +246,8 @@ public class UIDriver {
 			int id = RemoteUIProviderServer.readInt(client);
 			String name = RemoteUIProviderServer.readString(client);
 			String contents = RemoteUIProviderServer.readString(client);
+			byte[] cnt = contents.getBytes(Settings.getDefaultCharset());
+			contents = new String(cnt, Charset.forName("UTF-8"));
 			return new FileInfo(id, name, contents);
 		} else {
 			return null;
@@ -300,7 +305,9 @@ public class UIDriver {
 							synchronized (writeSyncer) {
 								out.write(("AUTH " + auth + " HTTP/1.1\r\n\r\n").getBytes(Settings.getDefaultCharset()));
 							}
-							int code = client.getInputStream().read();
+							byte[] b = new byte[1];
+							RemoteUIProviderServer.read(client, b);
+							int code = b[0];
 							if (code != 42) {
 								throw new IOException("Invalid welcome message");
 							}
@@ -387,7 +394,8 @@ public class UIDriver {
 	}
 
 	public void saveFile(int ID, String newContents) {
-		addJob(FileSavedEvent.ID, ID, newContents);
+		byte[] cnt = newContents.getBytes(Charset.forName("UTF-8"));
+		addJob(FileSavedEvent.ID, ID, new String(cnt, Settings.getDefaultCharset()));
 	}
 
 	public void createFile(String name) {

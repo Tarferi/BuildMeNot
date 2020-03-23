@@ -11,8 +11,8 @@ import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.RuntimeDB;
 import cz.rion.buildserver.db.RuntimeDB.RuntimeUserStats;
 import cz.rion.buildserver.db.StaticDB;
-import cz.rion.buildserver.db.StaticDB.DatabaseFile;
-import cz.rion.buildserver.db.StaticDB.LocalUser;
+import cz.rion.buildserver.db.layers.LayeredFilesDB.DatabaseFile;
+import cz.rion.buildserver.db.layers.LayeredUserDB.LocalUser;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.BuildThread.BuilderStats;
 import cz.rion.buildserver.http.HTTPServer;
@@ -32,9 +32,20 @@ import cz.rion.buildserver.ui.events.StatusMessageEvent.StatusMessageType;
 
 public class RemoteUIProviderServer {
 
+	public static void read(Socket sock, byte[] target) throws IOException {
+		int needed = target.length;
+		while (needed > 0) {
+			int read = sock.getInputStream().read(target, target.length - needed, needed);
+			if (read < 0) {
+				throw new IOException("Read error");
+			}
+			needed -= read;
+		}
+	}
+
 	public static int readInt(Socket sock) throws IOException {
 		byte[] data = new byte[4];
-		sock.getInputStream().read(data);
+		read(sock, data);
 		return ((data[0] & 0xff) << 24) | ((data[1] & 0xff) << 16) | ((data[2] & 0xff) << 8) | (data[3] & 0xff) & 0xffffffff;
 	}
 
@@ -63,7 +74,7 @@ public class RemoteUIProviderServer {
 
 	public static Date readDate(Socket sock) throws IOException {
 		byte[] data = new byte[8];
-		sock.getInputStream().read(data);
+		read(sock, data);
 		long l = 0;
 		l |= data[0] & 0xff;
 		l <<= 8;
@@ -92,7 +103,7 @@ public class RemoteUIProviderServer {
 	public static String readString(Socket sock) throws IOException {
 		int length = readInt(sock);
 		byte[] raw = new byte[length];
-		sock.getInputStream().read(raw);
+		read(sock, raw);
 		return new String(raw, Settings.getDefaultCharset());
 	}
 
@@ -388,7 +399,9 @@ public class RemoteUIProviderServer {
 				}
 			}
 			try {
-				int code = client.getInputStream().read();
+				byte[] b = new byte[1];
+				read(client, b);
+				int code = b[0];
 				if (!handle(code, client)) {
 					synchronized (syncer) {
 						if (this.client == client) {

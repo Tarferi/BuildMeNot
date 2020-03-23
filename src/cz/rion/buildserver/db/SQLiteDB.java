@@ -126,7 +126,7 @@ public class SQLiteDB {
 		execute(sb.toString());
 	}
 
-	protected final class DatabaseResult {
+	public final class DatabaseResult {
 
 		private final ResultSet rs;
 

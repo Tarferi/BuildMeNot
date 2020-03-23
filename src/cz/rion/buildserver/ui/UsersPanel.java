@@ -6,6 +6,8 @@ import cz.rion.buildserver.ui.events.UsersLoadedEvent;
 import cz.rion.buildserver.ui.events.EventManager.Status;
 import cz.rion.buildserver.ui.events.UsersLoadedEvent.UserInfo;
 import cz.rion.buildserver.ui.events.UsersLoadedEvent.UserListLoadedListener;
+import cz.rion.buildserver.ui.utils.BetterListCellRenderer;
+import cz.rion.buildserver.ui.utils.FilterModel;
 import net.miginfocom.swing.MigLayout;
 import java.awt.BorderLayout;
 import javax.swing.JSplitPane;
@@ -30,6 +32,7 @@ import javax.swing.event.ListSelectionListener;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.event.ListSelectionEvent;
+import java.awt.Font;
 
 public class UsersPanel extends JPanel implements UserListLoadedListener {
 
@@ -144,6 +147,8 @@ public class UsersPanel extends JPanel implements UserListLoadedListener {
 		pnlUsers.setLayout(new BorderLayout(0, 0));
 
 		list = new JList<>();
+		list.setFont(new Font("Tahoma", Font.PLAIN, 17));
+		list.setCellRenderer(new BetterListCellRenderer());
 		list.addListSelectionListener(new ListSelectionListener() {
 			public void valueChanged(ListSelectionEvent e) {
 				int selIndex = list.getSelectedIndex();
