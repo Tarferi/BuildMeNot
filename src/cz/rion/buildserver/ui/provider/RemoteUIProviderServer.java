@@ -223,6 +223,7 @@ public class RemoteUIProviderServer {
 
 	private void storeFile(Socket client) throws IOException {
 		int fileID = readInt(client);
+		String newFileName = readString(client);
 		String newContents = readString(client);
 		writeInt(client, FileSavedEvent.ID);
 		try {
@@ -231,7 +232,7 @@ public class RemoteUIProviderServer {
 				writeInt(client, 0);
 				return;
 			} else {
-				sdb.storeFile(fo, newContents);
+				sdb.storeFile(fo, newFileName, newContents);
 				fo = sdb.getFile(fileID);
 				if (fo == null) { // Check the write operation
 					writeInt(client, 0);

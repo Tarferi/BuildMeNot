@@ -1,4 +1,3 @@
-
 var allTests = [];
 
 var IDENTITY_TOKEN = "$IDENTITY_TOKEN$";
@@ -37,7 +36,7 @@ function dec(str) {
 	var decTable = {
 			
 			195: {
-				63: 193, // "Á"
+				63: 193, // "�?"
 				161: 225, // "á"
 				169: 233, // "é"
 				137: 201, // "É"
@@ -73,8 +72,8 @@ function dec(str) {
 			
 			197: {
 				135: 327, // "Ň"
-				63: 328, // "ň"
-				63: 344, // "Ř"
+				63: 328, // "�?"
+				63: 344, // "�?"
 				153: 345, // "ř"
 				32: 352, // "Š"
 				161: 353, // "š"
@@ -146,6 +145,78 @@ function testI(data) {
 	this.b1 = null;
 	this.rs = null;
 	
+	var UI = {
+		      "type":"div",
+		      "class":"w0",
+		      "contents":[
+		         {
+		            "type":"div",
+		            "class":"w00",
+		            "id":"txtBrief"
+		         },
+		         {
+		            "type":"div",
+		            "class":"w1",
+		            "contents":[
+		               {
+		                  "type":"div",
+		                  "class":"w11",
+		                  "contents":[
+		                     {
+		                        "type":"textarea",
+		                        "class":"w111",
+		                        "id":"txtArea"
+		                     },
+		                     {
+		                        "type":"div",
+		                        "class":"w112",
+		                        "contents":[
+		                           {
+		                              "type":"button",
+		                              "id":"runtests",
+		                              "innerHTML":"Otestovat řešení"
+		                           }
+		                        ]
+		                     }
+		                  ]
+		               },
+		               {
+		                  "type":"div",
+		                  "class":"w12",
+		                  "contents":[
+		                     {
+		                        "type":"div",
+		                        "class":"w121",
+		                        "innerHTML":"Popis"
+		                     },
+		                     {
+		                        "type":"div",
+		                        "id":"txtDescr",
+		                        "class":"w122"
+		                     }
+		                  ]
+		               },
+		               {
+		                  "type":"div",
+		                  "class":"w13",
+		                  "contents":[
+		                     {
+		                        "type":"div",
+		                        "class":"w131",
+		                        "innerHTML":"&#344;ešení"
+		                     },
+		                     {
+		                        "type":"div",
+		                        "id":"txtSolution",
+		                        "class":"w132"
+		                     }
+		                  ]
+		               }
+		            ]
+		         }
+		      ]
+			};
+
 	this.setComponentsEnabled  = function(enabled) {
 		self.ta.readOnly = !enabled;
 		self.b1.disabled = !enabled;
@@ -212,7 +283,54 @@ function testI(data) {
 		self.ta.addEventListener("keydown", cancF);
 	}
 	
+	var construct_rec = function (data, ids) {
+		if(!ids){
+			ids = {};
+		}
+		var type = data.type;
+		var el = document.createElement(type);
+		if(data.class) {
+			el.classList.add(data.class);
+		}
+		if(data.innerHTML) {
+			el.innerHTML = data.innerHTML;
+		}
+		if(data.id) {
+			el.id = data.id;
+			ids[data.id] = el;
+		}
+		if(data.contents) { 
+			for(var i = 0; i < data.contents.length; i++) {
+				var childData = data.contents[i];
+				var sub = construct_rec(childData, ids);
+				var subEl = sub[0];
+				var subIds = sub[1];
+				el.appendChild(subEl);
+				for(var x in subIds){
+					ids[x] = subIds[x];
+				}
+			}
+		}
+		return [el, ids];
+	};
+	
 	this.getElement = function() {
+		var struct = construct_rec(UI);
+		var el = struct[0];
+		var ids = struct[1];
+		ids.txtArea.innerHTML = data.init;
+		ids.txtBrief.innerHTML = data.title;
+		ids.txtDescr.innerHTML = data.zadani;
+		ids.txtSolution.innerHTML = "Zde se objevi detaily testů tvého řešení";
+		
+		self.ta = ids.txtArea;
+		self.b1 = ids.runtests;
+		self.rs = ids.txtSolution;
+		setup();
+		return el;
+	}
+	
+	this.getElementOld = function() {
 		var el = document.createElement("div"); // Hlavni prvek
 		el.classList.add("txtTest");
 		
@@ -271,12 +389,18 @@ function async(data, callbackOK, callbackFail) {
 
 function submit(id, asm, cbOK, cbFail) {
 	var data = {"asm":asm, "id": id}
+	if(window.pw_details) {
+		data.show_details = window.pw_details;
+	}
 	var txtEnc = "q=" + encode(JSON.stringify(data));
 	async(txtEnc, function(response) {
 		var deco=decode(response);
 		if(deco!==false) {
 			var obj = JSON.parse(deco);
 			if(obj!==false){
+				if(obj.details) {
+					console.log(JSON.stringify(obj.details));
+				}
 				if(obj.code == 0){
 					cbOK(obj.result);
 					return;
@@ -346,7 +470,7 @@ function materialize(data) {
 		data[i].init = dec(data[i].init);
 		var dataI = new testI(data[i]);
 		allTests[allTests.length] = dataI;
-		id_indiv.appendChild(dataI.getElement());
+		id_indiv.appendChild(use_old_ui ? dataI.getElementOld() : dataI.getElement());
 	}
 }
 
@@ -392,6 +516,10 @@ function logout() {
     window.location.href="http://isu.rion.cz/logout"
 }
 
+function show_details(password) {
+	window.pw_details = password;	
+}
+
 function aload() {
 	txtLogin.innerHTML = IDENTITY_TOKEN;
 	btnLogout.addEventListener("click", function(){logout();});
@@ -400,4 +528,16 @@ function aload() {
 
 function showLoginPanel() {
 	txtHeader.style.display="block";
+}
+
+var use_old_ui  = false;
+
+function reloadNewUI() {
+	use_old_ui = false;
+	loadRemoteTests();
+}
+
+function reloadOldUI() {
+	use_old_ui = true;
+	loadRemoteTests();
 }

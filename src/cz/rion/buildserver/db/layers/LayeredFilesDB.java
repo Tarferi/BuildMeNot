@@ -1,6 +1,5 @@
 package cz.rion.buildserver.db.layers;
 
-import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -156,9 +155,9 @@ public abstract class LayeredFilesDB extends LayeredStaticDB {
 		return result;
 	}
 
-	public final void storeFile(DatabaseFile file, String newContents) {
+	public final void storeFile(DatabaseFile file, String newFileName, String newContents) {
 		try {
-			this.execute("UPDATE files SET name = '?', contents = '?' WHERE ID = ?", file.FileName, encode(newContents), file.ID);
+			this.execute("UPDATE files SET name = '?', contents = '?' WHERE ID = ?", newFileName, encode(newContents), file.ID);
 		} catch (DatabaseException e) {
 			e.printStackTrace();
 		}

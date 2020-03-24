@@ -219,7 +219,9 @@ public class UIDriver {
 				throw new IOException("Invalid OP code: " + code);
 			}
 		} catch (IOException e) {
-			e.printStackTrace();
+			if (client != null) { // Client closed from another thread
+				e.printStackTrace(); 
+			}
 		}
 		return new StatusChangeEvent(Status.DISCONNECTED);
 	}
@@ -393,9 +395,9 @@ public class UIDriver {
 		addJob(FileLoadedEvent.ID, ID);
 	}
 
-	public void saveFile(int ID, String newContents) {
+	public void saveFile(int ID, String fileName, String newContents) {
 		byte[] cnt = newContents.getBytes(Charset.forName("UTF-8"));
-		addJob(FileSavedEvent.ID, ID, new String(cnt, Settings.getDefaultCharset()));
+		addJob(FileSavedEvent.ID, ID, fileName, new String(cnt, Settings.getDefaultCharset()));
 	}
 
 	public void createFile(String name) {

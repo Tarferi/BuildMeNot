@@ -2,20 +2,20 @@ package cz.rion.buildserver.ui;
 
 import javax.swing.JPanel;
 import net.miginfocom.swing.MigLayout;
-import javax.swing.JLabel;
-import javax.swing.JTextField;
 
 import cz.rion.buildserver.ui.events.EventManager;
 import cz.rion.buildserver.ui.events.EventManager.Status;
+import cz.rion.buildserver.ui.utils.MyButton;
+import cz.rion.buildserver.ui.utils.MyLabel;
+import cz.rion.buildserver.ui.utils.MyTextField;
 
-import javax.swing.JButton;
 import java.awt.event.ActionListener;
 import java.awt.event.ActionEvent;
 
 public class ConnectionPanel extends JPanel {
-	private JTextField txtServer;
-	private JTextField txtAuth;
-	private JButton btnConnect;
+	private MyTextField txtServer;
+	private MyTextField txtAuth;
+	private MyButton btnConnect;
 	private Status status;
 
 	public ConnectionPanel(final UIDriver driver, String remoteAddress, int remotePort, String remotePasscode) {
@@ -23,14 +23,14 @@ public class ConnectionPanel extends JPanel {
 		setOpaque(false);
 		setLayout(new MigLayout("", "[133.00][300:300:300][]", "[][]"));
 
-		JLabel lblServer = new JLabel("Server:");
+		MyLabel lblServer = new MyLabel("Server:");
 		add(lblServer, "cell 0 0,alignx trailing");
 
-		txtServer = new JTextField();
+		txtServer = new MyTextField();
 		add(txtServer, "cell 1 0,growx");
 		txtServer.setColumns(10);
 
-		btnConnect = new JButton("Connect");
+		btnConnect = new MyButton("Connect");
 		btnConnect.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				if (status == EventManager.Status.CONNECTED) {
@@ -53,10 +53,10 @@ public class ConnectionPanel extends JPanel {
 		});
 		add(btnConnect, "cell 2 0 1 2,grow");
 
-		JLabel lblAuthentication = new JLabel("Authentication:");
+		MyLabel lblAuthentication = new MyLabel("Authentication:");
 		add(lblAuthentication, "cell 0 1,alignx trailing");
 
-		txtAuth = new JTextField();
+		txtAuth = new MyTextField();
 		add(txtAuth, "cell 1 1,growx,aligny top");
 		txtAuth.setColumns(10);
 		txtServer.setText(remoteAddress + ":" + remotePort);

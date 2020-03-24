@@ -8,19 +8,19 @@ import cz.rion.buildserver.ui.events.UsersLoadedEvent.UserInfo;
 import cz.rion.buildserver.ui.events.UsersLoadedEvent.UserListLoadedListener;
 import cz.rion.buildserver.ui.utils.BetterListCellRenderer;
 import cz.rion.buildserver.ui.utils.FilterModel;
+import cz.rion.buildserver.ui.utils.MyButton;
+import cz.rion.buildserver.ui.utils.MyLabel;
+import cz.rion.buildserver.ui.utils.MyTextField;
 import net.miginfocom.swing.MigLayout;
 import java.awt.BorderLayout;
 import javax.swing.JSplitPane;
 import javax.swing.JScrollPane;
-import javax.swing.JLabel;
 import javax.swing.border.MatteBorder;
 import java.awt.Color;
 import java.awt.Graphics;
 
-import javax.swing.JButton;
 import javax.swing.JList;
 import javax.swing.ListSelectionModel;
-import javax.swing.JTextField;
 import javax.swing.ListModel;
 import javax.swing.border.LineBorder;
 import java.awt.event.ActionListener;
@@ -38,16 +38,16 @@ public class UsersPanel extends JPanel implements UserListLoadedListener {
 
 	private final UIDriver driver;
 	private Status status;
-	private JTextField txtUserFilter;
+	private MyTextField txtUserFilter;
 	private JPanel pnlDiv;
 	JList<UserInfo> list;
 	private JPanel pnlOverview;
-	private JLabel lblRegisted;
-	private JLabel lblLastActive;
-	private JLabel lblFullname;
-	private JLabel lblTotalTests;
-	private JLabel lblGroup;
-	private JLabel lblLastTest;
+	private MyLabel lblRegisted;
+	private MyLabel lblLastActive;
+	private MyLabel lblFullname;
+	private MyLabel lblTotalTests;
+	private MyLabel lblGroup;
+	private MyLabel lblLastTest;
 
 	private void setComponentsEnabled(boolean enabled) {
 		txtUserFilter.setEnabled(enabled);
@@ -88,11 +88,11 @@ public class UsersPanel extends JPanel implements UserListLoadedListener {
 		splitPane.setLeftComponent(panel);
 		panel.setLayout(new MigLayout("", "[grow][]", "[][][][grow]"));
 
-		JLabel lblUsers = new JLabel("Users");
+		MyLabel lblUsers = new MyLabel("Users");
 		lblUsers.setBorder(new MatteBorder(0, 0, 1, 0, (Color) new Color(0, 0, 0)));
 		panel.add(lblUsers, "cell 0 0,alignx center");
 
-		btnReload = new JButton("Reload");
+		btnReload = new MyButton("Reload");
 		btnReload.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				reloadUsers();
@@ -100,7 +100,7 @@ public class UsersPanel extends JPanel implements UserListLoadedListener {
 		});
 		panel.add(btnReload, "cell 0 1 2 1,grow");
 
-		txtUserFilter = new JTextField();
+		txtUserFilter = new MyTextField();
 		txtUserFilter.getDocument().addDocumentListener(new DocumentListener() {
 			public void changedUpdate(DocumentEvent e) {
 				filter();
@@ -130,7 +130,7 @@ public class UsersPanel extends JPanel implements UserListLoadedListener {
 		panel.add(txtUserFilter, "cell 0 2,grow");
 		txtUserFilter.setColumns(10);
 
-		JButton btnClear = new JButton("Clear");
+		MyButton btnClear = new MyButton("Clear");
 		btnClear.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				txtUserFilter.setText("");
@@ -167,7 +167,7 @@ public class UsersPanel extends JPanel implements UserListLoadedListener {
 		splitPane.setRightComponent(panel_1);
 		panel_1.setLayout(new MigLayout("", "[grow]", "[][grow]"));
 
-		JLabel lblOverview = new JLabel("Overview");
+		MyLabel lblOverview = new MyLabel("Overview");
 		lblOverview.setBorder(new MatteBorder(0, 0, 1, 0, (Color) new Color(0, 0, 0)));
 		panel_1.add(lblOverview, "cell 0 0,alignx center");
 
@@ -176,9 +176,9 @@ public class UsersPanel extends JPanel implements UserListLoadedListener {
 		panel_1.add(pnlOverview, "cell 0 1,grow");
 		pnlOverview.setLayout(new MigLayout("", "[][][grow][][]", "[][][][grow][]"));
 
-		pnlOverview.add(new JLabel("Registered:"), "cell 0 0,alignx right");
+		pnlOverview.add(new MyLabel("Registered:"), "cell 0 0,alignx right");
 
-		lblRegisted = new JLabel("<Registered>");
+		lblRegisted = new MyLabel("<Registered>");
 		pnlOverview.add(lblRegisted, "cell 1 0");
 
 		pnlDiv = new JPanel() {
@@ -192,36 +192,36 @@ public class UsersPanel extends JPanel implements UserListLoadedListener {
 		pnlDiv.setOpaque(false);
 		pnlOverview.add(pnlDiv, "cell 2 0 1 3,grow");
 
-		pnlOverview.add(new JLabel("Last active:"), "cell 3 0,alignx right");
+		pnlOverview.add(new MyLabel("Last active:"), "cell 3 0,alignx right");
 
-		lblLastActive = new JLabel("<Last active>");
+		lblLastActive = new MyLabel("<Last active>");
 		pnlOverview.add(lblLastActive, "cell 4 0");
 
-		pnlOverview.add(new JLabel("Full name:"), "cell 0 1,alignx right");
+		pnlOverview.add(new MyLabel("Full name:"), "cell 0 1,alignx right");
 
-		lblFullname = new JLabel("<Full name>");
+		lblFullname = new MyLabel("<Full name>");
 		pnlOverview.add(lblFullname, "cell 1 1");
 
-		pnlOverview.add(new JLabel("Tests submitted:"), "cell 3 1,alignx right");
+		pnlOverview.add(new MyLabel("Tests submitted:"), "cell 3 1,alignx right");
 
-		lblTotalTests = new JLabel("<Total tests>");
+		lblTotalTests = new MyLabel("<Total tests>");
 		pnlOverview.add(lblTotalTests, "cell 4 1");
 
-		pnlOverview.add(new JLabel("Group:"), "cell 0 2,alignx right");
+		pnlOverview.add(new MyLabel("Group:"), "cell 0 2,alignx right");
 
-		lblGroup = new JLabel("<Group>");
+		lblGroup = new MyLabel("<Group>");
 		pnlOverview.add(lblGroup, "cell 1 2");
 
-		pnlOverview.add(new JLabel("Last submit:"), "cell 3 2,alignx right");
+		pnlOverview.add(new MyLabel("Last submit:"), "cell 3 2,alignx right");
 
-		lblLastTest = new JLabel("<Last test>");
+		lblLastTest = new MyLabel("<Last test>");
 		pnlOverview.add(lblLastTest, "cell 4 2");
 
 		JPanel panel_3 = new JPanel();
 		pnlOverview.add(panel_3, "cell 0 4 5 1,grow");
 		panel_3.setLayout(new MigLayout("", "[]", "[]"));
 
-		JButton btnViewTests = new JButton("View tests");
+		MyButton btnViewTests = new MyButton("View tests");
 		panel_3.add(btnViewTests, "cell 0 0");
 
 		UsersLoadedEvent.addStatusChangeListener(driver.EventManager, this);
@@ -235,7 +235,7 @@ public class UsersPanel extends JPanel implements UserListLoadedListener {
 	}
 
 	private final SimpleDateFormat dateFormat = new SimpleDateFormat("dd. MM. yyyy - HH:mm");
-	private JButton btnReload;
+	private MyButton btnReload;
 
 	private String DateToText(Date date) {
 		return dateFormat.format(date);

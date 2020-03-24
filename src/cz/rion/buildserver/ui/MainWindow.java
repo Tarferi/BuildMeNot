@@ -16,7 +16,7 @@ public class MainWindow extends JFrame implements StatusChangeListener {
 	private final UsersPanel pnlUsers;
 	private final FilesPanel pnlFiles;
 	private final UIDriver driver;
-	private Status status;
+	private Status status = Status.DISCONNECTED;
 	private JTabbedPane tabbedPane;
 
 	private void update() {

@@ -25,6 +25,8 @@ import cz.rion.buildserver.test.AsmTest;
 import cz.rion.buildserver.test.TestManager;
 import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 import cz.rion.buildserver.ui.provider.RemoteUIProviderServer;
+import cz.rion.buildserver.wrappers.FileReadException;
+import cz.rion.buildserver.wrappers.MyFS;
 
 public class HTTPClient {
 
@@ -347,6 +349,19 @@ public class HTTPClient {
 		return resp;
 	}
 
+	private String readFileOrDBFile(String path) {
+		try {
+			String fileContents = MyFS.readFile("./web/" + endPoint);
+			return fileContents;
+		} catch (FileReadException e) {
+			FileInfo dbf = sdb.loadFile("web/" + endPoint);
+			if (dbf != null) {
+				return dbf.Contents;
+			}
+		}
+		return null;
+	}
+
 	private HTTPResponse handle(HTTPRequest request) throws HTTPClientException {
 		int returnCode = 200;
 		String type = "multipart/form-data;";
@@ -389,10 +404,9 @@ public class HTTPClient {
 				boolean isAllowed = false;
 				for (String allow : allowed) {
 					if (allow.equals(endPoint)) {
-						FileInfo dbf = sdb.loadFile("web/" + endPoint);
-						if (dbf != null) {
-							// String fileContents = MyFS.readFile("./web/" + endPoint);
-							data = dbf.Contents.getBytes(Settings.getDefaultCharset());
+						String contents = readFileOrDBFile(endPoint);
+						if (contents != null) {
+							data = contents.getBytes(Settings.getDefaultCharset());
 							intentType = HTTPClientIntentType.GET_RESOURCE;
 							if (allow.endsWith(".html")) {
 								type = "text/html; charset=UTF-8";
@@ -403,7 +417,7 @@ public class HTTPClient {
 								type = "text/css";
 							}
 							if (allow.equals("index.js")) {
-								data = dbf.Contents.replace("$IDENTITY_TOKEN$", login).getBytes(Settings.getDefaultCharset());
+								data = contents.replace("$IDENTITY_TOKEN$", login).getBytes(Settings.getDefaultCharset());
 							}
 						} else {
 							returnCode = 404;
@@ -513,7 +527,7 @@ public class HTTPClient {
 
 							returnValue = tests.run(builderID, test_id, asm);
 							testsPassed = returnValue.containsNumber("code") ? returnValue.getNumber("code").Value == 0 : false;
-							if (returnValue.containsArray("details")) {
+							if (returnValue.containsObject("details")) {
 								boolean keepDetails = false;
 								if (obj.containsString("show_details")) {
 									String detailsPassword = obj.getString("show_details").Value;

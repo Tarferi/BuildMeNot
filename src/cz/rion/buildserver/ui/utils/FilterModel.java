@@ -1,5 +1,6 @@
 package cz.rion.buildserver.ui.utils;
 
+import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -14,6 +15,22 @@ public abstract class FilterModel<T> extends AbstractListModel<T> {
 	public FilterModel(T[] data, String filter) {
 		this.data = data;
 		this.filter(filter);
+	}
+
+	private static class FilterModelConverter<X extends Object> {
+
+		private X[] fromList(List<X> data, Class<X> cls) {
+			@SuppressWarnings("unchecked")
+			final X[] result = (X[]) Array.newInstance(cls, data.size());
+			for (int i = 0; i < result.length; i++) {
+				result[i] = data.get(i);
+			}
+			return result;
+		}
+	}
+
+	public FilterModel(Class<T> cls, List<T> data, String filter) {
+		this(new FilterModelConverter<T>().fromList(data, cls), filter);
 	}
 
 	public String getFilter() {

@@ -15,28 +15,26 @@ import cz.rion.buildserver.ui.events.FileLoadedEvent.FileLoadedListener;
 import cz.rion.buildserver.ui.events.FileSavedEvent;
 import cz.rion.buildserver.ui.events.FileSavedEvent.FileSavedListener;
 import cz.rion.buildserver.ui.utils.BetterListCellRenderer;
-import cz.rion.buildserver.ui.utils.FilterModel;
+import cz.rion.buildserver.ui.utils.MyButton;
+import cz.rion.buildserver.ui.utils.MyLabel;
+import cz.rion.buildserver.ui.utils.MyTextField;
+import cz.rion.buildserver.ui.utils.NavigationList;
+import cz.rion.buildserver.ui.utils.NavigationList.FileSelectedListener;
 import net.miginfocom.swing.MigLayout;
 import java.awt.BorderLayout;
 import javax.swing.JSplitPane;
 import javax.swing.JScrollPane;
-import javax.swing.JLabel;
 import javax.swing.border.MatteBorder;
 import java.awt.Color;
 
-import javax.swing.JButton;
-import javax.swing.JList;
+import javax.swing.JComponent;
 import javax.swing.ListSelectionModel;
-import javax.swing.JTextField;
-import javax.swing.ListModel;
 import javax.swing.border.LineBorder;
 import java.awt.event.ActionListener;
 import java.util.List;
 import java.awt.event.ActionEvent;
-import javax.swing.event.ListSelectionListener;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
-import javax.swing.event.ListSelectionEvent;
 import javax.swing.JTextArea;
 import java.awt.Font;
 
@@ -44,48 +42,259 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 
 	private final UIDriver driver;
 	private Status status;
-	private JTextField txtFileFilter;
-	JList<DatabaseFile> list;
+	private MyTextField txtFileFilter;
+	private NavigationList list;
 	private JPanel pnlOverview;
 	private JTextArea txtContents;
-	private JButton btnSave;
-	private JButton btnSaveAndClose;
+	private MyButton btnSave;
+	private MyButton btnSaveAndClose;
 
 	private FileInfo loadedFile = null;
 	private boolean closeAfterSave;
-	private JLabel lblOverview;
-	private JButton btnReload;
-	private JTextField txtCreate;
-	private JButton btnCreate;
+	private MyLabel lblOverview;
+	private MyButton btnReload;
+	private MyTextField txtCreate;
+	private MyButton btnCreate;
 
-	private void setComponentsEnabled(boolean enabled) {
-		list.setEnabled(enabled);
-		txtFileFilter.setEnabled(enabled);
-		btnReload.setEnabled(enabled);
-		btnCreate.setEnabled(enabled);
-		txtCreate.setEnabled(enabled);
-		if (enabled) {
-			txtContents.setEnabled(enabled);
-			btnSave.setEnabled(enabled);
-			btnSaveAndClose.setEnabled(enabled);
+	private enum ActionState {
+		DISCONNECTED, FILES_NOT_LOADED, LOADING_FILES, FILES_LOADED, CREATING_FILE, EDITING_FILE, SAVING_FILE, LOADING_FILE
+	}
+
+	private MyButton btnClear;
+	private MyButton btnClose;
+	private JPanel pnlLeft;
+
+	private class PropertyWrapper {
+		private JComponent component;
+		private boolean enabled;
+		private boolean visible;
+		private String text = null;
+
+		private boolean initialEnabled;
+		private boolean initialVisible;
+		private String initialText;
+
+		private PropertyWrapper(JComponent c) {
+			this.component = c;
+			this.enabled = false;
+			this.visible = false;
+			if (c instanceof MyLabel) {
+				this.initialText = ((MyLabel) c).getText();
+			} else if (c instanceof MyButton) {
+				this.initialText = ((MyButton) c).getText();
+			} else if (c instanceof MyTextField) {
+				this.initialText = ((MyTextField) c).getText();
+			} else if (c instanceof JTextArea) {
+				this.initialText = ((JTextArea) c).getText();
+			}
+			this.initialEnabled = c.isEnabled();
+			this.initialVisible = c.isVisible();
+			this.text = this.initialText == null ? null : this.initialText; // TODO: Intent clarification?
+		}
+
+		protected void commit() {
+			if (initialEnabled != enabled) {
+				component.setEnabled(enabled);
+			}
+			if (initialVisible != visible) {
+				component.setVisible(visible);
+			}
+			if (text != initialText) {
+				if (text != null) {
+					if (initialText != null) {
+						if (text.equals(initialText)) {
+							return;
+						}
+					}
+					if (component instanceof MyLabel) {
+						((MyLabel) component).setText(text);
+					} else if (component instanceof MyButton) {
+						((MyButton) component).setText(text);
+					} else if (component instanceof MyTextField) {
+						((MyTextField) component).setText(text);
+					} else if (component instanceof JTextArea) {
+						((JTextArea) component).setText(text);
+					}
+				}
+			}
+		}
+
+		public void setEnabled(boolean enabled) {
+			this.enabled = enabled;
+		}
+
+		public void setVisible(boolean visible) {
+			this.visible = visible;
+		}
+
+		public void setText(String string) {
+			if (text != null) {
+				text = string;
+			}
 		}
 	}
 
-	private void setListItems(DatabaseFile[] items) {
-		String filter = "";
-		ListModel<DatabaseFile> model = list.getModel();
-		if (model != null) {
-			if (model instanceof FilterModel) {
-				filter = ((FilterModel<DatabaseFile>) model).getFilter();
-			}
-		}
-		list.setModel(new FilterModel<DatabaseFile>(items, filter) {
+	private void setState(ActionState state) {
+		PropertyWrapper wList = new PropertyWrapper(list);
+		PropertyWrapper wTxtFileFilter = new PropertyWrapper(txtFileFilter);
+		PropertyWrapper wBtnReload = new PropertyWrapper(btnReload);
+		PropertyWrapper wBtnCreate = new PropertyWrapper(btnCreate);
+		PropertyWrapper wBtnClear = new PropertyWrapper(btnClear);
+		PropertyWrapper wTxtCreate = new PropertyWrapper(txtCreate);
+		PropertyWrapper wWxtContents = new PropertyWrapper(txtContents);
+		PropertyWrapper wBtnSave = new PropertyWrapper(btnSave);
+		PropertyWrapper wBtnSaveAndClose = new PropertyWrapper(btnSaveAndClose);
+		PropertyWrapper wBtnClose = new PropertyWrapper(btnClose);
+		PropertyWrapper wPnlOverview = new PropertyWrapper(pnlOverview);
+		PropertyWrapper wLblOverview = new PropertyWrapper(lblOverview);
+		PropertyWrapper wTxtContents = new PropertyWrapper(txtContents);
 
-			@Override
-			public boolean show(DatabaseFile item, String filter) {
-				return item.FileName.contains(filter);
-			}
-		});
+		switch (state) {
+		case DISCONNECTED:
+			break;
+
+		case FILES_NOT_LOADED:
+			wTxtCreate.setText("");
+			wLblOverview.setText("Editor");
+			wBtnReload.setVisible(true);
+			wBtnReload.setEnabled(true);
+
+			wBtnClear.setVisible(true);
+
+			wBtnCreate.setVisible(true);
+
+			wTxtCreate.setEnabled(true);
+
+			wTxtFileFilter.setVisible(true);
+
+			break;
+
+		case LOADING_FILES:
+			wBtnReload.setVisible(true);
+
+			wBtnClear.setVisible(true);
+
+			wBtnCreate.setVisible(true);
+
+			wTxtCreate.setEnabled(true);
+
+			wTxtFileFilter.setVisible(true);
+
+			wTxtCreate.setText("");
+			break;
+
+		case FILES_LOADED:
+			wList.setVisible(true);
+			wList.setEnabled(true);
+
+			wBtnReload.setVisible(true);
+			wBtnReload.setEnabled(true);
+
+			wTxtCreate.setText("");
+			wTxtCreate.setEnabled(true);
+			wTxtCreate.setVisible(true);
+
+			wTxtContents.setText("");
+
+			wTxtFileFilter.setVisible(true);
+			wTxtFileFilter.setEnabled(true);
+
+			wBtnClear.setVisible(true);
+			wBtnClear.setEnabled(true);
+
+			wBtnCreate.setVisible(true);
+			wBtnCreate.setEnabled(true);
+			break;
+
+		case CREATING_FILE: // Async progress
+			wList.setVisible(true);
+
+			wBtnClear.setVisible(true);
+
+			wBtnCreate.setVisible(true);
+
+			wTxtCreate.setEnabled(true);
+
+			wTxtFileFilter.setVisible(true);
+			break;
+
+		case EDITING_FILE: // File loaded in txtContents
+			wPnlOverview.setVisible(true);
+
+			wList.setVisible(true);
+			wList.setEnabled(true);
+
+			wBtnClear.setVisible(true);
+
+			wBtnCreate.setVisible(true);
+
+			wTxtCreate.setEnabled(true);
+
+			wTxtFileFilter.setVisible(true);
+
+			wTxtContents.setVisible(true);
+			wTxtContents.setEnabled(true);
+			wTxtContents.setText(this.loadedFile.Contents);
+
+			wTxtCreate.setVisible(true);
+			wTxtCreate.setEnabled(true);
+			wTxtCreate.setText(this.loadedFile.FileName);
+
+			wBtnReload.setVisible(true);
+			wBtnReload.setEnabled(true);
+
+			wLblOverview.setVisible(true);
+			wLblOverview.setEnabled(true);
+			wLblOverview.setText(this.loadedFile.FileName);
+
+			wBtnSave.setVisible(true);
+			wBtnSave.setEnabled(true);
+
+			wBtnSaveAndClose.setVisible(true);
+			wBtnSaveAndClose.setEnabled(true);
+
+			wBtnClose.setVisible(true);
+			wBtnClose.setEnabled(true);
+			break;
+
+		case SAVING_FILE: // Async progress
+			wPnlOverview.setVisible(true);
+			wList.setVisible(true);
+			break;
+
+		case LOADING_FILE:
+			wPnlOverview.setVisible(true);
+
+			wList.setVisible(true);
+
+			wBtnClear.setVisible(true);
+
+			wBtnCreate.setVisible(true);
+
+			wTxtCreate.setEnabled(true);
+
+			wTxtFileFilter.setVisible(true);
+
+			break;
+		}
+
+		wList.commit();
+		wTxtFileFilter.commit();
+		wBtnReload.commit();
+		wBtnCreate.commit();
+		wBtnClear.commit();
+		wTxtCreate.commit();
+		wWxtContents.commit();
+		wBtnSave.commit();
+		wBtnSaveAndClose.commit();
+		wBtnClose.commit();
+		wPnlOverview.commit();
+		wLblOverview.commit();
+		wTxtContents.commit();
+	}
+
+	private void setListItems(DatabaseFile[] items) {
+		list.setItems(items, true);
 	}
 
 	public String getTabName() {
@@ -100,23 +309,23 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 		splitPane.setResizeWeight(0.2);
 		add(splitPane, BorderLayout.CENTER);
 
-		JPanel panel = new JPanel();
-		splitPane.setLeftComponent(panel);
-		panel.setLayout(new MigLayout("", "[grow][]", "[][][][grow][]"));
+		pnlLeft = new JPanel();
+		splitPane.setLeftComponent(pnlLeft);
+		pnlLeft.setLayout(new MigLayout("", "[grow][]", "[][][][grow][]"));
 
-		JLabel lblFiles = new JLabel("Files");
+		MyLabel lblFiles = new MyLabel("Files");
 		lblFiles.setBorder(new MatteBorder(0, 0, 1, 0, (Color) new Color(0, 0, 0)));
-		panel.add(lblFiles, "cell 0 0,alignx center");
+		pnlLeft.add(lblFiles, "cell 0 0 2 1,alignx center");
 
-		btnReload = new JButton("Reload");
+		btnReload = new MyButton("Reload");
 		btnReload.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				reloadFiles();
 			}
 		});
-		panel.add(btnReload, "cell 0 1 2 1,grow");
+		pnlLeft.add(btnReload, "cell 0 1 2 1,grow");
 
-		txtFileFilter = new JTextField();
+		txtFileFilter = new MyTextField();
 		txtFileFilter.getDocument().addDocumentListener(new DocumentListener() {
 			public void changedUpdate(DocumentEvent e) {
 				filter();
@@ -143,48 +352,45 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 			}
 		});
 		txtFileFilter.setBorder(new MatteBorder(1, 1, 1, 1, (Color) new Color(0, 0, 0)));
-		panel.add(txtFileFilter, "cell 0 2,grow");
+		pnlLeft.add(txtFileFilter, "cell 0 2,grow");
 		txtFileFilter.setColumns(10);
 
-		JButton btnClear = new JButton("Clear");
+		btnClear = new MyButton("Clear");
 		btnClear.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				txtFileFilter.setText("");
 				refilter("");
 			}
 		});
-		panel.add(btnClear, "cell 1 2,grow");
+		pnlLeft.add(btnClear, "cell 1 2,grow");
 
 		JScrollPane scrollFiles = new JScrollPane();
 		scrollFiles.getVerticalScrollBar().setUnitIncrement(16);
-		panel.add(scrollFiles, "cell 0 3 2 1,grow");
+		pnlLeft.add(scrollFiles, "cell 0 3 2 1,grow");
 
 		JPanel pnlFiles = new JPanel();
 		scrollFiles.setViewportView(pnlFiles);
 		pnlFiles.setLayout(new BorderLayout(0, 0));
 
-		list = new JList<>();
-		list.setCellRenderer(new BetterListCellRenderer());
+		list = new NavigationList();
+		BetterListCellRenderer renderer = new BetterListCellRenderer();
+		renderer.setIconsEnabled(true);
+		list.setCellRenderer(renderer);
 		list.setFont(new Font("Tahoma", Font.PLAIN, 17));
-		list.addListSelectionListener(new ListSelectionListener() {
-			public void valueChanged(ListSelectionEvent e) {
-				int selIndex = list.getSelectedIndex();
-				if (selIndex < 0) {
-					nothingSelected();
-				} else {
-					selectedFile(list.getModel().getElementAt(selIndex));
-				}
+		list.addFileSelectedListener(new FileSelectedListener() {
+			public void FileSelected(DatabaseFile file) {
+				selectedFile(file);
 			}
 		});
 		setListItems(new DatabaseFile[0]);
 		list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
 		pnlFiles.add(list, BorderLayout.CENTER);
 
-		txtCreate = new JTextField();
-		panel.add(txtCreate, "cell 0 4,grow");
+		txtCreate = new MyTextField();
+		pnlLeft.add(txtCreate, "cell 0 4,grow");
 		txtCreate.setColumns(10);
 
-		btnCreate = new JButton("Create");
+		btnCreate = new MyButton("Create");
 		btnCreate.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				String txt = txtCreate.getText().trim();
@@ -193,26 +399,26 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 				}
 			}
 		});
-		panel.add(btnCreate, "cell 1 4,grow");
+		pnlLeft.add(btnCreate, "cell 1 4,grow");
 
-		JPanel panel_1 = new JPanel();
-		splitPane.setRightComponent(panel_1);
-		panel_1.setLayout(new MigLayout("", "[grow]", "[][grow]"));
-
-		lblOverview = new JLabel("Editor");
-		lblOverview.setBorder(new MatteBorder(0, 0, 1, 0, (Color) new Color(0, 0, 0)));
-		panel_1.add(lblOverview, "cell 0 0,alignx center");
+		JPanel pnlRight = new JPanel();
+		splitPane.setRightComponent(pnlRight);
+		pnlRight.setLayout(new MigLayout("", "[grow]", "[grow]"));
 
 		pnlOverview = new JPanel();
 		pnlOverview.setBorder(new LineBorder(new Color(0, 0, 0)));
-		panel_1.add(pnlOverview, "cell 0 1,grow");
-		pnlOverview.setLayout(new MigLayout("", "[grow]", "[grow][]"));
+		pnlRight.add(pnlOverview, "cell 0 0,grow");
+		pnlOverview.setLayout(new MigLayout("", "[grow]", "[][grow][]"));
 
 		txtContents = new JTextArea();
 		txtContents.setFont(new Font("Monospaced", Font.PLAIN, 17));
 		JScrollPane scrollContents = new JScrollPane(txtContents);
 		scrollContents.getVerticalScrollBar().setUnitIncrement(16);
-		pnlOverview.add(scrollContents, "cell 0 0,grow");
+
+		lblOverview = new MyLabel("Editor");
+		pnlOverview.add(lblOverview, "cell 0 0,alignx center");
+		lblOverview.setBorder(new MatteBorder(0, 0, 1, 0, (Color) new Color(0, 0, 0)));
+		pnlOverview.add(scrollContents, "cell 0 1,grow");
 		txtContents.getDocument().addDocumentListener(new DocumentListener() {
 			public void changedUpdate(DocumentEvent e) {
 				filter();
@@ -229,27 +435,35 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 			private void filter() {
 				if (loadedFile != null) {
 					if (loadedFile.Contents.equals(txtContents.getText())) {
-						lblOverview.setText("Editor");
+						lblOverview.setText(loadedFile.FileName);
 					} else {
-						lblOverview.setText("Editor (unsaved changes)");
+						lblOverview.setText(loadedFile.FileName + " (unsaved changes)");
 					}
 				}
 			}
 		});
 		JPanel panel_3 = new JPanel();
-		pnlOverview.add(panel_3, "cell 0 1,grow");
-		panel_3.setLayout(new MigLayout("", "[grow][][]", "[]"));
+		pnlOverview.add(panel_3, "cell 0 2,grow");
+		panel_3.setLayout(new MigLayout("", "[grow][][][]", "[]"));
 
-		btnSave = new JButton("Save");
+		btnSave = new MyButton("Save");
 		btnSave.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				save();
 			}
 		});
-		panel_3.add(btnSave, "cell 1 0");
 
-		btnSaveAndClose = new JButton("Save and close");
-		panel_3.add(btnSaveAndClose, "cell 2 0");
+		btnClose = new MyButton("Close");
+		btnClose.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				setState(ActionState.FILES_LOADED);
+			}
+		});
+		panel_3.add(btnClose, "cell 1 0");
+		panel_3.add(btnSave, "cell 2 0");
+
+		btnSaveAndClose = new MyButton("Save and close");
+		panel_3.add(btnSaveAndClose, "cell 3 0");
 		btnSaveAndClose.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				saveAndClose();
@@ -260,63 +474,54 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 		FileLoadedEvent.addFileLoadedListener(driver.EventManager, this);
 		FileSavedEvent.addFileSavedListener(driver.EventManager, this);
 		FileCreatedEvent.addFileLoadedListener(driver.EventManager, this);
-		setComponentsEnabled(false);
 	}
 
 	protected void createFile(String name) {
-		setComponentsEnabled(false);
+		setState(ActionState.CREATING_FILE);
 		driver.createFile(name);
 	}
 
 	protected void save() {
-		setComponentsEnabled(false);
-		driver.saveFile(loadedFile.ID, txtContents.getText());
+		setState(ActionState.SAVING_FILE);
+		driver.saveFile(loadedFile.ID, txtCreate.getText(), txtContents.getText());
 		this.closeAfterSave = false;
 	}
 
 	protected void saveAndClose() {
-		setComponentsEnabled(false);
-		driver.saveFile(loadedFile.ID, txtContents.getText());
+		setState(ActionState.SAVING_FILE);
+		driver.saveFile(loadedFile.ID, txtCreate.getText(), txtContents.getText());
 		this.closeAfterSave = true;
 	}
 
 	private void refilter(String string) {
-		((FilterModel<DatabaseFile>) list.getModel()).filter(string);
+		list.refilter(string);
 		this.redraw();
 	}
 
 	private void selectedFile(DatabaseFile file) {
-		lblOverview.setText("Editor");
+		setState(ActionState.LOADING_FILE);
+		lblOverview.setText(file.FileName);
 		if (status == Status.CONNECTED) {
-			pnlOverview.setVisible(true);
-			setComponentsEnabled(false);
+			setState(ActionState.LOADING_FILE);
 			driver.loadFile(file.ID);
 		} else {
-			nothingSelected();
-			setListItems(new DatabaseFile[0]);
+			setState(ActionState.DISCONNECTED);
 		}
-		redraw();
-	}
-
-	private void nothingSelected() {
-		lblOverview.setText("Editor");
-		pnlOverview.setVisible(false);
 		redraw();
 	}
 
 	public void update(Status status) {
 		this.status = status;
 		if (status != Status.CONNECTED) {
-			setComponentsEnabled(false);
-			nothingSelected();
-			setListItems(new DatabaseFile[0]);
+			setState(ActionState.DISCONNECTED);
 		} else {
-			setComponentsEnabled(true);
+			setState(ActionState.FILES_NOT_LOADED);
 		}
 		redraw();
 	}
 
 	private void reloadFiles() {
+		setState(ActionState.LOADING_FILES);
 		this.driver.reloadFiles();
 	}
 
@@ -329,7 +534,6 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 	@Override
 	public void fileListLoaded(List<DatabaseFile> files) {
 		if (status == Status.CONNECTED) {
-			setComponentsEnabled(true);
 			DatabaseFile[] fileList = new DatabaseFile[files.size()];
 			int index = 0;
 			for (DatabaseFile file : files) {
@@ -337,9 +541,10 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 				index++;
 			}
 			setListItems(fileList);
+			setState(ActionState.FILES_LOADED);
 		} else {
-			setComponentsEnabled(false);
-			setListItems(new DatabaseFile[0]);
+			driver.disconnect();
+			setState(ActionState.DISCONNECTED);
 		}
 		this.redraw();
 	}
@@ -348,21 +553,18 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 	public void fileLoaded(FileInfo file) {
 		loadedFile = null;
 		txtContents.setText("");
-		lblOverview.setText("Editor");
 		if (status == Status.CONNECTED) {
 			if (file == null) { // Failed to load
 				driver.disconnect();
 			} else {
 				loadedFile = file;
-				setComponentsEnabled(true);
-				txtContents.setEnabled(true);
-				btnSave.setEnabled(true);
-				btnSaveAndClose.setEnabled(true);
-				txtContents.setText(file.Contents);
+				lblOverview.setText(file.FileName);
+				setState(ActionState.EDITING_FILE);
+				// txtContents.setText(file.Contents);
 			}
 		} else {
-			setComponentsEnabled(false);
-			setListItems(new DatabaseFile[0]);
+			driver.disconnect();
+			setState(ActionState.DISCONNECTED);
 		}
 		this.redraw();
 	}
@@ -371,15 +573,13 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 	public void fileSaved(FileInfo file, boolean saved) {
 		if (!saved) {
 			driver.disconnect();
+			setState(ActionState.DISCONNECTED);
 		} else {
-			lblOverview.setText("Editor");
-			setComponentsEnabled(true);
+			setState(ActionState.EDITING_FILE);
+			lblOverview.setText(file.FileName);
 			if (closeAfterSave) {
 				loadedFile = null;
-				txtContents.setText("");
-				txtContents.setEnabled(false);
-				btnSaveAndClose.setEnabled(false);
-				btnSave.setEnabled(false);
+				setState(ActionState.FILES_LOADED);
 			}
 		}
 	}
