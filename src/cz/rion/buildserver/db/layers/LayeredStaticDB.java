@@ -1,9 +1,8 @@
 package cz.rion.buildserver.db.layers;
 
-import cz.rion.buildserver.db.SQLiteDB;
 import cz.rion.buildserver.exceptions.DatabaseException;
 
-public abstract class LayeredStaticDB extends SQLiteDB {
+public abstract class LayeredStaticDB extends LayeredMetaDB {
 
 	public static class RuntimeClientSession {
 		public final String login;
@@ -20,6 +19,6 @@ public abstract class LayeredStaticDB extends SQLiteDB {
 	}
 
 	public LayeredStaticDB(String fileName) throws DatabaseException {
-		super(fileName);
+		super(fileName, "StaticDB");
 	}
 }

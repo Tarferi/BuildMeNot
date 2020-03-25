@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 
 import cz.rion.buildserver.Settings;
 
@@ -133,8 +134,9 @@ public abstract class JsonValue {
 				}
 				inst.nextChar(true);
 				return new JsonString(sb.toString());
-			} else if (c >= '0' && c <= '9') {
-				int num = c - '0';
+			} else if ((c >= '0' && c <= '9') || c == '-') {
+				boolean minus = c == '-';
+				int num = minus ? 0 : c - '0';
 				StringBuilder sb = new StringBuilder();
 				sb.append(c);
 				while (!inst.isDone()) {
@@ -578,6 +580,14 @@ public abstract class JsonValue {
 			if (Value.containsKey(key)) {
 				Value.remove(key);
 			}
+		}
+
+		public Set<Entry<String, JsonValue>> getEntries() {
+			return Value.entrySet();
+		}
+
+		public JsonValue get(String col) {
+			return Value.get(col);
 		}
 	}
 }

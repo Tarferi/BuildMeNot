@@ -11,6 +11,7 @@ import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.RuntimeDB;
 import cz.rion.buildserver.db.RuntimeDB.RuntimeUserStats;
 import cz.rion.buildserver.db.StaticDB;
+import cz.rion.buildserver.db.layers.LayeredDBFileWrapperDB;
 import cz.rion.buildserver.db.layers.LayeredFilesDB.DatabaseFile;
 import cz.rion.buildserver.db.layers.LayeredUserDB.LocalUser;
 import cz.rion.buildserver.exceptions.DatabaseException;
@@ -249,28 +250,41 @@ public class RemoteUIProviderServer {
 		}
 	}
 
+	private FileInfo getFile(int fileID) {
+		FileInfo fo = null;
+		try {
+			fo = sdb.getFile(fileID);
+		} catch (DatabaseException e1) {
+			e1.printStackTrace();
+		}
+		if (fo == null) {
+			try {
+				fo = LayeredDBFileWrapperDB.getFile(db, fileID);
+			} catch (DatabaseException e) {
+				e.printStackTrace();
+			}
+		}
+		return fo;
+	}
+
 	private void writeFile(Socket client) throws IOException {
 		int fileID = readInt(client);
 		writeInt(client, FileLoadedEvent.ID);
-		try {
-			FileInfo fo = sdb.getFile(fileID);
-			if (fo == null) {
-				writeInt(client, 0);
-				return;
-			} else {
-				writeInt(client, 1);
-				writeInt(client, fo.ID);
-				writeString(client, fo.FileName);
-				writeString(client, fo.Contents);
-			}
-		} catch (DatabaseException e) {
-			e.printStackTrace();
-			throw new IOException();
+		FileInfo fo = getFile(fileID);
+		if (fo == null) {
+			writeInt(client, 0);
+			return;
+		} else {
+			writeInt(client, 1);
+			writeInt(client, fo.ID);
+			writeString(client, fo.FileName);
+			writeString(client, fo.Contents);
 		}
 	}
 
 	private void writeFileList(Socket client) throws IOException {
 		List<DatabaseFile> lst = sdb.getFiles();
+		LayeredDBFileWrapperDB.loadDatabaseFiles(db, lst);
 		synchronized (syncer) {
 			writeInt(client, FileListLoadedEvent.ID);
 			writeInt(client, lst.size());

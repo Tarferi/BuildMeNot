@@ -10,6 +10,7 @@ import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
+import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 import cz.rion.buildserver.wrappers.FileReadException;
 import cz.rion.buildserver.wrappers.MyFS;
 
@@ -44,6 +45,39 @@ public abstract class LayeredUserDB extends LayeredTestDB {
 			super(login, group, fullName);
 			this.ID = id;
 		}
+	}
+
+	public final boolean allowDetails(String login) {
+		FileInfo file;
+		file = this.loadFile("config/allow_details.cfg");
+		if (file == null) {
+			return false;
+		}
+		if (file != null) {
+			String[] contents = file.Contents.split("\n");
+			for (String content : contents) {
+				String seekLogin = content.trim();
+				if (seekLogin.equals(login)) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	public final boolean allowFireFox(String login) {
+		FileInfo file;
+		file = this.loadFile("config/allow_firefox.cfg");
+		if (file != null) {
+			String[] contents = file.Contents.split("\n");
+			for (String content : contents) {
+				String seekLogin = content.trim();
+				if (seekLogin.equals(login)) {
+					return true;
+				}
+			}
+		}
+		return false;
 	}
 
 	private final boolean loadLocalUsers() {

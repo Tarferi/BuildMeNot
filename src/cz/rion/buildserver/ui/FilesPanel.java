@@ -63,6 +63,9 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 	private MyButton btnClear;
 	private MyButton btnClose;
 	private JPanel pnlLeft;
+	private JSplitPane splitPane;
+	private JScrollPane scrollContents;
+	private TableView myTable;
 
 	private class PropertyWrapper {
 		private JComponent component;
@@ -234,7 +237,6 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 
 			wTxtContents.setVisible(true);
 			wTxtContents.setEnabled(true);
-			wTxtContents.setText(this.loadedFile.Contents);
 
 			wTxtCreate.setVisible(true);
 			wTxtCreate.setEnabled(true);
@@ -247,11 +249,18 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 			wLblOverview.setEnabled(true);
 			wLblOverview.setText(this.loadedFile.FileName);
 
-			wBtnSave.setVisible(true);
-			wBtnSave.setEnabled(true);
+			if (this.loadedFile.FileName.endsWith(".table")) {
+				setTableEditing();
+				myTable.setData(this.loadedFile.Contents);
+			} else {
+				setTextAreaEditing();
+				wTxtContents.setText(this.loadedFile.Contents);
+				wBtnSave.setVisible(true);
+				wBtnSave.setEnabled(true);
 
-			wBtnSaveAndClose.setVisible(true);
-			wBtnSaveAndClose.setEnabled(true);
+				wBtnSaveAndClose.setVisible(true);
+				wBtnSaveAndClose.setEnabled(true);
+			}
 
 			wBtnClose.setVisible(true);
 			wBtnClose.setEnabled(true);
@@ -301,11 +310,23 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 		return "Files";
 	}
 
+	private void setRightSideContents(JComponent c) {
+		scrollContents.setViewportView(c);
+	}
+
+	private void setTextAreaEditing() {
+		setRightSideContents(txtContents);
+	}
+
+	private void setTableEditing() {
+		setRightSideContents(myTable);
+	}
+
 	public FilesPanel(UIDriver driver) {
 		this.driver = driver;
 		setLayout(new BorderLayout(0, 0));
 
-		JSplitPane splitPane = new JSplitPane();
+		splitPane = new JSplitPane();
 		splitPane.setResizeWeight(0.2);
 		add(splitPane, BorderLayout.CENTER);
 
@@ -324,6 +345,7 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 			}
 		});
 		pnlLeft.add(btnReload, "cell 0 1 2 1,grow");
+		myTable = new TableView();
 
 		txtFileFilter = new MyTextField();
 		txtFileFilter.getDocument().addDocumentListener(new DocumentListener() {
@@ -412,7 +434,7 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 
 		txtContents = new JTextArea();
 		txtContents.setFont(new Font("Monospaced", Font.PLAIN, 17));
-		JScrollPane scrollContents = new JScrollPane(txtContents);
+		scrollContents = new JScrollPane(txtContents);
 		scrollContents.getVerticalScrollBar().setUnitIncrement(16);
 
 		lblOverview = new MyLabel("Editor");

@@ -12,6 +12,8 @@ public interface AsmTest {
 	public String getDescription();
 	
 	public String getTitle();
+	
+	public boolean isHidden();
 
 	public TestResult perform(TestInput input);
 

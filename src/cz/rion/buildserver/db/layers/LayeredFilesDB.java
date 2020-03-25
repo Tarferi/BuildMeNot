@@ -21,7 +21,7 @@ public abstract class LayeredFilesDB extends LayeredStaticDB {
 
 	private final char[] hexData = new char[] { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
 
-	private String encode(String data) {
+	protected String encodeFileContents(String data) {
 		byte[] b = data.getBytes(Settings.getDefaultCharset());
 		byte[] n = new byte[b.length * 2];
 		for (int i = 0; i < b.length; i++) {
@@ -42,7 +42,7 @@ public abstract class LayeredFilesDB extends LayeredStaticDB {
 		}
 	}
 
-	private String decode(String data) {
+	protected String decodeFileContents(String data) {
 		byte[] b = data.getBytes(Settings.getDefaultCharset());
 		byte[] n = new byte[b.length / 2];
 		for (int i = 0; i < n.length; i++) {
@@ -59,7 +59,7 @@ public abstract class LayeredFilesDB extends LayeredStaticDB {
 	public FileInfo createFile(String name, String contents) throws DatabaseException {
 		synchronized (fileTable) {
 			try {
-				this.execute("INSERT INTO files (name, contents) VALUES ('?', '?')", name, encode(contents));
+				this.execute("INSERT INTO files (name, contents) VALUES ('?', '?')", name, encodeFileContents(contents));
 			} catch (DatabaseException e) {
 				e.printStackTrace();
 			}
@@ -72,7 +72,7 @@ public abstract class LayeredFilesDB extends LayeredStaticDB {
 						if (obj.containsNumber("ID") && obj.containsString("name") && obj.containsString("contents")) {
 							int id = obj.getNumber("ID").Value;
 							String fname = obj.getString("name").Value;
-							String c = decode(obj.getString("contents").Value);
+							String c = decodeFileContents(obj.getString("contents").Value);
 							return new FileInfo(id, fname, c);
 						}
 					}
@@ -97,24 +97,6 @@ public abstract class LayeredFilesDB extends LayeredStaticDB {
 		}
 	}
 
-	public FileInfo getFile(String fileName) throws DatabaseException {
-		JsonArray res = select("SELECT ID, name, contents FROM files WHERE name = '?'", fileName).getJSON();
-		if (res != null) {
-			for (JsonValue val : res.Value) {
-				if (val.isObject()) {
-					JsonObject obj = val.asObject();
-					if (obj.containsNumber("ID") && obj.containsString("name") && obj.containsString("contents")) {
-						int id = obj.getNumber("ID").Value;
-						String name = obj.getString("name").Value;
-						String contents = decode(obj.getString("contents").Value);
-						return new FileInfo(id, name, contents);
-					}
-				}
-			}
-		}
-		return null;
-	}
-
 	public FileInfo getFile(int fileID) throws DatabaseException {
 		JsonArray res = select("SELECT ID, name, contents FROM files WHERE ID = ?", fileID).getJSON();
 		if (res != null) {
@@ -124,7 +106,7 @@ public abstract class LayeredFilesDB extends LayeredStaticDB {
 					if (obj.containsNumber("ID") && obj.containsString("name") && obj.containsString("contents")) {
 						int id = obj.getNumber("ID").Value;
 						String name = obj.getString("name").Value;
-						String contents = decode(obj.getString("contents").Value);
+						String contents = decodeFileContents(obj.getString("contents").Value);
 						return new FileInfo(id, name, contents);
 					}
 				}
@@ -155,17 +137,17 @@ public abstract class LayeredFilesDB extends LayeredStaticDB {
 		return result;
 	}
 
-	public final void storeFile(DatabaseFile file, String newFileName, String newContents) {
+	public void storeFile(DatabaseFile file, String newFileName, String newContents) {
 		try {
-			this.execute("UPDATE files SET name = '?', contents = '?' WHERE ID = ?", newFileName, encode(newContents), file.ID);
+			this.execute("UPDATE files SET name = '?', contents = '?' WHERE ID = ?", newFileName, encodeFileContents(newContents), file.ID);
 		} catch (DatabaseException e) {
 			e.printStackTrace();
 		}
 	}
 
-	public final FileInfo loadFile(String name) {
+	public FileInfo loadFile(String name) {
 		try {
-			JsonArray res = this.select("SELECT * FROM files WHERE name = '?'", name).getJSON();
+			JsonArray res = this.select("SELECT ID, name, contents FROM files WHERE name = '?'", name).getJSON();
 			if (res != null) {
 				if (!res.Value.isEmpty()) {
 					JsonValue val = res.Value.get(0);
@@ -174,7 +156,7 @@ public abstract class LayeredFilesDB extends LayeredStaticDB {
 						if (obj.containsNumber("ID") && obj.containsString("name") && obj.containsString("contents")) {
 							int id = obj.getNumber("ID").Value;
 							String fname = obj.getString("name").Value;
-							String contents = decode(obj.getString("contents").Value);
+							String contents = decodeFileContents(obj.getString("contents").Value);
 							return new FileInfo(id, fname, contents);
 						}
 					}

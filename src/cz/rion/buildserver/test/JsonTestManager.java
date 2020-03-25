@@ -32,6 +32,7 @@ public class JsonTestManager {
 		private final String prepend;
 		private final String append;
 		private String finalASM;
+		private final boolean hidden;
 
 		@Override
 		public String getID() {
@@ -69,7 +70,7 @@ public class JsonTestManager {
 			}
 		}
 
-		private JsonTest(String id, String title, String description, List<TestVerificationData> tests, String initialASM, String append, String prepend) {
+		private JsonTest(String id, String title, String description, List<TestVerificationData> tests, String initialASM, String append, String prepend, boolean isHidden) {
 			this.id = id;
 			this.title = title;
 			this.description = description;
@@ -78,6 +79,7 @@ public class JsonTestManager {
 			this.prepend = prepend;
 			this.append = append;
 			this.finalASM = prepend + "\r\n" + initialASM + "\r\n" + append;
+			this.hidden = isHidden;
 		}
 
 		@Override
@@ -106,6 +108,11 @@ public class JsonTestManager {
 			}
 			this.finalASM = asm;
 			return asm;
+		}
+
+		@Override
+		public boolean isHidden() {
+			return this.hidden;
 		}
 	}
 
@@ -238,7 +245,8 @@ public class JsonTestManager {
 			String append = obj.containsString("append") ? obj.getString("append").Value : "";
 
 			String initialASM = obj.containsString("init") ? obj.getString("init").Value : "";
-			return new JsonTest(id, title, description, tvd, initialASM, append, prepend);
+			boolean hidden = obj.containsNumber("hidden") ? obj.getNumber("hidden").Value == 1 : false;
+			return new JsonTest(id, title, description, tvd, initialASM, append, prepend, hidden);
 		}
 		return null;
 	}

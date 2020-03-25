@@ -10,6 +10,7 @@ public class IconManager {
 	public final static ImageIcon DBIcon = IconLoader.LoadIcon("db.png");
 	public final static ImageIcon FileIcon = IconLoader.LoadIcon("file.png");
 	public final static ImageIcon UpIcon = IconLoader.LoadIcon("folder.png");
+	public final static ImageIcon TableIcon = IconLoader.LoadIcon("table.png");
 
 	public static final ImageIcon IconForFile(String path) {
 		path = path.toLowerCase();
@@ -21,6 +22,8 @@ public class IconManager {
 			return CFGIcon;
 		} else if (path.endsWith(".db")) {
 			return DBIcon;
+		} else if (path.endsWith(".table")) {
+			return TableIcon;
 		} else { // Coult be a folder
 			int pos1 = path.lastIndexOf("/");
 			int pos2 = path.lastIndexOf(".");

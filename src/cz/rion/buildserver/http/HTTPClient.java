@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -11,6 +12,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.RuntimeDB;
+import cz.rion.buildserver.db.RuntimeDB.CompletedTest;
 import cz.rion.buildserver.db.StaticDB;
 import cz.rion.buildserver.exceptions.ChangeOfSessionAddressException;
 import cz.rion.buildserver.exceptions.DatabaseException;
@@ -381,6 +383,8 @@ public class HTTPClient {
 				supportedClient = true;
 			} else if (agent.contains("Trident")) {
 				supportedClient = true;
+			} else if (sdb.allowFireFox(login)) {
+				supportedClient = true;
 			}
 		}
 
@@ -527,23 +531,8 @@ public class HTTPClient {
 
 							returnValue = tests.run(builderID, test_id, asm);
 							testsPassed = returnValue.containsNumber("code") ? returnValue.getNumber("code").Value == 0 : false;
-							if (returnValue.containsObject("details")) {
-								boolean keepDetails = false;
-								if (obj.containsString("show_details")) {
-									String detailsPassword = obj.getString("show_details").Value;
-									try {
-										FileInfo dbDetailsPassword = sdb.getFile("PasswordForDetailedView.cfg");
-										if (dbDetailsPassword != null) {
-											if (dbDetailsPassword.Contents.equals(detailsPassword)) {
-												keepDetails = true;
-											}
-										}
-									} catch (DatabaseException e) {
-									}
-								}
-								if (!keepDetails) {
-									returnValue.remove("details");
-								}
+							if (returnValue.containsObject("details") && !sdb.allowDetails(login)) {
+								returnValue.remove("details");
 							}
 
 						} else if (obj.containsString("action")) {
@@ -552,9 +541,40 @@ public class HTTPClient {
 							if (act.equals("COLLECT")) {
 								intentType = HTTPClientIntentType.COLLECT_TESTS;
 								List<AsmTest> tsts = tests.getAllTests();
+								tsts.sort(new Comparator<AsmTest>() {
+
+									@Override
+									public int compare(AsmTest o1, AsmTest o2) {
+										String id1 = o1.getID();
+										String id2 = o2.getID();
+
+										String[] p1 = id1.split("_");
+										String[] p2 = id2.split("_");
+
+										if (p1[0].equals(p2[0])) {
+											id1 = p1.length > 1 ? p1[1] : "";
+											id2 = p2.length > 1 ? p2[1] : "";
+											return id1.compareTo(id2);
+										} else {
+											return id2.compareTo(id1);
+										}
+									}
+								});
+
 								List<JsonValue> d = new ArrayList<>();
+								List<String> allowed = sdb.getAllowedTests();
+								List<CompletedTest> completed = db.getCompletedTests(login);
+								Map<String, CompletedTest> finishedByTestID = new HashMap<>();
+								for (CompletedTest test : completed) {
+									finishedByTestID.put(test.TestID, test);
+								}
 
 								for (AsmTest tst : tsts) {
+									String id_prefix = tst.getID().split("_")[0];
+									if (!allowed.contains(id_prefix)) {
+										continue;
+									}
+
 									JsonObject tobj = new JsonObject();
 									// {"title":"TEST1", "init": "tohle je uvodni cast", "zadani":"Implementujte XXX
 									// YYY", "id": "test01"}
@@ -562,6 +582,12 @@ public class HTTPClient {
 									tobj.add("zadani", new JsonString(tst.getDescription()));
 									tobj.add("init", new JsonString(tst.getInitialCode()));
 									tobj.add("id", new JsonString(tst.getID()));
+									tobj.add("hidden", new JsonNumber(tst.isHidden() ? 1 : 0));
+									if (finishedByTestID.containsKey(tst.getID())) {
+										CompletedTest result = finishedByTestID.get(tst.getID());
+										tobj.add("finished_date", new JsonString(result.CompletionDateStr));
+										tobj.add("finished_code", new JsonString(result.Code));
+									}
 									d.add(tobj);
 								}
 

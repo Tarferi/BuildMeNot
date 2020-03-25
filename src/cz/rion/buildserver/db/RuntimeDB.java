@@ -1,5 +1,6 @@
 package cz.rion.buildserver.db;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -7,20 +8,21 @@ import java.util.List;
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.crypto.Crypto;
 import cz.rion.buildserver.db.crypto.CryptoManager;
+import cz.rion.buildserver.db.layers.LayeredMetaDB;
 import cz.rion.buildserver.exceptions.ChangeOfSessionAddressException;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 
-public class RuntimeDB extends SQLiteDB {
+public class RuntimeDB extends LayeredMetaDB {
 
 	private final Crypto crypto;
 
 	private final Object syncer = new Object();
 
 	public RuntimeDB(String fileName, StaticDB sdb) throws DatabaseException {
-		super(fileName);
+		super(fileName, "RuntimeDB");
 		crypto = CryptoManager.getCrypto(sdb);
 		makeTable("users", KEY("ID"), TEXT("login"));
 		makeTable("session", KEY("ID"), TEXT("address"), TEXT("hash"), NUMBER("live"), NUMBER("user_id"), NUMBER("last_action"), NUMBER("creation_time"));
@@ -38,6 +40,50 @@ public class RuntimeDB extends SQLiteDB {
 			sb.append(c);
 		}
 		return sb.toString();
+	}
+
+	private static final SimpleDateFormat dateFormat = new SimpleDateFormat("dd. MM. yyyy - HH:mm");
+
+	public class CompletedTest {
+		public final int EntryID;
+		public final String TestID;
+		public final String Code;
+		public final String CompletionDateStr;
+
+		private CompletedTest(int entry_id, String test_id, String asm, long completion_date) {
+			this.EntryID = entry_id;
+			this.TestID = test_id;
+			this.Code = asm;
+			this.CompletionDateStr = dateFormat.format(new Date(completion_date));
+		}
+	}
+
+	public List<CompletedTest> getCompletedTests(String login) {
+		List<CompletedTest> result = new ArrayList<>();
+		String SQL = "SELECT \r\n" + "	users.login as Login,\r\n" + "	compilations.ID as CodeID,\r\n" + "	compilations.test_id as TestID,\r\n" + "	compilations.creation_time as TestTime,\r\n" + "	compilations.asm as Code,\r\n" + "	compilations.code as ResultCode\r\n" + "FROM\r\n" + "	users,\r\n" + "	compilations\r\n" + "\r\n" + "WHERE\r\n" + "	users.ID = compilations.user_id\r\n" + "\r\n" + "AND\r\n" + "	ResultCode = 0\r\n" + "\r\n" + "AND\r\n" + "	TestID != \"\"\r\n" + "AND\r\n" + "	Login = '?'";
+		try {
+			DatabaseResult res = this.select(SQL, login);
+			if (res != null) {
+				JsonArray jsn = res.getJSON();
+				if (jsn != null) {
+					for (JsonValue val : jsn.Value) {
+						if (val.isObject()) {
+							JsonObject obj = val.asObject();
+							if (obj.containsNumber("CodeID") && obj.containsString("Login") && obj.containsString("TestID") && obj.containsString("Code") && obj.containsNumber("ResultCode")) {
+								int entry_id = obj.getNumber("CodeID").Value;
+								String test_id = obj.getString("TestID").Value;
+								String asm = obj.getString("Code").Value;
+								long completion_date = obj.getNumber("TestTime").asLong();
+								result.add(new CompletedTest(entry_id, test_id, asm, completion_date));
+							}
+						}
+					}
+				}
+			}
+		} catch (DatabaseException e) {
+			e.printStackTrace();
+		}
+		return result;
 	}
 
 	public void storev1Compilation(String remoteAddress, Date time, String asm, String test_id, int resultCode, String result, String full) throws DatabaseException {

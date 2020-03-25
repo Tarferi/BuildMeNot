@@ -88,29 +88,37 @@ public class SQLiteDB {
 		}
 	}
 
+	private final Object syncer = new Object();
+
 	protected boolean execute(String sql, Object... params) throws DatabaseException {
-		PreparedStatement stmt = null;
-		try {
-			stmt = prepareStatement(sql, params);
-			stmt.execute();
-			return true;
-		} catch (SQLException e) {
-			throw new DatabaseException("Failed to execute: " + sql, e);
+		synchronized (syncer) {
+			PreparedStatement stmt = null;
+			try {
+				stmt = prepareStatement(sql, params);
+				stmt.execute();
+				return true;
+			} catch (SQLException e) {
+				throw new DatabaseException("Failed to execute: " + sql, e);
+			}
 		}
 	}
 
 	protected void executeExc(String sql, Object... params) throws DatabaseException {
-		if (!execute(sql, params)) {
-			// throw new DatabaseException("Failed to execute: " + sql);
+		synchronized (syncer) {
+			if (!execute(sql, params)) {
+				// throw new DatabaseException("Failed to execute: " + sql);
+			}
 		}
 	}
 
-	protected DatabaseResult select(String sql, Object... params) throws DatabaseException {
-		try {
-			PreparedStatement stmt = prepareStatement(sql, params);
-			return new DatabaseResult(stmt.executeQuery());
-		} catch (SQLException e) {
-			throw new DatabaseException("Failed to execute: " + sql, e);
+	public DatabaseResult select(String sql, Object... params) throws DatabaseException {
+		synchronized (syncer) {
+			try {
+				PreparedStatement stmt = prepareStatement(sql, params);
+				return new DatabaseResult(stmt.executeQuery());
+			} catch (SQLException e) {
+				throw new DatabaseException("Failed to execute: " + sql, e);
+			}
 		}
 	}
 

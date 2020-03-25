@@ -140,6 +140,7 @@ public class UsersPanel extends JPanel implements UserListLoadedListener {
 		panel.add(btnClear, "cell 1 2,grow");
 
 		JScrollPane scrollUsers = new JScrollPane();
+		scrollUsers.getVerticalScrollBar().setUnitIncrement(16);
 		panel.add(scrollUsers, "cell 0 3 2 1,grow");
 
 		JPanel pnlUsers = new JPanel();

@@ -1,7 +1,6 @@
 package cz.rion.buildserver;
 
 import java.lang.reflect.InvocationTargetException;
-import java.util.Properties;
 
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
@@ -49,7 +48,6 @@ public class MAIN {
 		try {
 			LookAndFeelInfo[] lnfs = UIManager.getInstalledLookAndFeels();
 			for (LookAndFeelInfo lnf : lnfs) {
-				System.out.println(lnf.getName());
 				if (lnf.getName().equals("Nimbus")) {
 					UIManager.setLookAndFeel(lnf.getClassName());
 					return;
