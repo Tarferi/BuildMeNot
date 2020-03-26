@@ -26,7 +26,7 @@ import cz.rion.buildserver.ui.utils.FontProvider;
 
 public class TableView extends JTable {
 
-	private static final SimpleDateFormat dateFormat = new SimpleDateFormat("dd. MM. yyyy - HH:mm");
+	protected static final SimpleDateFormat dateFormat = new SimpleDateFormat("dd. MM. yyyy - HH:mm");
 
 	private final DefaultTableCellRenderer renderRight = new DefaultTableCellRenderer();
 	private final DefaultTableCellRenderer renderDefault = new DefaultTableCellRenderer();

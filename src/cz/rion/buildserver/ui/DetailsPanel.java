@@ -10,6 +10,7 @@ import cz.rion.buildserver.ui.utils.MyTextArea;
 import cz.rion.buildserver.ui.utils.MyTextField;
 import net.miginfocom.swing.MigLayout;
 import java.awt.event.ActionListener;
+import java.sql.Date;
 import java.awt.event.ActionEvent;
 
 public class DetailsPanel extends JPanel {
@@ -42,7 +43,16 @@ public class DetailsPanel extends JPanel {
 				totalDoubleTextsPlaced++;
 			} else {
 				String dataEditPos = "cell 1 " + (i + totalDoubleTextsPlaced) + " 2 1,growx,growy";
-				MyTextField textField = new MyTextField(data[i]);
+				String str = data[i];
+				if(headers[i].IsDate) {
+					long val = Long.parseLong(str);
+					if ((val + "").toString().length() < "1000000000000".length()) { // int -> long
+						val *= 1000;
+					}
+					str =TableView.dateFormat.format(new Date(val));
+				}
+				
+				MyTextField textField = new MyTextField(str);
 				textField.setEditable(false);
 				add(textField, dataEditPos);
 			}

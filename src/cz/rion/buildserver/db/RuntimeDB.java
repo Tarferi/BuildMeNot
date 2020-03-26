@@ -233,6 +233,7 @@ public class RuntimeDB extends LayeredMetaDB {
 		synchronized (syncer) {
 			JsonArray res = this.select("SELECT * FROM session WHERE hash = '?' AND live = ?", session, 1).getJSON();
 			if (res.Value.size() == 1) {
+				refreshSession(session);
 				JsonValue val = res.Value.get(0);
 				if (val.isObject()) {
 					JsonObject obj = val.asObject();
@@ -256,6 +257,7 @@ public class RuntimeDB extends LayeredMetaDB {
 		synchronized (syncer) {
 			JsonArray res = this.select("SELECT * FROM session WHERE hash = '?' AND live = ?", sessionToken, 1).getJSON();
 			if (res.Value.size() == 1) {
+				this.refreshSession(sessionToken);
 				JsonValue val = res.Value.get(0);
 				if (val.isObject()) {
 					JsonObject obj = val.asObject();
@@ -284,6 +286,14 @@ public class RuntimeDB extends LayeredMetaDB {
 				}
 			}
 			return null;
+		}
+	}
+
+	private void refreshSession(String sessionToken) {
+		try {
+			this.execute("UPDATE session SET last_action WHERE hash = '?' AND live = ?", new Date().getTime(), sessionToken, 1);
+		} catch (DatabaseException e) {
+			e.printStackTrace();
 		}
 	}
 
