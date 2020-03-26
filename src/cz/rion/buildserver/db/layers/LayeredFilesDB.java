@@ -16,7 +16,7 @@ public abstract class LayeredFilesDB extends LayeredStaticDB {
 
 	public LayeredFilesDB(String fileName) throws DatabaseException {
 		super(fileName);
-		this.makeTable("files", KEY("ID"), TEXT("name"), TEXT("contents"));
+		this.makeTable("files", KEY("ID"), TEXT("name"), BIGTEXT("contents"));
 	}
 
 	private final char[] hexData = new char[] { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };

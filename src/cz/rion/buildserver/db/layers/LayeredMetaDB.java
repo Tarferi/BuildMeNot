@@ -27,7 +27,7 @@ public class LayeredMetaDB extends SQLiteDB {
 	public LayeredMetaDB(String fileName, String metaDatabaseName) throws DatabaseException {
 		super(fileName);
 		this.metaDatabaseName = metaDatabaseName;
-		this.makeTable("meta_tables", KEY("ID"), TEXT("name"), TEXT("data"));
+		this.makeTable("meta_tables", KEY("ID"), TEXT("name"), BIGTEXT("data"));
 		synchronized (incSyncer) {
 			this.DB_FILE_FIRST_ID = DB_FILE_FIRST_ID_ALL;
 			DB_FILE_FIRST_ID_ALL += DB_FILE_SIZE;
@@ -37,7 +37,7 @@ public class LayeredMetaDB extends SQLiteDB {
 	private JsonArray getFields(Field[] fields) {
 		JsonArray arr = new JsonArray(new ArrayList<JsonValue>());
 		for (Field f : fields) {
-			arr.add(new JsonString(f.toString().split(" ")[0]));
+			arr.add(new JsonString(f.getDecodableRepresentation()));
 		}
 		return arr;
 	}
@@ -46,7 +46,7 @@ public class LayeredMetaDB extends SQLiteDB {
 		return tables.containsKey(name.toLowerCase());
 	}
 
-	public final List<String> getFieldNames(String name) {
+	public final List<Field> getFields(String name) {
 		JsonArray res;
 		try {
 			res = this.select("SELECT * FROM meta_tables WHERE name = '?'", name).getJSON();
@@ -59,9 +59,9 @@ public class LayeredMetaDB extends SQLiteDB {
 							val = JsonValue.parse(data);
 							if (val != null) {
 								if (val.isArray()) {
-									List<String> lst = new ArrayList<>();
+									List<Field> lst = new ArrayList<>();
 									for (JsonValue vavl : val.asArray().Value) {
-										lst.add(vavl.asString().Value);
+										lst.add(Field.fromDecodableRepresentation(vavl.asString().Value));
 									}
 									return lst;
 								}

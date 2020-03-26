@@ -20,13 +20,44 @@ public class SQLiteDB {
 
 	private final Connection conn;
 
-	protected class Field {
-		private final String name;
+	public static class Field {
+		public final String name;
 		private final String modifiers;
+		public final boolean IsDate;
+		public final boolean IsBigString;
 
 		private Field(String name, String modifiers) {
+			this(name, modifiers, false, false);
+		}
+
+		private Field(String name, String modifiers, boolean isDate) {
+			this(name, modifiers, isDate, false);
+		}
+
+		public Field(String name, String modifiers, boolean isDate, boolean isBigString) {
 			this.name = name;
 			this.modifiers = modifiers;
+			this.IsDate = isDate;
+			this.IsBigString = isBigString;
+		}
+
+		public String getDecodableRepresentation() {
+			StringBuilder sb = new StringBuilder();
+			sb.append(IsDate ? "1" : "0");
+			sb.append(IsBigString ? "1" : "0");
+			sb.append(modifiers);
+			sb.append("@");
+			sb.append(name);
+			return sb.toString();
+		}
+
+		public static Field fromDecodableRepresentation(String str) {
+			boolean date = str.charAt(0) == '1';
+			boolean bigString = str.charAt(1) == '1';
+			String[] parts = str.substring(2).split("@", 2);
+			String modifiers = parts[0];
+			String name = parts[1];
+			return new Field(name, modifiers, date, bigString);
 		}
 
 		@Override
@@ -43,8 +74,16 @@ public class SQLiteDB {
 		return new Field(name, "TEXT");
 	}
 
+	protected Field BIGTEXT(String name) {
+		return new Field(name, "TEXT", false, true);
+	}
+
 	protected Field NUMBER(String name) {
 		return new Field(name, "INTEGER");
+	}
+
+	protected Field DATE(String name) {
+		return new Field(name, "INTEGER", true);
 	}
 
 	public SQLiteDB(String fileName) throws DatabaseException {
@@ -83,7 +122,6 @@ public class SQLiteDB {
 			}
 			return stmt;
 		} catch (SQLException | ArrayIndexOutOfBoundsException e) {
-			e.printStackTrace();
 			throw new DatabaseException("Failed to prepare statement: " + sql, e);
 		}
 	}

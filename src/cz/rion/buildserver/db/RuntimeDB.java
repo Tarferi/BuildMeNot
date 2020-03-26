@@ -25,11 +25,11 @@ public class RuntimeDB extends LayeredMetaDB {
 		super(fileName, "RuntimeDB");
 		crypto = CryptoManager.getCrypto(sdb);
 		makeTable("users", KEY("ID"), TEXT("login"));
-		makeTable("session", KEY("ID"), TEXT("address"), TEXT("hash"), NUMBER("live"), NUMBER("user_id"), NUMBER("last_action"), NUMBER("creation_time"));
-		makeTable("compilations", KEY("ID"), NUMBER("session_id"), TEXT("test_id"), NUMBER("user_id"), TEXT("address"), NUMBER("port"), TEXT("asm"), NUMBER("creation_time"), NUMBER("code"), TEXT("result"), TEXT("full"));
-		makeTable("pageLoads", KEY("ID"), NUMBER("session_id"), TEXT("address"), NUMBER("port"), TEXT("target"), NUMBER("creation_time"), NUMBER("result"));
-		makeTable("dbV1", KEY("ID"), TEXT("address"), NUMBER("port"), TEXT("asm"), TEXT("test_id"), NUMBER("creation_time"), NUMBER("code"), TEXT("result"), TEXT("full"));
-		makeTable("dbV1Good", KEY("ID"), TEXT("address"), NUMBER("port"), TEXT("asm"), TEXT("test_id"), NUMBER("creation_time"), NUMBER("code"), TEXT("result"), TEXT("full"));
+		makeTable("session", KEY("ID"), TEXT("address"), TEXT("hash"), NUMBER("live"), NUMBER("user_id"), DATE("last_action"), DATE("creation_time"));
+		makeTable("compilations", KEY("ID"), NUMBER("session_id"), TEXT("test_id"), NUMBER("user_id"), TEXT("address"), NUMBER("port"), BIGTEXT("asm"), DATE("creation_time"), NUMBER("code"), BIGTEXT("result"), BIGTEXT("full"));
+		makeTable("pageLoads", KEY("ID"), NUMBER("session_id"), TEXT("address"), NUMBER("port"), TEXT("target"), DATE("creation_time"), NUMBER("result"));
+		makeTable("dbV1", KEY("ID"), TEXT("address"), NUMBER("port"), BIGTEXT("asm"), TEXT("test_id"), DATE("creation_time"), NUMBER("code"), BIGTEXT("result"), BIGTEXT("full"));
+		makeTable("dbV1Good", KEY("ID"), TEXT("address"), NUMBER("port"), BIGTEXT("asm"), TEXT("test_id"), DATE("creation_time"), NUMBER("code"), BIGTEXT("result"), BIGTEXT("full"));
 	}
 
 	private String reverse(String str) {

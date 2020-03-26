@@ -2,19 +2,21 @@ package cz.rion.buildserver.db.layers;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map.Entry;
+import java.util.regex.Pattern;
 
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.json.JsonValue.JsonString;
+import cz.rion.buildserver.json.JsonValue.JsonNumber;
 import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 
 public class LayeredDBFileWrapperDB extends LayeredFilesDB {
 
 	private static final String dbDirPrefix = "database/";
-	protected static final String dbFileSuffix = ".table";
+	private static final String dbFileSuffix = ".table";
+	private static final String viewFileSuffix = ".view";
 	public final String dbFilePrefix;
 
 	public LayeredDBFileWrapperDB(String fileName) throws DatabaseException {
@@ -33,13 +35,13 @@ public class LayeredDBFileWrapperDB extends LayeredFilesDB {
 			JsonObject result = new JsonObject();
 			if (res != null) {
 				if (res.isArray()) {
-					JsonArray arr = res.asArray();
+					JsonArray arr = res.asArray(); // Row data of table contents
 					if (!arr.Value.isEmpty()) {
-						List<String> columns = db.getFieldNames(tableName);
+						List<Field> columns = db.getFields(tableName); // Fields definitions
 						if (columns != null) {
 							List<JsonValue> columnsjsn = new ArrayList<>();
-							for (String column : columns) {
-								columnsjsn.add(new JsonString(column));
+							for (Field column : columns) {
+								columnsjsn.add(new JsonString(column.getDecodableRepresentation()));
 							}
 							JsonValue first = arr.Value.get(0);
 							if (first.isObject()) {
@@ -50,9 +52,13 @@ public class LayeredDBFileWrapperDB extends LayeredFilesDB {
 									if (val.isObject()) {
 										List<JsonValue> values = new ArrayList<>();
 										JsonObject vobj = val.asObject();
-										for (JsonValue col : columnsjsn) {
-											JsonValue colValue = vobj.get(col.asString().Value);
+										for (Field col : columns) {
+											JsonValue colValue = vobj.get(col.name);
+											// if (col.IsBigString) {
+											// values.add(new JsonString(colValue.asString().Value.length() + " bytes"));
+											// } else {
 											values.add(colValue);
+											// }
 										}
 										resultData.add(new JsonArray(values));
 									}
@@ -85,6 +91,15 @@ public class LayeredDBFileWrapperDB extends LayeredFilesDB {
 		} else {
 			return super.getFile(fileID);
 		}
+	}
+
+	public static FileInfo processPostLoadedFile(LayeredMetaDB db, FileInfo fi) {
+		if (fi != null) {
+			if (fi.FileName.startsWith(dbDirPrefix + db.metaDatabaseName + "/") && fi.FileName.endsWith(viewFileSuffix)) {
+				return handleView(db, fi);
+			}
+		}
+		return fi;
 	}
 
 	public static FileInfo getFile(LayeredMetaDB db, int fileID) throws DatabaseException {
@@ -121,9 +136,43 @@ public class LayeredDBFileWrapperDB extends LayeredFilesDB {
 		}
 	}
 
+	public static final Pattern FreeSQLSyntaxMatcher = Pattern.compile("(TEXT|BIGTEXT|INT|DATE)\\((\\w+)\\)", Pattern.MULTILINE);
+
+	private static FileInfo handleView(LayeredMetaDB db, FileInfo sqlFile) {
+		if (sqlFile == null) { // Pass error
+			return null;
+		}
+		JsonValue result = null;
+		int code = 1; // Error
+
+		String SQL = sqlFile.Contents; // Strip all metas
+		String freeSQL = FreeSQLSyntaxMatcher.matcher(SQL).replaceAll("$2");
+
+		try {
+			DatabaseResult res = db.select(freeSQL);
+			result = res.getJSON();
+			if (result != null) { // The only non-error scenario
+				code = 0;
+			}
+		} catch (Exception e) { // No need to print exception, not our SQL to handle
+			result = new JsonString(e.getMessage());
+		}
+		JsonObject robj = new JsonObject();
+		robj.add("SQL", new JsonString(SQL));
+		robj.add("freeSQL", new JsonString(freeSQL));
+		robj.add("code", new JsonNumber(code));
+		robj.add("result", result);
+		return new FileInfo(sqlFile.ID, sqlFile.FileName, robj.getJsonString());
+	}
+
 	@Override
 	public FileInfo loadFile(String name) {
 		if (name.startsWith(dbFilePrefix)) {
+			if (name.endsWith(viewFileSuffix)) { // SQL view
+				FileInfo sqlFile = super.loadFile(name);
+				return handleView(this, sqlFile);
+			}
+
 			int index = super.lstTables.indexOf(name);
 			if (index < 0) {
 				return null;

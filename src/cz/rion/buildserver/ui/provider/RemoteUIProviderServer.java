@@ -270,7 +270,7 @@ public class RemoteUIProviderServer {
 	private void writeFile(Socket client) throws IOException {
 		int fileID = readInt(client);
 		writeInt(client, FileLoadedEvent.ID);
-		FileInfo fo = getFile(fileID);
+		FileInfo fo = LayeredDBFileWrapperDB.processPostLoadedFile(db, LayeredDBFileWrapperDB.processPostLoadedFile(sdb, getFile(fileID)));
 		if (fo == null) {
 			writeInt(client, 0);
 			return;

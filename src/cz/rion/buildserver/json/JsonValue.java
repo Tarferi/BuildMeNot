@@ -390,7 +390,7 @@ public abstract class JsonValue {
 
 		@Override
 		public String getJsonString() {
-			return Value + "";
+			return txtValue;
 		}
 
 	}
