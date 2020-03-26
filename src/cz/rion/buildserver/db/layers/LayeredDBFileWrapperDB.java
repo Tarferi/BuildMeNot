@@ -1,6 +1,7 @@
 package cz.rion.buildserver.db.layers;
 
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.regex.Pattern;
 
@@ -149,6 +150,7 @@ public class LayeredDBFileWrapperDB extends LayeredFilesDB {
 		String freeSQL = FreeSQLSyntaxMatcher.matcher(SQL).replaceAll("$2");
 
 		try {
+			freeSQL = Pattern.compile("\\%NOW\\%", Pattern.MULTILINE).matcher(freeSQL).replaceAll(new Date().getTime() + "");
 			DatabaseResult res = db.select(freeSQL);
 			result = res.getJSON();
 			if (result != null) { // The only non-error scenario
