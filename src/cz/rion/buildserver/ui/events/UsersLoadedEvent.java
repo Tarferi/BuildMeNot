@@ -5,9 +5,11 @@ import java.util.List;
 
 import javax.swing.SwingUtilities;
 
+import cz.rion.buildserver.ui.provider.RemoteUIClient;
+
 public class UsersLoadedEvent extends Event {
 
-	public static final int ID = 7;
+	public static final int ID = RemoteUIClient.RemoteOperation.UsersLoaded.code;
 
 	public static class UserInfo {
 		public final int ID;
@@ -59,7 +61,7 @@ public class UsersLoadedEvent extends Event {
 	}
 
 	public void dispatch(EventManager m) {
-		synchronized (m.bulidersAvailableListeners) {
+		synchronized (m.buildersAvailableListeners) {
 			@SuppressWarnings("unchecked")
 			final List<UserInfo> data = (List<UserInfo>) super.data;
 			for (final UserListLoadedListener userListLoadedListener : m.userListLoadedListeners) {

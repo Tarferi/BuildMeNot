@@ -1,8 +1,7 @@
 package cz.rion.buildserver.http;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.net.Socket;
+import java.nio.channels.SocketChannel;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Date;
@@ -113,7 +112,7 @@ public class HTTPClient {
 		}
 	}
 
-	private final Socket client;
+	private final MySocketClient client;
 	private int builderID;
 	private final TestManager tests;
 	private final RuntimeDB db;
@@ -121,14 +120,11 @@ public class HTTPClient {
 	private final RemoteUIProviderServer remoteAdmin;
 
 	private void close() {
-		try {
-			client.close();
-		} catch (IOException e) {
-		}
+		client.close();
 	}
 
-	public HTTPClient(RuntimeDB db, StaticDB sdb, TestManager tests, Socket client, RemoteUIProviderServer remoteAdmin) {
-		this.client = client;
+	public HTTPClient(RuntimeDB db, StaticDB sdb, TestManager tests, SocketChannel client, RemoteUIProviderServer remoteAdmin) {
+		this.client = new MySocketClient(client);
 		this.remoteAdmin = remoteAdmin;
 		this.tests = tests;
 		this.db = db;
@@ -179,7 +175,7 @@ public class HTTPClient {
 					synchronized (this) {
 						this.wait(1000);
 					}
-					client.getOutputStream().flush();
+					client.flush();
 				} catch (IOException e) {
 				} catch (InterruptedException e) {
 				} finally {
@@ -192,10 +188,9 @@ public class HTTPClient {
 	private String readLine() throws HTTPClientException {
 		StringBuilder sb = new StringBuilder();
 		try {
-			InputStream input = client.getInputStream();
 			char predchozi = 0;
 			while (true) {
-				int i = input.read();
+				int i = client.readSync();
 				if (i == -1) {
 					break;
 				}
@@ -217,17 +212,17 @@ public class HTTPClient {
 
 	private void handle(HTTPResponse response) throws HTTPClientException {
 		try {
-			client.getOutputStream().write((response.protocol + " " + response.code + " " + response.codeDescription + "\r\n").getBytes(Settings.getDefaultCharset()));
-			client.getOutputStream().write(("Connection: close\r\n").getBytes(Settings.getDefaultCharset()));
+			client.writeSync((response.protocol + " " + response.code + " " + response.codeDescription + "\r\n").getBytes(Settings.getDefaultCharset()));
+			client.writeSync(("Connection: close\r\n").getBytes(Settings.getDefaultCharset()));
 			if (response.contentType != null) {
-				client.getOutputStream().write(("Content-Type: " + response.contentType + "\r\n").getBytes(Settings.getDefaultCharset()));
+				client.writeSync(("Content-Type: " + response.contentType + "\r\n").getBytes(Settings.getDefaultCharset()));
 			}
 			for (Entry<String, String> entry : response.additionalHeaderFields) {
-				client.getOutputStream().write((entry.getKey() + ": " + entry.getValue() + "\r\n").getBytes(Settings.getDefaultCharset()));
+				client.writeSync((entry.getKey() + ": " + entry.getValue() + "\r\n").getBytes(Settings.getDefaultCharset()));
 			}
-			client.getOutputStream().write(("Content-Length: " + response.data.length + "\r\n").getBytes(Settings.getDefaultCharset()));
-			client.getOutputStream().write(("\r\n").getBytes(Settings.getDefaultCharset()));
-			client.getOutputStream().write(response.data);
+			client.writeSync(("Content-Length: " + response.data.length + "\r\n").getBytes(Settings.getDefaultCharset()));
+			client.writeSync(("\r\n").getBytes(Settings.getDefaultCharset()));
+			client.writeSync(response.data);
 		} catch (IOException e) {
 			throw new HTTPClientException("Failed to write response", e);
 		}
@@ -632,7 +627,7 @@ public class HTTPClient {
 		if (method.equals("AUTH")) {
 			if (path.equals(Settings.getPasscode())) {
 				try {
-					client.getOutputStream().write(42);
+					client.writeSync(42);
 				} catch (IOException e) {
 					throw new HTTPClientException("Socket write error", e);
 				}
@@ -663,11 +658,8 @@ public class HTTPClient {
 				throw new HTTPClientException("Request too big: " + strLen);
 			}
 			data = new byte[dataLength];
-			try {
-				RemoteUIProviderServer.read(client, data);
-				// client.getInputStream().read(data);
-			} catch (IOException e) {
-				throw new HTTPClientException("Failed to read request", e);
+			if (!read(data)) {
+				throw new HTTPClientException("Failed to read request");
 			}
 		}
 		return new HTTPRequest(method, protocol, path, data, header, cookiesLines);
@@ -684,6 +676,22 @@ public class HTTPClient {
 		String path = header.substring(method.length() + 1);
 		path = path.substring(0, path.length() - (protocol.length() + 1));
 		return handle(method, path, protocol);
+	}
+
+	private boolean read(byte[] target) {
+		try {
+			int needed = target.length;
+			while (needed > 0) {
+				int read = client.readSync(target, target.length - needed, needed);
+				if (read < 0) {
+					return false;
+				}
+				needed -= read;
+			}
+			return true;
+		} catch (Throwable t) {
+			return false;
+		}
 	}
 
 	public HTTPClientIntentType getIntent() {

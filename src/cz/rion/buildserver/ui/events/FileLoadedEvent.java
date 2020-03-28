@@ -3,10 +3,11 @@ package cz.rion.buildserver.ui.events;
 import javax.swing.SwingUtilities;
 
 import cz.rion.buildserver.db.layers.LayeredFilesDB.DatabaseFile;
+import cz.rion.buildserver.ui.provider.RemoteUIClient;
 
 public class FileLoadedEvent extends Event {
 
-	public static final int ID = 98;
+	public static final int ID = RemoteUIClient.RemoteOperation.FileLoaded.code;
 
 	public static class FileInfo extends DatabaseFile {
 		public final String Contents;
@@ -35,7 +36,7 @@ public class FileLoadedEvent extends Event {
 	}
 
 	public void dispatch(EventManager m) {
-		synchronized (m.bulidersAvailableListeners) {
+		synchronized (m.buildersAvailableListeners) {
 			final FileInfo data = (FileInfo) super.data;
 			for (final FileLoadedListener userListLoadedListener : m.fileLoadedListeners) {
 				SwingUtilities.invokeLater(new Runnable() {

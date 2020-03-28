@@ -3,10 +3,11 @@ package cz.rion.buildserver.ui.events;
 import javax.swing.SwingUtilities;
 
 import cz.rion.buildserver.ui.events.BuildersLoadedEvent.BuildThreadInfo;
+import cz.rion.buildserver.ui.provider.RemoteUIClient;
 
 public class BuilderUpdateEvent extends Event {
 
-	public static final int ID = 12;
+	public static final int ID = RemoteUIClient.RemoteOperation.BuildersUpdate.code;
 
 	public static void addBuilderUpdateListener(EventManager m, BuilderUpdateListener l) {
 		synchronized (m.builderUpdateListeners) {

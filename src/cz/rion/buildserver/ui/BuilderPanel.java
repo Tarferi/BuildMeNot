@@ -41,9 +41,9 @@ public class BuilderPanel extends JPanel {
 		this.setOpaque(false);
 		setLayout(new MigLayout("", "[][][80:n,grow][][][][][80:n,grow][][][grow]", "[][][][grow]"));
 
-		MyLabel lblBulider = new MyLabel("Builder#" + thr.ID);
-		lblBulider.setFont(new Font("Tahoma", Font.PLAIN, 16));
-		add(lblBulider, "cell 0 0");
+		MyLabel lblBuilder = new MyLabel("Builder#" + thr.ID);
+		lblBuilder.setFont(new Font("Tahoma", Font.PLAIN, 16));
+		add(lblBuilder, "cell 0 0");
 
 		MyLabel adsfasdf = new MyLabel("Status:");
 		add(adsfasdf, "cell 0 1,alignx right");

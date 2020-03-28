@@ -16,7 +16,7 @@ import cz.rion.buildserver.ui.events.UsersLoadedEvent.UserListLoadedListener;
 public class EventManager {
 
 	protected final List<StatusChangeListener> statusChangeListeners = new ArrayList<>();
-	protected final List<BuilderAvailableListener> bulidersAvailableListeners = new ArrayList<>();
+	protected final List<BuilderAvailableListener> buildersAvailableListeners = new ArrayList<>();
 	protected final List<StatusMessageListener> statusMessageListeners = new ArrayList<>();
 	protected final List<BuilderUpdateListener> builderUpdateListeners = new ArrayList<>();
 	protected final List<UserListLoadedListener> userListLoadedListeners = new ArrayList<>();

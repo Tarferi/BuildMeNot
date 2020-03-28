@@ -1,7 +1,6 @@
 package cz.rion.buildserver.ui;
 
 import java.io.IOException;
-import java.io.OutputStream;
 import java.net.Socket;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
@@ -9,6 +8,7 @@ import java.util.Date;
 import java.util.List;
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.layers.LayeredFilesDB.DatabaseFile;
+import cz.rion.buildserver.http.MySocketClient;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.BuildThread.BuilderStats;
@@ -29,7 +29,9 @@ import cz.rion.buildserver.ui.events.StatusChangeEvent;
 import cz.rion.buildserver.ui.events.StatusMessageEvent;
 import cz.rion.buildserver.ui.events.UsersLoadedEvent;
 import cz.rion.buildserver.ui.events.UsersLoadedEvent.UserInfo;
-import cz.rion.buildserver.ui.provider.RemoteUIProviderServer;
+import cz.rion.buildserver.ui.provider.InputPacketRequest;
+import cz.rion.buildserver.ui.provider.MemoryBuffer;
+import cz.rion.buildserver.ui.provider.RemoteUIClient;
 import cz.rion.buildserver.ui.provider.RemoteUIProviderServer.BuilderStatus;
 
 public class UIDriver {
@@ -40,7 +42,7 @@ public class UIDriver {
 	}
 
 	public final EventManager EventManager = new EventManager();
-	private Socket client;
+	private RemoteUIClient client;
 	private Object writeSyncer = new Object();
 
 	private UIDriverThread reader = null;
@@ -165,68 +167,73 @@ public class UIDriver {
 		}
 	}
 
-	private JsonObject readJSON() throws IOException {
-		JsonValue val = JsonValue.parse(RemoteUIProviderServer.readString(client));
+	private JsonObject readJSON(InputPacketRequest inBuffer) throws IOException {
+		JsonValue val = JsonValue.parse(inBuffer.readString());
 		if (val.isObject()) {
 			return val.asObject();
 		}
 		throw new IOException("Not a JSON?");
 	}
 
-	private List<BuildThreadInfo> readBuilders() throws IOException {
+	private List<BuildThreadInfo> readBuilders(InputPacketRequest inBuffer) throws IOException {
 		final List<BuildThreadInfo> builders = new ArrayList<>();
-		int totalBuilders = RemoteUIProviderServer.readInt(client);
+		int totalBuilders = inBuffer.readInt();
 		for (int i = 0; i < totalBuilders; i++) {
-			builders.add(readBuilder(i));
+			builders.add(readBuilder(inBuffer, i));
 		}
 		return builders;
 	}
 
-	private BuildThreadInfo readBuilder(int index) throws IOException {
-		int queueSize = RemoteUIProviderServer.readInt(client);
-		int totalJobsFinished = RemoteUIProviderServer.readInt(client);
-		int totalAdminJobs = RemoteUIProviderServer.readInt(client);
-		int totalHTMLJobs = RemoteUIProviderServer.readInt(client);
-		int totalResourceJobs = RemoteUIProviderServer.readInt(client);
-		int totalHackJobs = RemoteUIProviderServer.readInt(client);
-		int totalJobsPassed = RemoteUIProviderServer.readInt(client);
+	private BuildThreadInfo readBuilder(InputPacketRequest inBuffer, int index) throws IOException {
+		int queueSize = inBuffer.readInt();
+		int totalJobsFinished = inBuffer.readInt();
+		int totalAdminJobs = inBuffer.readInt();
+		int totalHTMLJobs = inBuffer.readInt();
+		int totalResourceJobs = inBuffer.readInt();
+		int totalHackJobs = inBuffer.readInt();
+		int totalJobsPassed = inBuffer.readInt();
 		BuilderStats stats = new BuilderStats(totalJobsFinished, totalHackJobs, totalResourceJobs, totalHTMLJobs, totalAdminJobs, totalJobsPassed);
-		BuilderStatus bs = BuilderStatus.values()[RemoteUIProviderServer.readInt(client)];
+		int builderID = inBuffer.readInt();
+		BuilderStatus bs = BuilderStatus.values()[builderID];
 		return new BuildThreadInfo(index, queueSize, stats, bs);
 	}
 
 	private Event readNextEvent() {
-		try {
-			int code = RemoteUIProviderServer.readInt(client);
-			if (code == BuildersLoadedEvent.ID) {
-				return new BuildersLoadedEvent(readBuilders());
-			} else if (code == BuilderUpdateEvent.ID) {
-				int index = RemoteUIProviderServer.readInt(client);
-				return new BuilderUpdateEvent(readBuilder(index));
-			} else if (code == StatusMessageEvent.ID) {
-				return new StatusMessageEvent(readJSON());
-			} else if (code == UsersLoadedEvent.ID) {
-				return new UsersLoadedEvent(readUsers(client));
-			} else if (code == FileListLoadedEvent.ID) {
-				return new FileListLoadedEvent(readFiles(client));
-			} else if (code == FileLoadedEvent.ID) {
-				return new FileLoadedEvent(readFile(client));
-			} else if (code == FileSavedEvent.ID) {
-				return new FileSavedEvent(readFileSave(client));
-			} else if (code == FileCreatedEvent.ID) {
-				return new FileCreatedEvent(readFileCreate(client));
-			} else {
-				throw new IOException("Invalid OP code: " + code);
-			}
-		} catch (IOException e) {
-			if (client != null) { // Client closed from another thread
-				e.printStackTrace(); 
+		InputPacketRequest inBuffer = client.getNext(true);
+		if (inBuffer != null) {
+			try {
+				int code = inBuffer.readInt();
+				System.out.println("[UIDriver]: received " + RemoteUIClient.RemoteOperation.fromCode(code));
+				if (code == BuildersLoadedEvent.ID) {
+					return new BuildersLoadedEvent(readBuilders(inBuffer));
+				} else if (code == BuilderUpdateEvent.ID) {
+					int index = inBuffer.readInt();
+					return new BuilderUpdateEvent(readBuilder(inBuffer, index));
+				} else if (code == StatusMessageEvent.ID) {
+					return new StatusMessageEvent(readJSON(inBuffer));
+				} else if (code == UsersLoadedEvent.ID) {
+					return new UsersLoadedEvent(readUsers(inBuffer));
+				} else if (code == FileListLoadedEvent.ID) {
+					return new FileListLoadedEvent(readFiles(inBuffer));
+				} else if (code == FileLoadedEvent.ID) {
+					return new FileLoadedEvent(readFile(inBuffer));
+				} else if (code == FileSavedEvent.ID) {
+					return new FileSavedEvent(readFileSave(inBuffer));
+				} else if (code == FileCreatedEvent.ID) {
+					return new FileCreatedEvent(readFileCreate(inBuffer));
+				} else {
+					throw new IOException("Invalid OP code: " + code);
+				}
+			} catch (IOException e) {
+				if (client != null) { // Client closed from another thread
+					e.printStackTrace();
+				}
 			}
 		}
 		return new StatusChangeEvent(Status.DISCONNECTED);
 	}
 
-	private FileCreationInfo readFileCreate(Socket client) throws IOException {
+	private FileCreationInfo readFileCreate(InputPacketRequest client) throws IOException {
 		FileInfo fo = readFile(client);
 		if (fo == null) {
 			return new FileCreationInfo(null, false);
@@ -234,7 +241,7 @@ public class UIDriver {
 		return new FileCreationInfo(fo, true);
 	}
 
-	private FileSaveResult readFileSave(Socket client) throws IOException {
+	private FileSaveResult readFileSave(InputPacketRequest client) throws IOException {
 		FileInfo fo = readFile(client);
 		if (fo == null) {
 			return new FileSaveResult(null, false);
@@ -242,12 +249,12 @@ public class UIDriver {
 		return new FileSaveResult(fo, true);
 	}
 
-	private FileInfo readFile(Socket client) throws IOException {
-		boolean exists = RemoteUIProviderServer.readInt(client) == 1;
+	private FileInfo readFile(InputPacketRequest inBuffer) throws IOException {
+		boolean exists = inBuffer.readInt() == 1;
 		if (exists) {
-			int id = RemoteUIProviderServer.readInt(client);
-			String name = RemoteUIProviderServer.readString(client);
-			String contents = RemoteUIProviderServer.readString(client);
+			int id = inBuffer.readInt();
+			String name = inBuffer.readString();
+			String contents = inBuffer.readString();
 			byte[] cnt = contents.getBytes(Settings.getDefaultCharset());
 			contents = new String(cnt, Charset.forName("UTF-8"));
 			return new FileInfo(id, name, contents);
@@ -256,31 +263,31 @@ public class UIDriver {
 		}
 	}
 
-	private List<DatabaseFile> readFiles(Socket client) throws IOException {
+	private List<DatabaseFile> readFiles(InputPacketRequest inBuffer) throws IOException {
 		List<DatabaseFile> lst = new ArrayList<>();
-		int totalSize = RemoteUIProviderServer.readInt(client);
+		int totalSize = inBuffer.readInt();
 		for (int i = 0; i < totalSize; i++) {
-			int id = RemoteUIProviderServer.readInt(client);
-			String name = RemoteUIProviderServer.readString(client);
+			int id = inBuffer.readInt();
+			String name = inBuffer.readString();
 			lst.add(new DatabaseFile(id, name));
 		}
 		return lst;
 	}
 
-	private List<UserInfo> readUsers(Socket client) throws IOException {
+	private List<UserInfo> readUsers(InputPacketRequest inBuffer) throws IOException {
 		List<UserInfo> lst = new ArrayList<>();
-		int totalSize = RemoteUIProviderServer.readInt(client);
+		int totalSize = inBuffer.readInt();
 		for (int i = 0; i < totalSize; i++) {
-			int UserID = RemoteUIProviderServer.readInt(client);
-			String Login = RemoteUIProviderServer.readString(client);
-			Date RegistrationDate = RemoteUIProviderServer.readDate(client);
-			Date LastActiveDate = RemoteUIProviderServer.readDate(client);
-			Date lastLoginDate = RemoteUIProviderServer.readDate(client);
-			int TotalTestsSubmitted = RemoteUIProviderServer.readInt(client);
-			String LastTestID = RemoteUIProviderServer.readString(client);
-			Date LastTestDate = RemoteUIProviderServer.readDate(client);
-			String fullName = RemoteUIProviderServer.readString(client);
-			String group = RemoteUIProviderServer.readString(client);
+			int UserID = inBuffer.readInt();
+			String Login = inBuffer.readString();
+			Date RegistrationDate = inBuffer.readDate();
+			Date LastActiveDate = inBuffer.readDate();
+			Date lastLoginDate = inBuffer.readDate();
+			int TotalTestsSubmitted = inBuffer.readInt();
+			String LastTestID = inBuffer.readString();
+			Date LastTestDate = inBuffer.readDate();
+			String fullName = inBuffer.readString();
+			String group = inBuffer.readString();
 			UserInfo ui = new UserInfo(UserID, Login, fullName, group, RegistrationDate, LastActiveDate, lastLoginDate, TotalTestsSubmitted, LastTestID, LastTestDate);
 			lst.add(ui);
 		}
@@ -297,22 +304,20 @@ public class UIDriver {
 				synchronized (EventManager.getStatusSyncer()) {
 					if (EventManager.getStatus() == Status.DISCONNECTED) {
 						setStatus(Status.CONNECTING);
+						MySocketClient raw = null;
 						try {
 							if (client != null) {
 								client.close();
 								client = null;
 							}
-							client = new Socket(server, port);
-							OutputStream out = client.getOutputStream();
-							synchronized (writeSyncer) {
-								out.write(("AUTH " + auth + " HTTP/1.1\r\n\r\n").getBytes(Settings.getDefaultCharset()));
-							}
-							byte[] b = new byte[1];
-							RemoteUIProviderServer.read(client, b);
-							int code = b[0];
+							raw = new MySocketClient(new Socket(server, port));
+							raw.writeSync(("AUTH " + auth + " HTTP/1.1\r\n\r\n").getBytes(Settings.getDefaultCharset()));
+							int code = raw.readSync();
 							if (code != 42) {
 								throw new IOException("Invalid welcome message");
 							}
+
+							client = new RemoteUIClient(raw);
 							startThreads(false, false, true); // Load event reader
 							stopAll = false;
 							setStatus(Status.CONNECTED);
@@ -321,6 +326,9 @@ public class UIDriver {
 						} finally {
 							if (stopAll) {
 								stopThreads();
+							}
+							if (client == null && raw != null) {
+								raw.close();
 							}
 						}
 					}
@@ -339,23 +347,28 @@ public class UIDriver {
 			@Override
 			public void run() {
 				synchronized (EventManager.getStatusSyncer()) {
-					synchronized (writeSyncer) {
-						if (EventManager.getStatus() == Status.CONNECTED) {
-							try {
-								client.getOutputStream().write(code);
-								for (Object o : params) {
-									if (o instanceof String) {
-										RemoteUIProviderServer.writeString(client, (String) o);
-									} else if (o instanceof Integer) {
-										RemoteUIProviderServer.writeInt(client, (int) o);
-									} else {
-										throw new Exception("Invalid object type to write");
-									}
+					if (EventManager.getStatus() == Status.CONNECTED) {
+						try {
+							MemoryBuffer buf = new MemoryBuffer.SignleClientMemoryBuffer(32, client);
+							buf.write(new byte[] { (byte) code });
+							for (Object o : params) {
+								if (o instanceof String) {
+									buf.writeString((String) o);
+								} else if (o instanceof Integer) {
+									buf.writeInt((int) o);
+								} else {
+									throw new Exception("Invalid object type to write");
 								}
-							} catch (Exception e) {
-								e.printStackTrace();
-								setStatus(Status.DISCONNECTED);
 							}
+							System.out.println("[UIDriver] sending " + RemoteUIClient.RemoteOperation.fromCode(code));
+							synchronized (writeSyncer) {
+								if (!client.write(buf, true)) {
+									setStatus(Status.DISCONNECTED);
+								}
+							}
+						} catch (Exception e) {
+							e.printStackTrace();
+							setStatus(Status.DISCONNECTED);
 						}
 					}
 				}

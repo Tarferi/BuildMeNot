@@ -72,7 +72,7 @@ public class TableView extends JTable {
 		redraw();
 	}
 
-	private void showData() {
+	public void showData() {
 		detailsCB.closeDetails();
 		redraw();
 	}

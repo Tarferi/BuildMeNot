@@ -1,8 +1,9 @@
 package cz.rion.buildserver.http;
 
 import java.io.IOException;
-import java.net.ServerSocket;
-import java.net.Socket;
+import java.net.InetSocketAddress;
+import java.nio.channels.ServerSocketChannel;
+import java.nio.channels.SocketChannel;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -43,7 +44,7 @@ public class HTTPServer {
 		return selectedBuilder;
 	}
 
-	public HTTPServer(int port) throws DatabaseException {
+	public HTTPServer(int port) throws DatabaseException, IOException {
 		this.sdb = new StaticDB(Settings.getStaticDB());
 		this.db = new RuntimeDB(Settings.getMainDB(), sdb);
 		this.tests = new TestManager(sdb, "./web/tests");
@@ -54,25 +55,28 @@ public class HTTPServer {
 		}
 	}
 
-	public void addRemoteUIClient(Socket socket) {
+	public void addRemoteUIClient(MySocketClient socket) {
 		remoteUI.addClient(socket);
 	}
 
 	public void run() throws HTTPServerException {
-		ServerSocket server;
+		ServerSocketChannel server;
 		try {
-			server = new ServerSocket(port);
+			server = ServerSocketChannel.open();
+			server.configureBlocking(true);
+			server.socket().bind(new InetSocketAddress(port));
 		} catch (IOException e) {
 			throw new HTTPServerException("Failed to start server on port " + port, e);
 		}
 		while (true) {
-			Socket client;
+			SocketChannel client;
 			try {
 				client = server.accept();
 			} catch (IOException e) {
 				throw new HTTPServerException("Failed to accept client on port " + port, e);
 			}
-			HTTPClient myClient = new HTTPClient(db, sdb, tests, client, remoteUI);
+			HTTPClient myClient;
+			myClient = new HTTPClient(db, sdb, tests, client, remoteUI);
 			getBuilder().addJob(myClient);
 		}
 	}

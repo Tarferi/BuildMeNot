@@ -28,6 +28,7 @@ import javax.swing.JSplitPane;
 import javax.swing.JScrollPane;
 import javax.swing.border.MatteBorder;
 import java.awt.Color;
+import java.awt.Dimension;
 
 import javax.swing.JComponent;
 import javax.swing.ListSelectionModel;
@@ -39,6 +40,9 @@ import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.JTextArea;
 import java.awt.Font;
+import javax.swing.ScrollPaneConstants;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 
 public class FilesPanel extends JPanel implements FileListLoadedListener, FileLoadedListener, FileSavedListener, FileCreatedListener {
 
@@ -155,6 +159,7 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 		PropertyWrapper wLblOverview = new PropertyWrapper(lblOverview);
 		PropertyWrapper wTxtContents = new PropertyWrapper(txtContents);
 		PropertyWrapper wBtnEdit = new PropertyWrapper(btnEdit);
+		PropertyWrapper wBtnReturn = new PropertyWrapper(btnReturn);
 
 		switch (state) {
 		case DISCONNECTED:
@@ -331,6 +336,7 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 		wLblOverview.commit();
 		wTxtContents.commit();
 		wBtnEdit.commit();
+		wBtnReturn.commit();
 	}
 
 	private void setListItems(DatabaseFile[] items) {
@@ -342,6 +348,8 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 	}
 
 	private JComponent currentRightSideContent = null;
+	private MyButton btnReturn;
+	private JPanel panel_1;
 
 	private void setRightSideContents(JComponent c) {
 		scrollContents.setViewportView(c);
@@ -385,6 +393,8 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 			@Override
 			public void showDetails(JPanel panel) {
 				setRightSideContents(panel);
+				btnReturn.setVisible(true);
+				btnReturn.setEnabled(true);
 			}
 
 			@Override
@@ -478,15 +488,32 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 		pnlRight.add(pnlOverview, "cell 0 0,grow");
 		pnlOverview.setLayout(new MigLayout("", "[grow]", "[][grow][]"));
 
-		txtContents = new JTextArea();
-		txtContents.setFont(new Font("Monospaced", Font.PLAIN, 17));
-		scrollContents = new JScrollPane(txtContents);
-		scrollContents.getVerticalScrollBar().setUnitIncrement(16);
-
 		lblOverview = new MyLabel("Editor");
 		pnlOverview.add(lblOverview, "cell 0 0,alignx center");
 		lblOverview.setBorder(new MatteBorder(0, 0, 1, 0, (Color) new Color(0, 0, 0)));
-		pnlOverview.add(scrollContents, "cell 0 1,grow");
+
+		panel_1 = new JPanel();
+		pnlOverview.add(panel_1, "cell 0 1,grow");
+		panel_1.setLayout(new BorderLayout(0, 0));
+
+		txtContents =new JTextArea();
+		txtContents.setFont(new Font("Monospaced", Font.PLAIN, 17));
+		scrollContents = new JScrollPane(txtContents);
+		panel_1.add(scrollContents, BorderLayout.CENTER);
+		scrollContents.addComponentListener(new ComponentAdapter() {
+			@Override
+			public void componentResized(ComponentEvent e) {
+				if (currentRightSideContent != null) {
+					currentRightSideContent.setSize(100, 100);
+				}
+				int height = scrollContents.getViewport().getHeight();
+				int width = scrollContents.getViewport().getWidth();
+				int newWidth = scrollContents.getWidth();
+				// scrollContents.getViewport().setSize(scrollContents.getWidth()-50, height);
+			}
+		});
+		scrollContents.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+		scrollContents.getVerticalScrollBar().setUnitIncrement(16);
 		txtContents.getDocument().addDocumentListener(new DocumentListener() {
 			public void changedUpdate(DocumentEvent e) {
 				filter();
@@ -512,7 +539,7 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 		});
 		JPanel panel_3 = new JPanel();
 		pnlOverview.add(panel_3, "cell 0 2,grow");
-		panel_3.setLayout(new MigLayout("", "[grow][][][][]", "[]"));
+		panel_3.setLayout(new MigLayout("", "[grow][][][][][]", "[]"));
 
 		btnSave = new MyButton("Save");
 		btnSave.addActionListener(new ActionListener() {
@@ -534,12 +561,21 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 				editBtnPressed();
 			}
 		});
-		panel_3.add(btnEdit, "cell 1 0");
-		panel_3.add(btnClose, "cell 2 0");
-		panel_3.add(btnSave, "cell 3 0");
+
+		btnReturn = new MyButton("Return");
+		btnReturn.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				myTable.showData();
+				btnReturn.setVisible(false);
+			}
+		});
+		panel_3.add(btnReturn, "cell 1 0");
+		panel_3.add(btnEdit, "cell 2 0");
+		panel_3.add(btnClose, "cell 3 0");
+		panel_3.add(btnSave, "cell 4 0");
 
 		btnSaveAndClose = new MyButton("Save and close");
-		panel_3.add(btnSaveAndClose, "cell 4 0");
+		panel_3.add(btnSaveAndClose, "cell 5 0");
 		btnSaveAndClose.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				saveAndClose();

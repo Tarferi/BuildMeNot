@@ -3,10 +3,11 @@ package cz.rion.buildserver.ui.events;
 import javax.swing.SwingUtilities;
 
 import cz.rion.buildserver.json.JsonValue.JsonObject;
+import cz.rion.buildserver.ui.provider.RemoteUIClient;
 
 public class StatusMessageEvent extends Event {
 
-	public static final int ID = 40;
+	public static final int ID = RemoteUIClient.RemoteOperation.StatusMessage.code;
 
 	private static StatusMessage parse(JsonObject data) {
 		if (data.containsNumber("code") && data.containsString("address") && data.containsString("login") && data.containsString("result") && data.containsNumber("type")) {

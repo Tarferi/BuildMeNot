@@ -1,13 +1,13 @@
 package cz.rion.buildserver.exceptions;
 
-import java.net.Socket;
+import cz.rion.buildserver.http.MySocketClient;
 
 public class SwitchClientException extends Exception {
 
-	public final Socket socket;
+	public final MySocketClient socket;
 
-	public SwitchClientException(Socket socket) {
-		this.socket = socket;
+	public SwitchClientException(MySocketClient client) {
+		this.socket = client;
 	}
 
 }

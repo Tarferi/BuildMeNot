@@ -101,7 +101,7 @@ public class BuildThread {
 			break;
 		case PERFORM_TEST:
 			remoteAdmin.writeTestResult(address, login, code, codeDescription, asm, test_id);
-			remoteAdmin.writeBuliderDataUpdate(this.ID, this);
+			remoteAdmin.writeBuilderDataUpdate(this.ID, this);
 			if (ok) {
 				stats.totalJobsPassed++;
 			}

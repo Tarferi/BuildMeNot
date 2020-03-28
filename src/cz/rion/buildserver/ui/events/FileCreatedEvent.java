@@ -3,10 +3,11 @@ package cz.rion.buildserver.ui.events;
 import javax.swing.SwingUtilities;
 
 import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
+import cz.rion.buildserver.ui.provider.RemoteUIClient;
 
 public class FileCreatedEvent extends Event {
 
-	public static final int ID = 91;
+	public static final int ID = RemoteUIClient.RemoteOperation.FileCreated.code;
 
 	public static class FileCreationInfo {
 		public final FileInfo FileInfo;
@@ -36,7 +37,7 @@ public class FileCreatedEvent extends Event {
 	}
 
 	public void dispatch(EventManager m) {
-		synchronized (m.bulidersAvailableListeners) {
+		synchronized (m.buildersAvailableListeners) {
 			final FileCreationInfo data = (FileCreationInfo) super.data;
 			for (final FileCreatedListener fileCreatedListener : m.fileCreatedListeners) {
 				SwingUtilities.invokeLater(new Runnable() {

@@ -1,5 +1,6 @@
 package cz.rion.buildserver;
 
+import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 
 import javax.swing.SwingUtilities;
@@ -38,7 +39,7 @@ public class MAIN {
 			try {
 				server = new HTTPServer(Settings.GetHTTPServerPort());
 				server.run();
-			} catch (HTTPServerException | DatabaseException e) {
+			} catch (HTTPServerException | DatabaseException | IOException e) {
 				e.printStackTrace();
 			}
 		}

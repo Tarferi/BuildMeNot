@@ -291,7 +291,7 @@ public class RuntimeDB extends LayeredMetaDB {
 
 	private void refreshSession(String sessionToken) {
 		try {
-			this.execute("UPDATE session SET last_action WHERE hash = '?' AND live = ?", new Date().getTime(), sessionToken, 1);
+			this.execute("UPDATE session SET last_action = ? WHERE hash = '?' AND live = ?", new Date().getTime(), sessionToken, 1);
 		} catch (DatabaseException e) {
 			e.printStackTrace();
 		}

@@ -5,11 +5,12 @@ import java.util.List;
 import javax.swing.SwingUtilities;
 
 import cz.rion.buildserver.BuildThread.BuilderStats;
+import cz.rion.buildserver.ui.provider.RemoteUIClient;
 import cz.rion.buildserver.ui.provider.RemoteUIProviderServer.BuilderStatus;
 
 public class BuildersLoadedEvent extends Event {
-	
-	public static final int ID = 6;
+
+	public static final int ID = RemoteUIClient.RemoteOperation.BuildersLoad.code;
 
 	public static class BuildThreadInfo {
 		public final int ID;
@@ -24,11 +25,11 @@ public class BuildersLoadedEvent extends Event {
 			this.Status = bs;
 		}
 	}
-	
+
 	public static void addStatusChangeListener(EventManager m, BuilderAvailableListener l) {
-		synchronized (m.bulidersAvailableListeners) {
-			if (!m.bulidersAvailableListeners.contains(l)) {
-				m.bulidersAvailableListeners.add(l);
+		synchronized (m.buildersAvailableListeners) {
+			if (!m.buildersAvailableListeners.contains(l)) {
+				m.buildersAvailableListeners.add(l);
 			}
 		}
 	}
@@ -43,15 +44,15 @@ public class BuildersLoadedEvent extends Event {
 	}
 
 	public void dispatch(EventManager m) {
-		synchronized (m.bulidersAvailableListeners) {
+		synchronized (m.buildersAvailableListeners) {
 			@SuppressWarnings("unchecked")
 			final List<BuildThreadInfo> data = (List<BuildThreadInfo>) super.data;
-			for (final BuilderAvailableListener bulidersAvailableListener : m.bulidersAvailableListeners) {
+			for (final BuilderAvailableListener buildersAvailableListener : m.buildersAvailableListeners) {
 				SwingUtilities.invokeLater(new Runnable() {
 
 					@Override
 					public void run() {
-						bulidersAvailableListener.buildersAvailable(data);
+						buildersAvailableListener.buildersAvailable(data);
 					}
 
 				});

@@ -2,12 +2,16 @@ package cz.rion.buildserver.ui.provider;
 
 import java.io.IOException;
 import java.net.Socket;
-import java.util.Date;
+import java.nio.channels.ClosedChannelException;
+import java.nio.channels.SelectableChannel;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import cz.rion.buildserver.BuildThread;
-import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.RuntimeDB;
 import cz.rion.buildserver.db.RuntimeDB.RuntimeUserStats;
 import cz.rion.buildserver.db.StaticDB;
@@ -17,6 +21,7 @@ import cz.rion.buildserver.db.layers.LayeredUserDB.LocalUser;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.BuildThread.BuilderStats;
 import cz.rion.buildserver.http.HTTPServer;
+import cz.rion.buildserver.http.MySocketClient;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.json.JsonValue.JsonNumber;
 import cz.rion.buildserver.json.JsonValue.JsonString;
@@ -33,81 +38,6 @@ import cz.rion.buildserver.ui.events.StatusMessageEvent.StatusMessageType;
 
 public class RemoteUIProviderServer {
 
-	public static void read(Socket sock, byte[] target) throws IOException {
-		int needed = target.length;
-		while (needed > 0) {
-			int read = sock.getInputStream().read(target, target.length - needed, needed);
-			if (read < 0) {
-				throw new IOException("Read error");
-			}
-			needed -= read;
-		}
-	}
-
-	public static int readInt(Socket sock) throws IOException {
-		byte[] data = new byte[4];
-		read(sock, data);
-		return ((data[0] & 0xff) << 24) | ((data[1] & 0xff) << 16) | ((data[2] & 0xff) << 8) | (data[3] & 0xff) & 0xffffffff;
-	}
-
-	public static void writeInt(Socket sock, int x) throws IOException {
-		byte[] data = new byte[4];
-		data[0] = (byte) ((x >> 24) & 0xff);
-		data[1] = (byte) ((x >> 16) & 0xff);
-		data[2] = (byte) ((x >> 8) & 0xff);
-		data[3] = (byte) (x & 0xff);
-		sock.getOutputStream().write(data);
-	}
-
-	public static void writeDate(Socket sock, Date d) throws IOException {
-		long x = d.getTime();
-		byte[] data = new byte[8];
-		data[0] = (byte) ((x >> 56) & 0xff);
-		data[1] = (byte) ((x >> 48) & 0xff);
-		data[2] = (byte) ((x >> 40) & 0xff);
-		data[3] = (byte) ((x >> 32) & 0xff);
-		data[4] = (byte) ((x >> 24) & 0xff);
-		data[5] = (byte) ((x >> 16) & 0xff);
-		data[6] = (byte) ((x >> 8) & 0xff);
-		data[7] = (byte) (x & 0xff);
-		sock.getOutputStream().write(data);
-	}
-
-	public static Date readDate(Socket sock) throws IOException {
-		byte[] data = new byte[8];
-		read(sock, data);
-		long l = 0;
-		l |= data[0] & 0xff;
-		l <<= 8;
-		l |= data[1] & 0xff;
-		l <<= 8;
-		l |= data[2] & 0xff;
-		l <<= 8;
-		l |= data[3] & 0xff;
-		l <<= 8;
-		l |= data[4] & 0xff;
-		l <<= 8;
-		l |= data[5] & 0xff;
-		l <<= 8;
-		l |= data[6] & 0xff;
-		l <<= 8;
-		l |= data[7] & 0xff;
-		return new Date(l);
-	}
-
-	public static void writeString(Socket sock, String str) throws IOException {
-		byte[] raw = str.getBytes(Settings.getDefaultCharset());
-		writeInt(sock, raw.length);
-		sock.getOutputStream().write(raw);
-	}
-
-	public static String readString(Socket sock) throws IOException {
-		int length = readInt(sock);
-		byte[] raw = new byte[length];
-		read(sock, raw);
-		return new String(raw, Settings.getDefaultCharset());
-	}
-
 	public enum BuilderStatus {
 		IDLE(0, "Idle"), WORKING(1, "Working");
 
@@ -120,10 +50,10 @@ public class RemoteUIProviderServer {
 		}
 	}
 
-	private Socket client = null;
+	private final List<RemoteUIClient> clients = new ArrayList<>();
+	private final List<RemoteUIClient> unregisteredClients = new ArrayList<>();
+	private final Selector selector;
 	private final HTTPServer server;
-	private final Object syncer = new Object();
-	private boolean waitingForClient = false;
 	private final StaticDB sdb;
 	private final RuntimeDB db;
 
@@ -135,86 +65,82 @@ public class RemoteUIProviderServer {
 		}
 	};
 
-	public RemoteUIProviderServer(HTTPServer server) {
+	public RemoteUIProviderServer(HTTPServer server) throws IOException {
+		selector = Selector.open();
 		this.server = server;
 		this.db = server.db;
 		this.sdb = server.sdb;
 		thread.start();
 	}
 
-	private void closeClient(Socket client) {
-		if (client != null) {
-			try {
-				client.close();
-			} catch (Exception e) {
-			}
+	public void addClient(MySocketClient socket) {
+		try {
+			socket.configureBlocking(false);
+		} catch (IOException e1) {
+			e1.printStackTrace();
+			socket.close();
+			return;
+		}
+		RemoteUIClient client = new RemoteUIClient(socket);
+		synchronized (unregisteredClients) {
+			unregisteredClients.add(client);
+			selector.wakeup();
 		}
 	}
 
-	public void addClient(Socket socket) {
-		synchronized (syncer) {
-			closeClient(client);
-			client = socket;
-			if (waitingForClient) {
-				waitingForClient = false;
-				syncer.notify();
-			}
-		}
-	}
-
-	private void writeBuilder(BuildThread builder, Socket client) throws IOException {
+	private void writeBuilder(BuildThread builder, MemoryBuffer outBuffer) {
 		BuilderStats stats = builder.getBuilderStats();
-		writeInt(client, builder.getQueueSize());
-		writeInt(client, stats.getTotalJobsFinished());
-		writeInt(client, stats.getTotalAdminJobs());
-		writeInt(client, stats.getHTMLJobs());
-		writeInt(client, stats.getTotalResourceJobs());
-		writeInt(client, stats.getTotlaHackJobs());
-		writeInt(client, stats.getTotalJobsPassed());
-		writeInt(client, builder.getBuilderStatus().code);
+		outBuffer.writeInt(builder.getQueueSize());
+		outBuffer.writeInt(stats.getTotalJobsFinished());
+		outBuffer.writeInt(stats.getTotalAdminJobs());
+		outBuffer.writeInt(stats.getHTMLJobs());
+		outBuffer.writeInt(stats.getTotalResourceJobs());
+		outBuffer.writeInt(stats.getTotlaHackJobs());
+		outBuffer.writeInt(stats.getTotalJobsPassed());
+		outBuffer.writeInt(builder.getBuilderStatus().code);
 	}
 
-	private boolean handle(int code, Socket client) throws IOException {
+	private boolean handle(int code, InputPacketRequest inBuffer, MemoryBuffer outBuffer) throws IOException {
 		if (code == BuildersLoadedEvent.ID) {
 			int totalBuilders = server.builders.size();
-			writeInt(client, BuildersLoadedEvent.ID);
-			writeInt(client, totalBuilders);
+			outBuffer.writeInt(BuildersLoadedEvent.ID);
+			outBuffer.writeInt(totalBuilders);
 			for (BuildThread builder : server.builders) {
-				writeBuilder(builder, client);
+				writeBuilder(builder, outBuffer);
 			}
 			return true;
 		} else if (code == UsersLoadedEvent.ID) {
-			writeUserList(client);
+			writeUserList(inBuffer, outBuffer);
 			return true;
 		} else if (code == FileListLoadedEvent.ID) {
-			writeFileList(client);
+			writeFileList(inBuffer, outBuffer);
 			return true;
 		} else if (code == FileLoadedEvent.ID) {
-			writeFile(client);
+			writeFile(inBuffer, outBuffer);
 			return true;
 		} else if (code == FileSavedEvent.ID) {
-			storeFile(client);
+			storeFile(inBuffer, outBuffer);
 			return true;
 		} else if (code == FileCreatedEvent.ID) {
-			createFile(client);
+			createFile(inBuffer, outBuffer);
 			return true;
 		}
 		return false;
 	}
 
-	private void createFile(Socket client) throws IOException {
-		String newName = readString(client);
-		writeInt(client, FileCreatedEvent.ID);
+	private void createFile(InputPacketRequest inBuffer, MemoryBuffer outBuffer) throws IOException {
+		String newName = inBuffer.readString();
+		outBuffer.writeInt(FileCreatedEvent.ID);
 		try {
 			FileInfo fo = sdb.createFile(newName, "");
 			if (fo == null) {
-				writeInt(client, 0);
+				outBuffer.writeInt(0);
 				return;
 			} else {
-				writeInt(client, 1);
-				writeInt(client, fo.ID);
-				writeString(client, fo.FileName);
-				writeString(client, fo.Contents);
+				outBuffer.writeInt(1);
+				outBuffer.writeInt(fo.ID);
+				outBuffer.writeString(fo.FileName);
+				outBuffer.writeString(fo.Contents);
 			}
 		} catch (DatabaseException e) {
 			e.printStackTrace();
@@ -222,26 +148,26 @@ public class RemoteUIProviderServer {
 		}
 	}
 
-	private void storeFile(Socket client) throws IOException {
-		int fileID = readInt(client);
-		String newFileName = readString(client);
-		String newContents = readString(client);
-		writeInt(client, FileSavedEvent.ID);
+	private void storeFile(InputPacketRequest inBuffer, MemoryBuffer outBuffer) throws IOException {
+		int fileID = inBuffer.readInt();
+		String newFileName = inBuffer.readString();
+		String newContents = inBuffer.readString();
+		outBuffer.writeInt(FileSavedEvent.ID);
 		try {
 			FileInfo fo = sdb.getFile(fileID);
 			if (fo == null) {
-				writeInt(client, 0);
+				outBuffer.writeInt(0);
 				return;
 			} else {
 				sdb.storeFile(fo, newFileName, newContents);
 				fo = sdb.getFile(fileID);
 				if (fo == null) { // Check the write operation
-					writeInt(client, 0);
+					outBuffer.writeInt(0);
 				} else {
-					writeInt(client, 1);
-					writeInt(client, fo.ID);
-					writeString(client, fo.FileName);
-					writeString(client, fo.Contents);
+					outBuffer.writeInt(1);
+					outBuffer.writeInt(fo.ID);
+					outBuffer.writeString(fo.FileName);
+					outBuffer.writeString(fo.Contents);
 				}
 			}
 		} catch (DatabaseException e) {
@@ -267,78 +193,82 @@ public class RemoteUIProviderServer {
 		return fo;
 	}
 
-	private void writeFile(Socket client) throws IOException {
-		int fileID = readInt(client);
-		writeInt(client, FileLoadedEvent.ID);
+	private void writeFile(InputPacketRequest inBuffer, MemoryBuffer outBuffer) throws IOException {
+		int fileID = inBuffer.readInt();
+		outBuffer.writeInt(FileLoadedEvent.ID);
 		FileInfo fo = LayeredDBFileWrapperDB.processPostLoadedFile(db, LayeredDBFileWrapperDB.processPostLoadedFile(sdb, getFile(fileID)));
 		if (fo == null) {
-			writeInt(client, 0);
+			outBuffer.writeInt(0);
 			return;
 		} else {
-			writeInt(client, 1);
-			writeInt(client, fo.ID);
-			writeString(client, fo.FileName);
-			writeString(client, fo.Contents);
+			outBuffer.writeInt(1);
+			outBuffer.writeInt(fo.ID);
+			outBuffer.writeString(fo.FileName);
+			outBuffer.writeString(fo.Contents);
 		}
 	}
 
-	private void writeFileList(Socket client) throws IOException {
+	private void writeFileList(InputPacketRequest inBuffer, MemoryBuffer outBuffer) {
 		List<DatabaseFile> lst = sdb.getFiles();
 		LayeredDBFileWrapperDB.loadDatabaseFiles(db, lst);
-		synchronized (syncer) {
-			writeInt(client, FileListLoadedEvent.ID);
-			writeInt(client, lst.size());
-			for (DatabaseFile file : lst) {
-				writeInt(client, file.ID);
-				writeString(client, file.FileName);
-			}
+		outBuffer.writeInt(FileListLoadedEvent.ID);
+		outBuffer.writeInt(lst.size());
+		for (DatabaseFile file : lst) {
+			outBuffer.writeInt(file.ID);
+			outBuffer.writeString(file.FileName);
 		}
 	}
 
-	private void writeUserList(Socket client) {
+	private void writeUserList(InputPacketRequest inBuffer, MemoryBuffer outBuffer) {
 		List<RuntimeUserStats> stats = this.db.getUserStats();
 		Map<String, LocalUser> statics = this.sdb.LoadedUsersByLogin;
-		try {
-			synchronized (syncer) {
-				writeInt(client, UsersLoadedEvent.ID);
-				writeInt(client, stats.size());
-				for (RuntimeUserStats stat : stats) {
-					LocalUser usr = statics.get(stat.Login);
-					String fullName = "???";
-					String group = "???";
-					if (usr != null) {
-						fullName = usr.FullName;
-						group = usr.Group;
-					}
-					writeInt(client, stat.UserID);
-					writeString(client, stat.Login);
-					writeDate(client, stat.RegistrationDate);
-					writeDate(client, stat.LastActiveDate);
-					writeDate(client, stat.lastLoginDate);
-					writeInt(client, stat.TotalTestsSubmitted);
-					writeString(client, stat.LastTestID);
-					writeDate(client, stat.LastTestDate);
-					writeString(client, fullName);
-					writeString(client, group);
-				}
+		outBuffer.writeInt(UsersLoadedEvent.ID);
+		outBuffer.writeInt(stats.size());
+		for (RuntimeUserStats stat : stats) {
+			LocalUser usr = statics.get(stat.Login);
+			String fullName = "???";
+			String group = "???";
+			if (usr != null) {
+				fullName = usr.FullName;
+				group = usr.Group;
 			}
-		} catch (IOException e) {
-			e.printStackTrace();
-			closeClient(client);
+			outBuffer.writeInt(stat.UserID);
+			outBuffer.writeString(stat.Login);
+			outBuffer.writeDate(stat.RegistrationDate);
+			outBuffer.writeDate(stat.LastActiveDate);
+			outBuffer.writeDate(stat.lastLoginDate);
+			outBuffer.writeInt(stat.TotalTestsSubmitted);
+			outBuffer.writeString(stat.LastTestID);
+			outBuffer.writeDate(stat.LastTestDate);
+			outBuffer.writeString(fullName);
+			outBuffer.writeString(group);
 		}
 	}
 
-	private void writeRaw(String raw) {
-		synchronized (syncer) {
-			try {
-				if (client != null) {
-					writeInt(client, StatusMessageEvent.ID);
-					writeString(client, raw);
-				}
-			} catch (Exception e) {
-				e.printStackTrace();
+	private void writeStatusMessage(MemoryBuffer outBuffer, String raw) {
+		outBuffer.writeInt(StatusMessageEvent.ID);
+		outBuffer.writeString(raw);
+	}
+
+	private void dispatch(MemoryBuffer outBuffer) {
+		System.out.println("[RemoteUI] sending " + RemoteUIClient.RemoteOperation.fromCode(outBuffer.get()[4]));
+		if (outBuffer.isForSingleClient()) {
+			RemoteUIClient client = outBuffer.getClient();
+			if (!client.write(outBuffer, false)) {
 				closeClient(client);
-				client = null;
+			}
+		} else {
+			List<RemoteUIClient> toClose = new ArrayList<>();
+			synchronized (clients) {
+				for (RemoteUIClient client : clients) {
+					if (!client.write(outBuffer, false)) {
+						toClose.add(client);
+					}
+				}
+				for (RemoteUIClient client : toClose) {
+					client.close();
+					clients.remove(client);
+				}
 			}
 		}
 	}
@@ -351,7 +281,10 @@ public class RemoteUIProviderServer {
 		obj.add("result", new JsonString(codeDescription));
 		obj.add("type", new JsonNumber(StatusMessageType.LOAD_HTML.code));
 		obj.add("path", new JsonString(path));
-		writeRaw(obj.getJsonString());
+		String str = obj.getJsonString();
+		MemoryBuffer outBuffer = new MemoryBuffer.BroadcastMemoryBuffer(str.length());
+		writeStatusMessage(outBuffer, str);
+		dispatch(outBuffer);
 	}
 
 	public void writeTestCollect(String address, String login) {
@@ -359,7 +292,10 @@ public class RemoteUIProviderServer {
 		obj.add("address", new JsonString(address));
 		obj.add("login", new JsonString(login));
 		obj.add("type", new JsonNumber(StatusMessageType.GET_TESTS.code));
-		writeRaw(obj.getJsonString());
+		String str = obj.getJsonString();
+		MemoryBuffer outBuffer = new MemoryBuffer.BroadcastMemoryBuffer(str.length());
+		writeStatusMessage(outBuffer, str);
+		dispatch(outBuffer);
 	}
 
 	public void writeGetResource(String address, String login, int code, String codeDescription, String path) {
@@ -370,7 +306,10 @@ public class RemoteUIProviderServer {
 		obj.add("result", new JsonString(codeDescription));
 		obj.add("type", new JsonNumber(StatusMessageType.GET_RESOURCE.code));
 		obj.add("path", new JsonString(path));
-		writeRaw(obj.getJsonString());
+		String str = obj.getJsonString();
+		MemoryBuffer outBuffer = new MemoryBuffer.BroadcastMemoryBuffer(str.length());
+		writeStatusMessage(outBuffer, str);
+		dispatch(outBuffer);
 	}
 
 	public void writeTestResult(String address, String login, int code, String codeDescription, String asm, String test_id) {
@@ -382,54 +321,89 @@ public class RemoteUIProviderServer {
 		obj.add("type", new JsonNumber(StatusMessageType.PERFORM_TEST.code));
 		obj.add("asm", new JsonString(asm));
 		obj.add("test_id", new JsonString(test_id));
-		writeRaw(obj.getJsonString());
+		String str = obj.getJsonString();
+		MemoryBuffer outBuffer = new MemoryBuffer.BroadcastMemoryBuffer(str.length());
+		writeStatusMessage(outBuffer, str);
+		dispatch(outBuffer);
 	}
 
-	public void writeBuliderDataUpdate(int builderIndex, BuildThread buildThread) {
-		synchronized (syncer) {
-			if (client != null) {
-				try {
-					writeInt(client, BuilderUpdateEvent.ID);
-					writeInt(client, builderIndex);
-					writeBuilder(buildThread, client);
-				} catch (IOException e) {
+	public void writeBuilderDataUpdate(int builderIndex, BuildThread buildThread) {
+		MemoryBuffer outBuffer = new MemoryBuffer.BroadcastMemoryBuffer(64);
+		outBuffer.writeInt(BuilderUpdateEvent.ID);
+		outBuffer.writeInt(builderIndex);
+		writeBuilder(buildThread, outBuffer);
+		dispatch(outBuffer);
+	}
+
+	private void closeClient(RemoteUIClient client) {
+		synchronized (clients) {
+			client.close();
+			clients.remove(client);
+		}
+	}
+
+	private void handle(RemoteUIClient client, InputPacketRequest request) {
+		try {
+			byte[] b = new byte[1];
+			request.read(b);
+			int code = b[0];
+			System.out.println("[RemoteUIProvider]: received " + RemoteUIClient.RemoteOperation.fromCode(code));
+			MemoryBuffer toSend = new MemoryBuffer.SignleClientMemoryBuffer(128, client);
+			if (!handle(code, request, toSend)) {
+				synchronized (clients) {
+					client.close();
 				}
+			} else { // Handled, send response
+				dispatch(toSend);
 			}
+		} catch (Exception e) {
+			e.printStackTrace();
+			closeClient(client);
 		}
 	}
 
 	private void async() {
 		while (true) {
-			Socket client = null;
-			synchronized (syncer) {
-				if (this.client == null) {
-					waitingForClient = true;
-					try {
-						syncer.wait();
-					} catch (InterruptedException e) {
-					}
-				}
-				if (this.client != null) {
-					client = this.client;
-				}
-			}
 			try {
-				byte[] b = new byte[1];
-				read(client, b);
-				int code = b[0];
-				if (!handle(code, client)) {
-					synchronized (syncer) {
-						if (this.client == client) {
-							this.client = null;
+				selector.select(500);
+				synchronized (unregisteredClients) {
+					if (!unregisteredClients.isEmpty()) {
+						for (RemoteUIClient client : unregisteredClients) {
+							client.register(selector, SelectionKey.OP_READ, client);
+							clients.add(client);
 						}
-						closeClient(client);
+						unregisteredClients.clear();
 					}
 				}
-			} catch (Exception e) {
-				if (this.client == client) {
-					this.client = null;
+				Set<SelectionKey> keys = selector.selectedKeys();
+				for (SelectionKey sk : keys) {
+					Object attach = sk.attachment();
+					RemoteUIClient client = null;
+					if (attach instanceof RemoteUIClient) {
+						client = (RemoteUIClient) attach;
+					}
+					if (sk.isReadable()) {
+						if (client != null) {
+							try {
+								client.processAvailableBytes();
+								while (client.hasNextAsyncEvent()) {
+									InputPacketRequest packet = client.getNextAsync();
+									handle(client, packet);
+								}
+							} catch (Throwable t) { // Close client and continue
+								closeClient(client);
+							}
+						}
+					}
+					if (client != null) {
+						if(!client.isConnected()) {
+							closeClient(client);
+						}
+					}
 				}
-				closeClient(client);
+				keys.clear();
+			} catch (Exception e) {
+				e.printStackTrace();
 			}
 		}
 	}
