@@ -157,7 +157,7 @@ public class MyDB {
 			}
 			String deb_id = null;
 			for (String test_id : tests) {
-				JsonObject res = tm.run(builderID, test_id, d.code);
+				JsonObject res = tm.run(builderID, test_id, d.code, null);
 				if (res.getNumber("code").Value == 0) {
 					if (test_id.contains("debug")) {
 						deb_id = test_id;

@@ -307,6 +307,7 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 				wBtnSaveAndClose.setEnabled(true);
 			}
 			scrollContents.getVerticalScrollBar().setValue(0);
+			txtContents.setCaretPosition(0);
 
 			wBtnClose.setVisible(true);
 			wBtnClose.setEnabled(true);
@@ -331,7 +332,7 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 			wTxtCreate.setEnabled(true);
 
 			wTxtFileFilter.setVisible(true);
-			
+
 			myTable.clearData();
 
 			break;
@@ -553,7 +554,9 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 					Dimension sz = scrollContents.getSize();
 					Dimension scroll = scrollContents.getHorizontalScrollBar().getSize();
 					Dimension total = new Dimension((int) (sz.getWidth() - scroll.getWidth()), (int) (cz.getHeight()));
-					currentRightSideContent.setPreferredSize(total);
+					if (currentRightSideContent != txtContents) {
+						currentRightSideContent.setPreferredSize(total);
+					}
 				}
 			}
 

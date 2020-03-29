@@ -33,6 +33,9 @@ public class JsonTestManager {
 		private final String append;
 		private String finalASM;
 		private final boolean hidden;
+		private final boolean secret;
+		private final String[] allowedInstructions;
+		public final boolean replace;
 
 		@Override
 		public String getID() {
@@ -70,7 +73,7 @@ public class JsonTestManager {
 			}
 		}
 
-		private JsonTest(String id, String title, String description, List<TestVerificationData> tests, String initialASM, String append, String prepend, boolean isHidden) {
+		private JsonTest(String id, String title, String description, List<TestVerificationData> tests, String initialASM, String append, String prepend, boolean isHidden, boolean isSecret, String[] allowedInstructions, boolean replace) {
 			this.id = id;
 			this.title = title;
 			this.description = description;
@@ -80,6 +83,9 @@ public class JsonTestManager {
 			this.append = append;
 			this.finalASM = prepend + "\r\n" + initialASM + "\r\n" + append;
 			this.hidden = isHidden;
+			this.secret = isSecret;
+			this.allowedInstructions = allowedInstructions;
+			this.replace = replace;
 		}
 
 		@Override
@@ -98,21 +104,78 @@ public class JsonTestManager {
 		}
 
 		@Override
-		public String CodeValid(String asm) {
-			if (prepend.contains("_main:") || prepend.contains("CMAIN") || append.contains("_main:") || append.contains("CMAIN")) {
-				if (!asm.contains("_main:") && !asm.contains("CMAIN")) {
-					return prepend + "\r\n" + asm + "\r\n" + append;
-				} else {
-					return null;
+		public String VerifyCode(String asm) {
+			if (allowedInstructions != null) {
+				boolean codeSection = true;
+				String[] asmLine = asm.split("\n");
+				for (String line : asmLine) {
+					String lt = line.trim().toLowerCase();
+					if (lt.contains(";")) {
+						lt = lt.split(";")[0].trim();
+					}
+					if (lt.contains(":")) {
+						if(lt.endsWith(":")) {
+							continue;
+						}
+						String[] d = lt.split(":");
+						lt = d[d.length - 1].trim(); // Last
+					}
+					if (!lt.isEmpty()) {
+						if (lt.startsWith("section")) {
+							codeSection = lt.contains(".text");
+						} else if (codeSection) {
+							if (lt.startsWith("%")) {
+								if (!lt.startsWith("%include")) {
+									return null;
+								}
+							} else {
+								boolean validStart = false;
+								for (String instruction : allowedInstructions) {
+									if (lt.startsWith(instruction.toLowerCase())) {
+										validStart = true;
+										break;
+									}
+								}
+								if (!validStart) {
+									return "Nepovolená instrukce: " + lt.trim().split(" ")[0].toUpperCase();
+								}
+							}
+						}
+					}
 				}
 			}
-			this.finalASM = asm;
-			return asm;
+
+			if (prepend.contains("_main:") || prepend.contains("CMAIN") || append.contains("_main:") || append.contains("CMAIN")) {
+				if (asm.contains("_main:") || asm.contains("CMAIN")) {
+					return "Nesmí být definován vstupní bod programu";
+				}
+			}
+			return null;
 		}
 
 		@Override
 		public boolean isHidden() {
 			return this.hidden;
+		}
+
+		@Override
+		public boolean isSecret() {
+			return secret;
+		}
+
+		@Override
+		public String[] getAllowedInstructions() {
+			return allowedInstructions;
+		}
+
+		@Override
+		public String GetFinalASM(String login, String asm) {
+			if (replace) {
+				asm = asm.replaceAll("\\$LOGIN\\$", login);
+			}
+			asm = prepend + "\r\n" + asm + "\r\n" + append;
+			this.finalASM = asm;
+			return asm;
 		}
 	}
 
@@ -238,6 +301,18 @@ public class JsonTestManager {
 				return null;
 			}
 
+			String[] allowedInstructions = null;
+
+			if (obj.containsArray("instructions")) {
+				JsonArray allowedInstr = obj.getArray("instructions");
+				allowedInstructions = new String[allowedInstr.Value.size()];
+				int index = 0;
+				for (JsonValue val : allowedInstr.Value) {
+					allowedInstructions[index] = val.asString().Value;
+					index++;
+				}
+			}
+
 			String id = obj.getString("id").Value;
 			String description = obj.getString("description").Value;
 			String title = obj.getString("title").Value;
@@ -246,7 +321,9 @@ public class JsonTestManager {
 
 			String initialASM = obj.containsString("init") ? obj.getString("init").Value : "";
 			boolean hidden = obj.containsNumber("hidden") ? obj.getNumber("hidden").Value == 1 : false;
-			return new JsonTest(id, title, description, tvd, initialASM, append, prepend, hidden);
+			boolean secret = obj.containsNumber("secret") ? obj.getNumber("secret").Value == 1 : false;
+			boolean replace = obj.containsNumber("replace") ? obj.getNumber("replace").Value == 1 : false;
+			return new JsonTest(id, title, description, tvd, initialASM, append, prepend, hidden, secret, allowedInstructions, replace);
 		}
 		return null;
 	}

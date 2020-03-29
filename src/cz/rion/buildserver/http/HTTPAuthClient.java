@@ -92,9 +92,10 @@ public class HTTPAuthClient extends HTTPTestClient {
 				if (goodCookie == null) {
 					try {
 						String login = db.getLogin(client.getRemoteSocketAddress().toString(), cookieSession);
+						int user_id = db.getUserIDFromLogin(login);
 						if (login != null) { // Valid session
 							int session_id = db.getSessionIDFromSession(client.getRemoteSocketAddress().toString(), cookieSession);
-							loadPermissions(session_id, login);
+							loadPermissions(session_id, login, user_id);
 							goodCookie = cookieSession;
 							continue;
 						}

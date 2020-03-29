@@ -136,7 +136,7 @@ public class TestManager {
 		});
 	}
 
-	public JsonObject run(int builderID, String test_id, String asm) {
+	public JsonObject run(int builderID, String test_id, String asm, String login) {
 		AsmTest test = null;
 		synchronized (tests) {
 			if (mtest.containsKey(test_id.toLowerCase())) {
@@ -150,10 +150,11 @@ public class TestManager {
 			code = 1;
 			message = "<span class='log_err'>Uvedený test nebyl nalezen</span>";
 		} else {
-			asm = test.CodeValid(asm);
-			if (asm == null) {
-				message = "<span class='log_err'>Neplatný kód. Pravdìpodobnì nesmí být definované návìští _main ani CMAIN</span>";
+			String err = test.VerifyCode(asm);
+			if (err != null) {
+				message = "<span class='log_err'>" + err + "</span>";
 			} else {
+				asm = test.GetFinalASM(login, asm);
 				RunResult result = null;
 				try {
 					result = NasmWrapper.run("./test" + builderID, asm, "", 2000, false, false);

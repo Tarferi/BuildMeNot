@@ -25,12 +25,12 @@ public class HTTPPermissionClient extends AbstractHTTPClient {
 		return perms;
 	}
 
-	protected void loadPermissions(int session_id, String login) {
-		this.perms = this.permanager.getPermissionForLogin(session_id, login);
+	protected void loadPermissions(int session_id, String login, int user_id) {
+		this.perms = this.permanager.getPermissionForLogin(session_id, login, user_id);
 	}
 
 	public int getUserID() {
-		return perms.getUserID();
+		return perms.UserID;
 	}
 
 	public String getLogin() {

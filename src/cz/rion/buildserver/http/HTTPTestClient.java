@@ -155,7 +155,7 @@ public class HTTPTestClient extends HTTPFileProviderClient {
 							test_id = obj.getString("id").Value;
 							asm = obj.getString("asm").Value;
 
-							returnValue = tests.run(BuilderID, test_id, asm);
+							returnValue = tests.run(BuilderID, test_id, asm, getPermissions().Login);
 							testsPassed = returnValue.containsNumber("code") ? returnValue.getNumber("code").Value == 0 : false;
 							if (returnValue.containsObject("details") && !this.getPermissions().allowDetails(test_id)) {
 								returnValue.remove("details");
@@ -195,6 +195,9 @@ public class HTTPTestClient extends HTTPFileProviderClient {
 
 								for (AsmTest tst : tsts) {
 									if (!getPermissions().allowSee(tst.getID())) {
+										continue;
+									}
+									if (tst.isSecret() && !getPermissions().allowSeeSecretTests()) {
 										continue;
 									}
 									JsonObject tobj = new JsonObject();
@@ -249,7 +252,7 @@ public class HTTPTestClient extends HTTPFileProviderClient {
 		if (this.getIntention() == HTTPClientIntentType.PERFORM_TEST) {
 			int code = returnValue.asObject().getNumber("code").Value;
 			String result = returnValue.asObject().getString("result").Value;
-			db.storeCompilation(client.getRemoteSocketAddress().toString(), new Date(), asm, getPermissions().getSessionID(), test_id, code, result, getReducedResult(), getPermissions().getSessionID());
+			db.storeCompilation(client.getRemoteSocketAddress().toString(), new Date(), asm, getPermissions().getSessionID(), test_id, code, result, getReducedResult(), getPermissions().UserID);
 		}
 	}
 }

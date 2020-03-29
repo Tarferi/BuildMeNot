@@ -29,12 +29,12 @@ public class LayeredPermissionDB extends LayeredTestDB {
 			this.defaultUsername = defaultUsername;
 		}
 
-		public UsersPermission getPermissionForLogin(int session_id, String login) {
-			return new UsersPermission(session_id, login, db);
+		public UsersPermission getPermissionForLogin(int session_id, String login, int user_id) {
+			return new UsersPermission(session_id, login, user_id, db);
 		}
 
 		public UsersPermission getDefaultPermission() {
-			return new UsersPermission(0, defaultUsername, db);
+			return new UsersPermission(0, defaultUsername, 0, db);
 		}
 	}
 
@@ -46,7 +46,8 @@ public class LayeredPermissionDB extends LayeredTestDB {
 		public final String Login;
 		private String fullName = null;
 		private String userGroup = null;
-		private int UserID;
+		private int StaticUserID;
+		public final int UserID;
 		private int SessionID;
 
 		public int getSessionID() {
@@ -63,9 +64,10 @@ public class LayeredPermissionDB extends LayeredTestDB {
 			return obj;
 		}
 
-		private UsersPermission(int session_id, String login, LayeredPermissionDB db) {
+		private UsersPermission(int session_id, String login, int user_id, LayeredPermissionDB db) {
 			this.db = db;
 			this.Login = login;
+			this.UserID = user_id;
 			this.SessionID = session_id;
 		}
 
@@ -81,9 +83,9 @@ public class LayeredPermissionDB extends LayeredTestDB {
 			return can(WebPermission.SeeFireFox);
 		}
 
-		public int getUserID() {
+		public int getStaticUserID() {
 			handleInit();
-			return UserID;
+			return StaticUserID;
 		}
 
 		private void handleInit() {
@@ -96,7 +98,7 @@ public class LayeredPermissionDB extends LayeredTestDB {
 				Object[] parts = db.getFullNameAndGroup(Login);
 				fullName = (String) parts[0];
 				userGroup = (String) parts[1];
-				UserID = (int) parts[2];
+				StaticUserID = (int) parts[2];
 			}
 		}
 
@@ -115,6 +117,10 @@ public class LayeredPermissionDB extends LayeredTestDB {
 			}
 			handleInit();
 			return permissions.covers(action);
+		}
+
+		public boolean allowSeeSecretTests() {
+			return permissions.covers(WebPermission.SeeSecretTests);
 		}
 
 	}
@@ -407,8 +413,8 @@ public class LayeredPermissionDB extends LayeredTestDB {
 		return new Object[] { login, Settings.GetDefaultGroup(), 0 };
 	}
 
-	public UsersPermission loadPermissions(int session_id, String login) {
-		return new UsersPermission(session_id, login, this);
+	public UsersPermission loadPermissions(int session_id, String login, int user_id) {
+		return new UsersPermission(session_id, login, user_id, this);
 	}
 
 }
