@@ -7,12 +7,13 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import cz.rion.buildserver.Settings;
-import cz.rion.buildserver.db.layers.LayeredFilesDB.DatabaseFile;
-import cz.rion.buildserver.http.MySocketClient;
+import cz.rion.buildserver.http.CompatibleSocketClient;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.BuildThread.BuilderStats;
+import cz.rion.buildserver.db.layers.staticDB.LayeredFilesDB.DatabaseFile;
 import cz.rion.buildserver.ui.events.BuildersLoadedEvent.BuildThreadInfo;
+import cz.rion.buildserver.ui.events.DatabaseTableRowEditEvent;
 import cz.rion.buildserver.ui.events.Event;
 import cz.rion.buildserver.ui.events.BuilderUpdateEvent;
 import cz.rion.buildserver.ui.events.BuildersLoadedEvent;
@@ -203,7 +204,6 @@ public class UIDriver {
 		if (inBuffer != null) {
 			try {
 				int code = inBuffer.readInt();
-				System.out.println("[UIDriver]: received " + RemoteUIClient.RemoteOperation.fromCode(code));
 				if (code == BuildersLoadedEvent.ID) {
 					return new BuildersLoadedEvent(readBuilders(inBuffer));
 				} else if (code == BuilderUpdateEvent.ID) {
@@ -221,6 +221,8 @@ public class UIDriver {
 					return new FileSavedEvent(readFileSave(inBuffer));
 				} else if (code == FileCreatedEvent.ID) {
 					return new FileCreatedEvent(readFileCreate(inBuffer));
+				} else if (code == DatabaseTableRowEditEvent.ID) {
+					return new DatabaseTableRowEditEvent(readDatabaseEditResult(inBuffer));
 				} else {
 					throw new IOException("Invalid OP code: " + code);
 				}
@@ -231,6 +233,11 @@ public class UIDriver {
 			}
 		}
 		return new StatusChangeEvent(Status.DISCONNECTED);
+	}
+
+	private boolean readDatabaseEditResult(InputPacketRequest inBuffer) throws IOException {
+		int val = inBuffer.readInt();
+		return val == 42;
 	}
 
 	private FileCreationInfo readFileCreate(InputPacketRequest client) throws IOException {
@@ -304,13 +311,13 @@ public class UIDriver {
 				synchronized (EventManager.getStatusSyncer()) {
 					if (EventManager.getStatus() == Status.DISCONNECTED) {
 						setStatus(Status.CONNECTING);
-						MySocketClient raw = null;
+						CompatibleSocketClient raw = null;
 						try {
 							if (client != null) {
 								client.close();
 								client = null;
 							}
-							raw = new MySocketClient(new Socket(server, port));
+							raw = new CompatibleSocketClient(new Socket(server, port));
 							raw.writeSync(("AUTH " + auth + " HTTP/1.1\r\n\r\n").getBytes(Settings.getDefaultCharset()));
 							int code = raw.readSync();
 							if (code != 42) {
@@ -360,7 +367,6 @@ public class UIDriver {
 									throw new Exception("Invalid object type to write");
 								}
 							}
-							System.out.println("[UIDriver] sending " + RemoteUIClient.RemoteOperation.fromCode(code));
 							synchronized (writeSyncer) {
 								if (!client.write(buf, true)) {
 									setStatus(Status.DISCONNECTED);
@@ -415,6 +421,10 @@ public class UIDriver {
 
 	public void createFile(String name) {
 		addJob(FileCreatedEvent.ID, name);
+	}
+
+	public void editTableRow(int fileID, JsonObject values) {
+		addJob(DatabaseTableRowEditEvent.ID, fileID, values.getJsonString());
 	}
 
 }

@@ -1,10 +1,12 @@
-package cz.rion.buildserver.db.layers;
+package cz.rion.buildserver.db.layers.common;
 
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Map.Entry;
 import java.util.regex.Pattern;
 
+import cz.rion.buildserver.db.layers.staticDB.LayeredFilesDB;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
@@ -79,7 +81,11 @@ public class LayeredDBFileWrapperDB extends LayeredFilesDB {
 	@Override
 	public FileInfo createFile(String name, String contents) throws DatabaseException {
 		if (name.startsWith(dbFilePrefix)) {
-			return null;
+			if (name.endsWith(viewFileSuffix)) {
+				return super.createFile(name, contents);
+			} else {
+				return null;
+			}
 		} else {
 			return super.createFile(name, contents);
 		}
@@ -90,7 +96,8 @@ public class LayeredDBFileWrapperDB extends LayeredFilesDB {
 		if (fileID >= DB_FILE_FIRST_ID && fileID < DB_FILE_FIRST_ID + DB_FILE_SIZE) {
 			return loadDBFile(this, fileID, this.lstTables.get(fileID - DB_FILE_FIRST_ID));
 		} else {
-			return super.getFile(fileID);
+			FileInfo fo= super.getFile(fileID);
+			return fo;
 		}
 	}
 
@@ -126,6 +133,54 @@ public class LayeredDBFileWrapperDB extends LayeredFilesDB {
 		List<DatabaseFile> lst = super.getFiles();
 		loadDatabaseFiles(this, lst);
 		return lst;
+	}
+
+	public static final boolean editRow(LayeredMetaDB db, FileInfo file, JsonObject contents) {
+		if (file.ID >= db.DB_FILE_FIRST_ID && file.ID < db.DB_FILE_FIRST_ID + DB_FILE_SIZE) { // Owned by the DB -> table exists in db
+			if (contents.containsNumber("ID")) {
+				int RowID = contents.getNumber("ID").Value;
+				String tableName = db.lstTables.get(file.ID - db.DB_FILE_FIRST_ID);
+
+				// Construct query
+				Object[] values = new Object[contents.getEntries().size()];
+				StringBuilder setQueryPart = new StringBuilder();
+				int index = 0;
+				for (Entry<String, JsonValue> entry : contents.getEntries()) {
+					String name = entry.getKey();
+					JsonValue val = entry.getValue();
+					if (!name.equals("ID")) { // Not counting ID, that must be last
+						String valReplacement;
+						if (val.isNumber()) {
+							values[index] = val.asNumber().asLong();
+							valReplacement = "?";
+						} else if (val.isString()) {
+							values[index] = val.asString().Value;
+							valReplacement = "'?'";
+						} else { // Unknown column type
+							return false;
+						}
+						if (index > 0) {
+							setQueryPart.append(", ");
+						}
+						setQueryPart.append(name + " = " + valReplacement);
+						index++;
+					}
+				}
+				if (index != values.length - 1) {
+					return false;
+				}
+				values[index] = RowID;
+				String sql = "UPDATE " + tableName + " SET " + setQueryPart.toString() + " WHERE ID = ?";
+				try {
+					db.execute(sql, values);
+					return true;
+				} catch (DatabaseException e) {
+					e.printStackTrace();
+					return false;
+				}
+			}
+		}
+		return false;
 	}
 
 	@Override

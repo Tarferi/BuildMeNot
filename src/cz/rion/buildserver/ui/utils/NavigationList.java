@@ -11,8 +11,8 @@ import javax.swing.ListModel;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 
-import cz.rion.buildserver.db.layers.LayeredFilesDB.DatabaseFile;
 import cz.rion.buildserver.ui.utils.ListPathItem.ListPathItemFile;
+import cz.rion.buildserver.db.layers.staticDB.LayeredFilesDB.DatabaseFile;
 import cz.rion.buildserver.ui.utils.ListPathItem.ListPathItemDirectory;
 
 public class NavigationList extends JList<ListPathItem> {

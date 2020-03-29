@@ -1,9 +1,9 @@
 package cz.rion.buildserver.db;
 
-import cz.rion.buildserver.db.layers.LayeredUserDB;
+import cz.rion.buildserver.db.layers.staticDB.LayeredPermissionDB;
 import cz.rion.buildserver.exceptions.DatabaseException;
 
-public class StaticDB extends LayeredUserDB {
+public class StaticDB extends LayeredPermissionDB {
 
 	public StaticDB(String dbName) throws DatabaseException {
 		super(dbName);

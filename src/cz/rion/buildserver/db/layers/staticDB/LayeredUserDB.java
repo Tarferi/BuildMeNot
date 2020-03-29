@@ -1,4 +1,4 @@
-package cz.rion.buildserver.db.layers;
+package cz.rion.buildserver.db.layers.staticDB;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -6,22 +6,22 @@ import java.util.List;
 import java.util.Map;
 
 import cz.rion.buildserver.Settings;
+import cz.rion.buildserver.db.layers.common.LayeredDBFileWrapperDB;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
-import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 import cz.rion.buildserver.wrappers.FileReadException;
 import cz.rion.buildserver.wrappers.MyFS;
 
-public abstract class LayeredUserDB extends LayeredTestDB {
+public abstract class LayeredUserDB extends LayeredDBFileWrapperDB {
 
 	public final List<LocalUser> LoadedUsers = new ArrayList<>();
 	public final Map<String, LocalUser> LoadedUsersByLogin = new HashMap<>();
 
 	public LayeredUserDB(String dbName) throws DatabaseException {
 		super(dbName);
-		this.makeTable("users", KEY("ID"), TEXT("name"), TEXT("usergroup"), TEXT("login"));
+		this.makeTable("users", KEY("ID"), TEXT("name"), TEXT("usergroup"), TEXT("login"), BIGTEXT("permissions"));
 		loadLocalUsers();
 		loadRemoteUsers();
 	}
@@ -45,39 +45,6 @@ public abstract class LayeredUserDB extends LayeredTestDB {
 			super(login, group, fullName);
 			this.ID = id;
 		}
-	}
-
-	public final boolean allowDetails(String login) {
-		FileInfo file;
-		file = this.loadFile("config/allow_details.cfg");
-		if (file == null) {
-			return false;
-		}
-		if (file != null) {
-			String[] contents = file.Contents.split("\n");
-			for (String content : contents) {
-				String seekLogin = content.trim();
-				if (seekLogin.equals(login)) {
-					return true;
-				}
-			}
-		}
-		return false;
-	}
-
-	public final boolean allowFireFox(String login) {
-		FileInfo file;
-		file = this.loadFile("config/allow_firefox.cfg");
-		if (file != null) {
-			String[] contents = file.Contents.split("\n");
-			for (String content : contents) {
-				String seekLogin = content.trim();
-				if (seekLogin.equals(login)) {
-					return true;
-				}
-			}
-		}
-		return false;
 	}
 
 	private final boolean loadLocalUsers() {

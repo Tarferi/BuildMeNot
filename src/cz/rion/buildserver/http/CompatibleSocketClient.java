@@ -4,22 +4,28 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
-import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
 
-public class MySocketClient {
+public class CompatibleSocketClient {
 
 	private final SocketChannel sock;
 	private final Socket rsock;
+	private String address;
 
 	public void register(Selector selector, int operations, Object attach) throws ClosedChannelException {
 		sock.register(selector, operations, attach);
 	}
 
-	public MySocketClient(SocketChannel sc) {
+	public CompatibleSocketClient(SocketChannel sc) {
+		try {
+			this.address = sc.getRemoteAddress().toString();
+		} catch (IOException e1) {
+			e1.printStackTrace();
+			this.address = "???";
+		}
 		this.sock = sc;
 		this.rsock = null;
 		try {
@@ -30,9 +36,10 @@ public class MySocketClient {
 		}
 	}
 
-	public MySocketClient(Socket sc) {
+	public CompatibleSocketClient(Socket sc) {
 		this.sock = null;
 		this.rsock = sc;
+		this.address = sc.getRemoteSocketAddress().toString();
 	}
 
 	public void close() {
@@ -50,8 +57,8 @@ public class MySocketClient {
 		}
 	}
 
-	public SocketAddress getRemoteSocketAddress() {
-		return rsock == null ? sock.socket().getRemoteSocketAddress() : rsock.getRemoteSocketAddress();
+	public String getRemoteSocketAddress() {
+		return address;
 	}
 
 	private OutputStream getOutputStream() throws IOException {
@@ -75,16 +82,22 @@ public class MySocketClient {
 	}
 
 	public void writeAsync(byte[] data) throws IOException {
-		sock.write(ByteBuffer.wrap(data));
+		int written = 0;
+		while (written != data.length) {
+			int writ = sock.write(ByteBuffer.wrap(data, written, data.length - written));
+			if (writ < 0) {
+				throw new IOException("Socket write error");
+			}
+			written += writ;
+		}
 	}
 
 	public int readSync(byte[] target, int position, int length) throws IOException {
 		return getInputStream().read(target, position, length);
 	}
 
-	public int readAsync(byte[] target, int i, int needed) {
-		// TODO Auto-generated method stub
-		return 0;
+	public int readAsync(byte[] target, int i, int needed) throws IOException {
+		throw new IOException("Invalid read");
 	}
 
 	public int readSync() throws IOException {

@@ -1,4 +1,4 @@
-package cz.rion.buildserver.db.layers;
+package cz.rion.buildserver.db.layers.staticDB;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -20,7 +20,7 @@ public abstract class LayeredFilesDB extends LayeredStaticDB {
 	}
 
 	private final char[] hexData = new char[] { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
-
+	
 	protected String encodeFileContents(String data) {
 		byte[] b = data.getBytes(Settings.getDefaultCharset());
 		byte[] n = new byte[b.length * 2];

@@ -20,9 +20,9 @@ public class HTTPServer {
 
 	private final int port;
 	public final List<BuildThread> builders = new ArrayList<>();
-	private final RemoteUIProviderServer remoteUI;
+	public final RemoteUIProviderServer remoteUI;
 
-	private final TestManager tests;
+	public final TestManager tests;
 
 	public final RuntimeDB db;
 	public final StaticDB sdb;
@@ -55,7 +55,7 @@ public class HTTPServer {
 		}
 	}
 
-	public void addRemoteUIClient(MySocketClient socket) {
+	public void addRemoteUIClient(CompatibleSocketClient socket) {
 		remoteUI.addClient(socket);
 	}
 
@@ -75,9 +75,9 @@ public class HTTPServer {
 			} catch (IOException e) {
 				throw new HTTPServerException("Failed to accept client on port " + port, e);
 			}
-			HTTPClient myClient;
-			myClient = new HTTPClient(db, sdb, tests, client, remoteUI);
-			getBuilder().addJob(myClient);
+			//HTTPClient myClient;
+			//myClient = new HTTPClient(db, sdb, tests, client, remoteUI);
+			getBuilder().addJob(client);
 		}
 	}
 }

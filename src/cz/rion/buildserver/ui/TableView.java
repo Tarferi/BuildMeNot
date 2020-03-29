@@ -1,5 +1,7 @@
 package cz.rion.buildserver.ui;
 
+import java.awt.BorderLayout;
+import java.awt.Dimension;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.sql.Date;
@@ -10,48 +12,146 @@ import java.util.List;
 import java.util.regex.Matcher;
 
 import javax.swing.JPanel;
+import javax.swing.JScrollPane;
 import javax.swing.JTable;
+import javax.swing.RowFilter;
 import javax.swing.SwingConstants;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import javax.swing.event.TableModelListener;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableModel;
+import javax.swing.table.TableRowSorter;
 
 import cz.rion.buildserver.db.SQLiteDB.Field;
-import cz.rion.buildserver.db.layers.LayeredDBFileWrapperDB;
+import cz.rion.buildserver.db.SQLiteDB.FieldType;
+import cz.rion.buildserver.db.layers.common.LayeredDBFileWrapperDB;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.ui.DetailsPanel.DetailsPanelCloseListener;
 import cz.rion.buildserver.ui.utils.FontProvider;
+import cz.rion.buildserver.ui.utils.MyTextField;
 
-public class TableView extends JTable {
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
+
+public class TableView extends JPanel {
 
 	protected static final SimpleDateFormat dateFormat = new SimpleDateFormat("dd. MM. yyyy - HH:mm");
 
+	private final DefaultTableCellRenderer renderBigString = new DefaultTableCellRenderer();
 	private final DefaultTableCellRenderer renderRight = new DefaultTableCellRenderer();
 	private final DefaultTableCellRenderer renderDefault = new DefaultTableCellRenderer();
 	private String[] _headers = new String[0];
 	private String[][] _data = new String[0][0];
 	private Field[] _fields = new Field[0];
+	private MyTextField[] _filters = new MyTextField[0];
+	private boolean editingTable = false;
+	private final JPanel pnlFilters;
+
+	private static final class MyFilter extends RowFilter<TableModel, Integer> {
+
+		private String[] filters;
+		private boolean[] fast;
+
+		private MyFilter(String[] filters, boolean[] columnFiltering) {
+			this.filters = filters;
+			this.fast = columnFiltering;
+		}
+
+		@Override
+		public boolean include(Entry<? extends TableModel, ? extends Integer> entry) {
+			for (int i = 0; i < fast.length; i++) {
+				if (fast[i]) {
+					String value = entry.getValue(i).toString();
+					String filter = filters[i];
+					if (!value.contains(filter)) {
+						return false;
+					}
+				}
+			}
+			return true;
+		}
+
+	}
+
+	private void executeFilters() {
+		final String[] filters = new String[_filters.length];
+		final boolean[] filtersBool = new boolean[_filters.length];
+		boolean execute = false;
+		for (int i = 0; i < filters.length; i++) {
+			filters[i] = _filters[i].getText();
+			execute |= !filters[i].isEmpty();
+			filtersBool[i] = !filters[i].isEmpty();
+		}
+		TableRowSorter<? extends TableModel> sorter = (TableRowSorter<? extends TableModel>) table.getRowSorter();
+		if (sorter == null) {
+			sorter = new TableRowSorter<TableModel>(table.getModel());
+			table.setRowSorter(sorter);
+		}
+		if (execute) {
+			sorter.setRowFilter(new MyFilter(filters, filtersBool));
+		} else {
+			sorter.setRowFilter(null);
+		}
+	}
+
+	private final JTable table;
 
 	private ShowDetailsPanelCallback detailsCB;
 
+	private DetailsPanel pnlDetails;
+
 	public static interface ShowDetailsPanelCallback {
-		public void showDetails(JPanel panel);
+		public void showDetails();
 
 		public void closeDetails();
 	}
 
-	public TableView(ShowDetailsPanelCallback detailsCB) {
+	public TableView(DetailsPanel pnlDetails, ShowDetailsPanelCallback detailsCB) {
+		this.pnlDetails = pnlDetails;
 		this.detailsCB = detailsCB;
-		setFont(FontProvider.LabelFont);
+
+		this.setLayout(new BorderLayout());
+		table = new JTable();
+		table.getTableHeader().setFont(FontProvider.LabelFont);
+		table.addComponentListener(new ComponentAdapter() {
+			@Override
+			public void componentResized(ComponentEvent e) {
+				updateFiltersLocation();
+			}
+
+			@Override
+			public void componentMoved(ComponentEvent e) {
+				updateFiltersLocation();
+			}
+		});
+
+		JPanel tblPnl = new JPanel();
+		tblPnl.setLayout(new BorderLayout());
+		JScrollPane tblScroll = new JScrollPane(table);
+		tblScroll.getVerticalScrollBar().getUnitIncrement(16);
+		tblPnl.add(table.getTableHeader(), BorderLayout.NORTH);
+		tblPnl.add(tblScroll, BorderLayout.CENTER);
+
+		this.add(tblPnl, BorderLayout.CENTER);
+
+		pnlFilters = new JPanel();
+		Dimension dim = new Dimension(640, 32); // Only height really matters
+		pnlFilters.setPreferredSize(dim);
+		this.add(pnlFilters, BorderLayout.NORTH);
+
+		table.setFont(FontProvider.LabelFont);
 		// table.getTableHeader().setFont(FontProvider.LabelFont);
 		renderRight.setHorizontalAlignment(SwingConstants.RIGHT);
+		renderBigString.setHorizontalAlignment(SwingConstants.CENTER);
 
-		addMouseListener(new MouseAdapter() {
+		table.addMouseListener(new MouseAdapter() {
 			public void mousePressed(MouseEvent mouseEvent) {
-				if (mouseEvent.getClickCount() == 2 && getSelectedRow() != -1) {
-					int row = rowAtPoint(mouseEvent.getPoint());
+				if (mouseEvent.getClickCount() == 2 && table.getSelectedRow() != -1) {
+					int row = table.rowAtPoint(mouseEvent.getPoint());
+					row = table.convertRowIndexToModel(row);
 					if (row >= 0 && row < _data.length) {
 						showDetails(row);
 					}
@@ -60,15 +160,30 @@ public class TableView extends JTable {
 		});
 	}
 
+	protected void updateFiltersLocation() {
+		pnlFilters.setLayout(null);
+		int pos = 0;
+		for (int i = 0; i < _headers.length; i++) {
+			int width = table.getColumnModel().getColumn(i).getWidth();
+			_filters[i].setLocation(pos, 0);
+			_filters[i].setSize(width + 2, 30);
+			pos += width;
+		}
+		Dimension dim = new Dimension(pos, 30);
+		pnlFilters.setSize(dim);
+		pnlFilters.setPreferredSize(dim);
+		pnlFilters.setVisible(_data.length > 0);
+	}
+
 	private void showDetails(int row) {
-		JPanel pnl = new DetailsPanel(_fields, _data[row], new DetailsPanelCloseListener() {
+		pnlDetails.reset(_fields, _data[row], new DetailsPanelCloseListener() {
 
 			@Override
 			public void close() {
 				showData();
 			}
-		});
-		detailsCB.showDetails(pnl);
+		}, dateFormat, editingTable);
+		detailsCB.showDetails();
 		redraw();
 	}
 
@@ -185,13 +300,13 @@ public class TableView extends JTable {
 						int position = sql.indexOf(fn + "(" + field + ")");
 						Field f = null;
 						if (fn.equals("TEXT")) {
-							f = new Field(field, "", false, false);
+							f = new Field(field, "", FieldType.STRING);
 						} else if (fn.equals("BIGTEXT")) {
-							f = new Field(field, "", false, true);
+							f = new Field(field, "", FieldType.BIGSTRING);
 						} else if (fn.equals("INT")) {
-							f = new Field(field, "", false, false);
+							f = new Field(field, "", FieldType.INT);
 						} else if (fn.equals("DATE")) {
-							f = new Field(field, "", true, false);
+							f = new Field(field, "", FieldType.DATE);
 						} else {
 							return;
 						}
@@ -224,19 +339,11 @@ public class TableView extends JTable {
 
 	}
 
-	public void setData(String contents, boolean isView) {
-		showData();
-		JsonValue val = JsonValue.parse(contents);
+	private void projectTable() {
 
-		if (val != null) {
-			if (isView) {
-				parseView(val);
-			} else {
-				parseTable(val);
-			}
-		}
+		table.setRowHeight(32);
 
-		setModel(new TableModel() {
+		table.setModel(new TableModel() {
 
 			@Override
 			public int getRowCount() {
@@ -265,13 +372,13 @@ public class TableView extends JTable {
 
 			@Override
 			public Object getValueAt(int rowIndex, int columnIndex) {
-				if (_fields[columnIndex].IsDate) {
+				if (_fields[columnIndex].IsDate()) {
 					long val = Long.parseLong(_data[rowIndex][columnIndex]);
 					if ((val + "").toString().length() < "1000000000000".length()) { // int -> long
 						val *= 1000;
 					}
 					return dateFormat.format(new Date(val));
-				} else if (_fields[columnIndex].IsBigString) {
+				} else if (_fields[columnIndex].IsBigString()) {
 					return _data[rowIndex][columnIndex].length() + " bytes";
 				}
 				return _data[rowIndex][columnIndex];
@@ -294,12 +401,64 @@ public class TableView extends JTable {
 		for (int i = 0; i < this._headers.length; i++) {
 			Field f = _fields[i];
 			DefaultTableCellRenderer r = renderDefault;
-			if (f.IsBigString) {
+			if (f.IsBigString()) {
+				r = renderBigString;
+			} else if (f.IsDate()) {
 				r = renderRight;
 			}
-			getColumnModel().getColumn(i).setCellRenderer(r);
+			table.getColumnModel().getColumn(i).setCellRenderer(r);
 		}
 
+		_filters = new MyTextField[_headers.length];
+
+		pnlFilters.removeAll();
+		for (int i = 0; i < _filters.length; i++) {
+			_filters[i] = new MyTextField();
+			pnlFilters.add(_filters[i]);
+			_filters[i].getDocument().addDocumentListener(new DocumentListener() {
+
+				@Override
+				public void insertUpdate(DocumentEvent e) {
+					executeFilters();
+				}
+
+				@Override
+				public void removeUpdate(DocumentEvent e) {
+					executeFilters();
+				}
+
+				@Override
+				public void changedUpdate(DocumentEvent e) {
+					executeFilters();
+				}
+			});
+		}
+
+		updateFiltersLocation();
+		executeFilters();
+	}
+
+	public void setData(String contents, boolean isView) {
+		editingTable = !isView;
+		showData();
+		JsonValue val = JsonValue.parse(contents);
+
+		if (val != null) {
+			if (isView) {
+				parseView(val);
+			} else {
+				parseTable(val);
+			}
+		}
+		projectTable();
+
+	}
+
+	public void clearData() {
+		_headers = new String[0];
+		_data = new String[0][0];
+		_fields = new Field[0];
+		projectTable();
 	}
 
 }

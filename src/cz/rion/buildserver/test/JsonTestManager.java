@@ -6,7 +6,7 @@ import java.util.Collection;
 import java.util.List;
 
 import cz.rion.buildserver.db.StaticDB;
-import cz.rion.buildserver.db.layers.LayeredFilesDB.DatabaseFile;
+import cz.rion.buildserver.db.layers.staticDB.LayeredFilesDB.DatabaseFile;
 import cz.rion.buildserver.exceptions.CommandLineExecutionException;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.json.JsonValue;

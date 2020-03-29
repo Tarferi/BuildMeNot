@@ -1,9 +1,11 @@
 package cz.rion.buildserver;
 
+import java.nio.channels.SocketChannel;
 import java.util.ArrayList;
 import java.util.List;
 
 import cz.rion.buildserver.exceptions.SwitchClientException;
+import cz.rion.buildserver.http.AbstractHTTPClient.HTTPClientIntentType;
 import cz.rion.buildserver.http.HTTPClient;
 import cz.rion.buildserver.http.HTTPServer;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
@@ -64,7 +66,7 @@ public class BuildThread {
 
 	private final BuilderStats stats = new BuilderStats();
 
-	private final List<HTTPClient> jobs = new ArrayList<>();
+	private final List<SocketChannel> jobs = new ArrayList<>();
 	private boolean waiting = false;
 
 	private final Thread thread = new Thread() {
@@ -80,7 +82,7 @@ public class BuildThread {
 		thread.start();
 	}
 
-	private void account(boolean ok, RemoteUIProviderServer remoteAdmin, HTTPClient.HTTPClientIntentType type, String address, String login, int code, String codeDescription, String path, String asm, String testResult, String test_id) {
+	private void account(boolean ok, RemoteUIProviderServer remoteAdmin, HTTPClientIntentType type, String address, String login, int code, String codeDescription, String path, String asm, String testResult, String test_id) {
 		switch (type) {
 		case ADMIN:
 			stats.totalAdminJobs++;
@@ -99,13 +101,17 @@ public class BuildThread {
 		case COLLECT_TESTS:
 			remoteAdmin.writeTestCollect(address, login);
 			break;
+
+		case UNKNOWN:
+			break;
+
 		case PERFORM_TEST:
-			remoteAdmin.writeTestResult(address, login, code, codeDescription, asm, test_id);
-			remoteAdmin.writeBuilderDataUpdate(this.ID, this);
 			if (ok) {
 				stats.totalJobsPassed++;
 			}
 			stats.totalJobsFinished++;
+			remoteAdmin.writeTestResult(address, login, code, codeDescription, asm, test_id);
+			remoteAdmin.writeBuilderDataUpdate(this.ID, this);
 			break;
 		}
 	}
@@ -113,7 +119,7 @@ public class BuildThread {
 	private void async() {
 		thread.setName("Worker " + ID);
 		while (true) {
-			HTTPClient client;
+			SocketChannel sock;
 			synchronized (jobs) {
 				if (jobs.isEmpty()) {
 					waiting = true;
@@ -122,10 +128,11 @@ public class BuildThread {
 					} catch (InterruptedException e) {
 					}
 				}
-				client = jobs.remove(0);
+				sock = jobs.remove(0);
 			}
+			HTTPClient client = new HTTPClient(sock, ID, server.db, server.sdb, server.tests, server.remoteUI);
 			try {
-				client.run(ID);
+				client.run();
 			} catch (SwitchClientException e) {
 				server.addRemoteUIClient(e.socket);
 			} catch (Exception | Error e) {
@@ -138,7 +145,7 @@ public class BuildThread {
 				String runtimeResult = result == null ? null : result.getJsonString();
 				String test_id = client.getTestID();
 				String asm = client.getASM();
-				account(client.haveTestsPassed(), client.getRemoteAdmin(), client.getIntent(), client.getAddress(), client.getLogin(), code, codeDescription, path, asm, runtimeResult, test_id);
+				account(client.haveTestsPassed(), this.server.remoteUI, client.getIntention(), client.getAddress(), client.getLogin(), code, codeDescription, path, asm, runtimeResult, test_id);
 			}
 		}
 	}
@@ -155,7 +162,7 @@ public class BuildThread {
 		}
 	}
 
-	public void addJob(HTTPClient client) {
+	public void addJob(SocketChannel client) {
 		synchronized (jobs) {
 			jobs.add(client);
 			if (waiting) {

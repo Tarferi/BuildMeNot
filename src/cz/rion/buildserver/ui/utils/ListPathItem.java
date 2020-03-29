@@ -5,7 +5,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import cz.rion.buildserver.db.layers.LayeredFilesDB.DatabaseFile;
+import cz.rion.buildserver.db.layers.staticDB.LayeredFilesDB.DatabaseFile;
 
 public abstract class ListPathItem {
 	public final boolean isDirectory;

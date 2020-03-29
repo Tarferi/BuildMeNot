@@ -9,6 +9,8 @@ import cz.rion.buildserver.ui.events.StatusChangeEvent.StatusChangeListener;
 
 import java.awt.BorderLayout;
 import java.awt.Dimension;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 
 public class MainWindow extends JFrame implements StatusChangeListener {
 	private final ConnectionPanel pnlConnect;
@@ -27,6 +29,11 @@ public class MainWindow extends JFrame implements StatusChangeListener {
 	}
 
 	public MainWindow(String remoteAddress, int remotePort, String remotePasscode) {
+		addComponentListener(new ComponentAdapter() {
+			@Override
+			public void componentResized(ComponentEvent e) {
+			}
+		});
 		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		setSize(new Dimension(640, 480));
 		this.driver = new UIDriver(this);
@@ -49,6 +56,8 @@ public class MainWindow extends JFrame implements StatusChangeListener {
 		this.update();
 		this.setVisible(true);
 		StatusChangeEvent.addStatusChangeListener(driver.EventManager, this);
+		this.setLocationRelativeTo(null);
+		this.pack();
 	}
 
 	@Override

@@ -33,6 +33,8 @@ public class Settings {
 	private final SettingsValue onlyUITargetPort = new SettingsValue("onlyUITargetPort", ValueType.INTEGER, 8000);
 	private final SettingsValue onlyUITargetPasscode = new SettingsValue("onlyUITargetPasscode", ValueType.STRING, "abc");
 	private final SettingsValue RemoteUserDatabaseURL = new SettingsValue("RemoteUserDatabaseURL", ValueType.STRING, null);
+	private final SettingsValue DefaultUsername = new SettingsValue("DefaultUsername", ValueType.STRING, "Anonymous");
+	private final SettingsValue DefaultGroup = new SettingsValue("DefaultGroup", ValueType.STRING, "Default");
 
 	private List<SettingsValue> settings;
 
@@ -236,5 +238,13 @@ public class Settings {
 
 	public static String GetRemoteUserDB() {
 		return instance.RemoteUserDatabaseURL.asString();
+	}
+
+	public static String GetDefaultUsername() {
+		return instance.DefaultUsername.asString();
+	}
+
+	public static String GetDefaultGroup() {
+		return instance.DefaultGroup.asString();
 	}
 }

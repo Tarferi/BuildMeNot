@@ -1,5 +1,6 @@
-package cz.rion.buildserver.db.layers;
+package cz.rion.buildserver.db.layers.staticDB;
 
+import cz.rion.buildserver.db.layers.common.LayeredMetaDB;
 import cz.rion.buildserver.exceptions.DatabaseException;
 
 public abstract class LayeredStaticDB extends LayeredMetaDB {

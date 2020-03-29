@@ -4,7 +4,7 @@ import java.util.List;
 
 import javax.swing.SwingUtilities;
 
-import cz.rion.buildserver.db.layers.LayeredFilesDB.DatabaseFile;
+import cz.rion.buildserver.db.layers.staticDB.LayeredFilesDB.DatabaseFile;
 import cz.rion.buildserver.ui.provider.RemoteUIClient;
 
 public class FileListLoadedEvent extends Event {

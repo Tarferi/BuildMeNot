@@ -5,12 +5,12 @@ import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.Selector;
 
-import cz.rion.buildserver.http.MySocketClient;
+import cz.rion.buildserver.http.CompatibleSocketClient;
 
 public class RemoteUIClient {
 
 	public static enum RemoteOperation {
-		BuildersLoad(0), BuildersUpdate(1), FileCreated(2), FileListLoaded(3), FileLoaded(4), FileSaved(5), StatusChanged(6), StatusMessage(7), UsersLoaded(8);
+		BuildersLoad(0), BuildersUpdate(1), FileCreated(2), FileListLoaded(3), FileLoaded(4), FileSaved(5), StatusChanged(6), StatusMessage(7), UsersLoaded(8), DatabaseTableTowEdit(9);
 
 		public final int code;
 
@@ -27,7 +27,7 @@ public class RemoteUIClient {
 		}
 	}
 
-	private final MySocketClient client;
+	private final CompatibleSocketClient client;
 
 	public void register(Selector selector, int operations, Object attach) throws ClosedChannelException {
 		client.register(selector, operations, attach);
@@ -89,7 +89,7 @@ public class RemoteUIClient {
 		return write(data, sync);
 	}
 
-	public RemoteUIClient(MySocketClient client) {
+	public RemoteUIClient(CompatibleSocketClient client) {
 		this.client = client;
 	}
 

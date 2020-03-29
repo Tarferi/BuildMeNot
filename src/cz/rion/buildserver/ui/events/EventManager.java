@@ -5,6 +5,7 @@ import java.util.List;
 
 import cz.rion.buildserver.ui.events.BuilderUpdateEvent.BuilderUpdateListener;
 import cz.rion.buildserver.ui.events.BuildersLoadedEvent.BuilderAvailableListener;
+import cz.rion.buildserver.ui.events.DatabaseTableRowEditEvent.DatabaseRowEditEventListener;
 import cz.rion.buildserver.ui.events.FileCreatedEvent.FileCreatedListener;
 import cz.rion.buildserver.ui.events.FileListLoadedEvent.FileListLoadedListener;
 import cz.rion.buildserver.ui.events.FileLoadedEvent.FileLoadedListener;
@@ -24,7 +25,8 @@ public class EventManager {
 	protected final List<FileListLoadedListener> fileListLoadedListeners = new ArrayList<>();
 	protected final List<FileSavedListener> fileSavedListeners = new ArrayList<>();
 	protected final List<FileCreatedListener> fileCreatedListeners = new ArrayList<>();
-	
+	protected final List<DatabaseRowEditEventListener> databaseRowEditEventListeners = new ArrayList<>();
+
 	protected Status status = Status.DISCONNECTED;
 
 	private final Object statusSyncer = new Object();

@@ -1,4 +1,4 @@
-package cz.rion.buildserver.db.layers;
+package cz.rion.buildserver.db.layers.common;
 
 import java.util.ArrayList;
 import java.util.HashMap;

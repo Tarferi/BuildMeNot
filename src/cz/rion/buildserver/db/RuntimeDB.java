@@ -8,7 +8,7 @@ import java.util.List;
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.crypto.Crypto;
 import cz.rion.buildserver.db.crypto.CryptoManager;
-import cz.rion.buildserver.db.layers.LayeredMetaDB;
+import cz.rion.buildserver.db.layers.common.LayeredMetaDB;
 import cz.rion.buildserver.exceptions.ChangeOfSessionAddressException;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.json.JsonValue;

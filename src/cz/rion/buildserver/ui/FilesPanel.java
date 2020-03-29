@@ -2,9 +2,12 @@ package cz.rion.buildserver.ui;
 
 import javax.swing.JPanel;
 
-import cz.rion.buildserver.db.layers.LayeredFilesDB.DatabaseFile;
+import cz.rion.buildserver.db.layers.staticDB.LayeredFilesDB.DatabaseFile;
 import cz.rion.buildserver.json.JsonValue;
+import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.ui.TableView.ShowDetailsPanelCallback;
+import cz.rion.buildserver.ui.events.DatabaseTableRowEditEvent;
+import cz.rion.buildserver.ui.events.DatabaseTableRowEditEvent.DatabaseRowEditEventListener;
 import cz.rion.buildserver.ui.events.EventManager.Status;
 import cz.rion.buildserver.ui.events.FileCreatedEvent;
 import cz.rion.buildserver.ui.events.FileCreatedEvent.FileCreatedListener;
@@ -40,11 +43,10 @@ import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.JTextArea;
 import java.awt.Font;
-import javax.swing.ScrollPaneConstants;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
 
-public class FilesPanel extends JPanel implements FileListLoadedListener, FileLoadedListener, FileSavedListener, FileCreatedListener {
+public class FilesPanel extends JPanel implements FileListLoadedListener, FileLoadedListener, FileSavedListener, FileCreatedListener, DatabaseRowEditEventListener {
 
 	private final UIDriver driver;
 	private Status status;
@@ -73,6 +75,7 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 	private JScrollPane scrollContents;
 	private TableView myTable;
 	private MyButton btnEdit;
+	private DetailsPanel pnlDetails = new DetailsPanel();
 
 	private class PropertyWrapper {
 		private JComponent component;
@@ -96,6 +99,8 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 				this.initialText = ((MyTextField) c).getText();
 			} else if (c instanceof JTextArea) {
 				this.initialText = ((JTextArea) c).getText();
+			} else if (c instanceof DetailsPanel) {
+				this.initialText = null;
 			}
 			this.initialEnabled = c.isEnabled();
 			this.initialVisible = c.isVisible();
@@ -124,6 +129,8 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 						((MyTextField) component).setText(text);
 					} else if (component instanceof JTextArea) {
 						((JTextArea) component).setText(text);
+					} else if (component instanceof DetailsPanel) {
+
 					}
 				}
 			}
@@ -160,6 +167,7 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 		PropertyWrapper wTxtContents = new PropertyWrapper(txtContents);
 		PropertyWrapper wBtnEdit = new PropertyWrapper(btnEdit);
 		PropertyWrapper wBtnReturn = new PropertyWrapper(btnReturn);
+		PropertyWrapper wPnlDetails = new PropertyWrapper(pnlDetails);
 
 		switch (state) {
 		case DISCONNECTED:
@@ -247,6 +255,9 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 			wTxtContents.setVisible(true);
 			wTxtContents.setEnabled(true);
 
+			wPnlDetails.setEnabled(true);
+			wPnlDetails.setVisible(true);
+
 			wTxtCreate.setVisible(true);
 			wTxtCreate.setEnabled(true);
 			wTxtCreate.setText(this.loadedFile.FileName);
@@ -258,10 +269,10 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 			wLblOverview.setEnabled(true);
 			wLblOverview.setText(this.loadedFile.FileName);
 
-			if (this.loadedFile.FileName.endsWith(".table")) {
+			if (this.CurrentlyEditingTable()) {
 				setTableEditing();
 				myTable.setData(this.loadedFile.Contents, false);
-			} else if (this.loadedFile.FileName.endsWith(".view")) {
+			} else if (this.CurrentlyEditingView()) {
 				setTableEditing();
 				myTable.setData(this.loadedFile.Contents, true);
 
@@ -304,6 +315,8 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 		case SAVING_FILE: // Async progress
 			wPnlOverview.setVisible(true);
 			wList.setVisible(true);
+
+			wPnlDetails.setVisible(true);
 			break;
 
 		case LOADING_FILE:
@@ -318,6 +331,8 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 			wTxtCreate.setEnabled(true);
 
 			wTxtFileFilter.setVisible(true);
+			
+			myTable.clearData();
 
 			break;
 		}
@@ -337,6 +352,7 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 		wTxtContents.commit();
 		wBtnEdit.commit();
 		wBtnReturn.commit();
+		wPnlDetails.commit();
 	}
 
 	private void setListItems(DatabaseFile[] items) {
@@ -349,7 +365,7 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 
 	private JComponent currentRightSideContent = null;
 	private MyButton btnReturn;
-	private JPanel panel_1;
+	private JPanel pnlScroll;
 
 	private void setRightSideContents(JComponent c) {
 		scrollContents.setViewportView(c);
@@ -357,8 +373,38 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 		redraw();
 	}
 
+	public boolean CurrentViewIsTextContents() {
+		return currentRightSideContent == txtContents;
+	}
+
+	public boolean CurrentViewIsTable() {
+		return currentRightSideContent == myTable;
+	}
+
+	public boolean CurrentViewIsPnlDetails() {
+		return currentRightSideContent == pnlDetails;
+	}
+
+	public boolean CurrentlyEditingView() {
+		return loadedFile.FileName.endsWith(".view");
+	}
+
+	public boolean CurrentlyEditingTable() {
+		return loadedFile.FileName.endsWith(".table");
+	}
+
 	private void setTextAreaEditing() {
 		setRightSideContents(txtContents);
+	}
+
+	private void setDetailsEditing() {
+		setRightSideContents(pnlDetails);
+		if (this.CurrentlyEditingTable()) {
+			btnSave.setVisible(true);
+			btnSave.setEnabled(true);
+			btnSaveAndClose.setVisible(true);
+			btnSaveAndClose.setEnabled(true);
+		}
 	}
 
 	private void setTableEditing() {
@@ -388,18 +434,24 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 			}
 		});
 		pnlLeft.add(btnReload, "cell 0 1 2 1,grow");
-		myTable = new TableView(new ShowDetailsPanelCallback() {
+		myTable = new TableView(pnlDetails, new ShowDetailsPanelCallback() {
 
 			@Override
-			public void showDetails(JPanel panel) {
-				setRightSideContents(panel);
+			public void showDetails() {
+				setDetailsEditing();
 				btnReturn.setVisible(true);
 				btnReturn.setEnabled(true);
 			}
 
 			@Override
 			public void closeDetails() {
-				setRightSideContents(myTable);
+				setTableEditing();
+				if (CurrentlyEditingTable()) {
+					btnSave.setVisible(false);
+					btnSave.setEnabled(false);
+					btnSaveAndClose.setVisible(false);
+					btnSaveAndClose.setEnabled(false);
+				}
 			}
 		});
 
@@ -492,27 +544,27 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 		pnlOverview.add(lblOverview, "cell 0 0,alignx center");
 		lblOverview.setBorder(new MatteBorder(0, 0, 1, 0, (Color) new Color(0, 0, 0)));
 
-		panel_1 = new JPanel();
-		pnlOverview.add(panel_1, "cell 0 1,grow");
-		panel_1.setLayout(new BorderLayout(0, 0));
-
-		txtContents =new JTextArea();
-		txtContents.setFont(new Font("Monospaced", Font.PLAIN, 17));
-		scrollContents = new JScrollPane(txtContents);
-		panel_1.add(scrollContents, BorderLayout.CENTER);
-		scrollContents.addComponentListener(new ComponentAdapter() {
+		pnlScroll = new JPanel();
+		pnlOverview.addComponentListener(new ComponentAdapter() {
 			@Override
 			public void componentResized(ComponentEvent e) {
 				if (currentRightSideContent != null) {
-					currentRightSideContent.setSize(100, 100);
+					Dimension cz = currentRightSideContent.getSize();
+					Dimension sz = scrollContents.getSize();
+					Dimension scroll = scrollContents.getHorizontalScrollBar().getSize();
+					Dimension total = new Dimension((int) (sz.getWidth() - scroll.getWidth()), (int) (cz.getHeight()));
+					currentRightSideContent.setPreferredSize(total);
 				}
-				int height = scrollContents.getViewport().getHeight();
-				int width = scrollContents.getViewport().getWidth();
-				int newWidth = scrollContents.getWidth();
-				// scrollContents.getViewport().setSize(scrollContents.getWidth()-50, height);
 			}
+
 		});
-		scrollContents.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+		pnlOverview.add(pnlScroll, "cell 0 1,grow");
+		pnlScroll.setLayout(new BorderLayout());
+
+		txtContents = new JTextArea();
+		txtContents.setFont(new Font("Monospaced", Font.PLAIN, 17));
+		scrollContents = new JScrollPane(txtContents);
+		pnlScroll.add(scrollContents);
 		scrollContents.getVerticalScrollBar().setUnitIncrement(16);
 		txtContents.getDocument().addDocumentListener(new DocumentListener() {
 			public void changedUpdate(DocumentEvent e) {
@@ -586,6 +638,7 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 		FileLoadedEvent.addFileLoadedListener(driver.EventManager, this);
 		FileSavedEvent.addFileSavedListener(driver.EventManager, this);
 		FileCreatedEvent.addFileLoadedListener(driver.EventManager, this);
+		DatabaseTableRowEditEvent.addFileListChangeListener(driver.EventManager, this);
 	}
 
 	protected void createFile(String name) {
@@ -594,15 +647,33 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 	}
 
 	protected void save() {
-		setState(ActionState.SAVING_FILE);
-		driver.saveFile(loadedFile.ID, txtCreate.getText(), txtContents.getText());
-		this.closeAfterSave = false;
+		if (this.CurrentViewIsTextContents()) {
+			setState(ActionState.SAVING_FILE);
+			driver.saveFile(loadedFile.ID, txtCreate.getText(), txtContents.getText());
+			this.closeAfterSave = false;
+		} else if (CurrentViewIsPnlDetails()) {
+			JsonObject vals = pnlDetails.collectValues();
+			if (vals != null) {
+				setState(ActionState.SAVING_FILE);
+				driver.editTableRow(loadedFile.ID, vals);
+				this.closeAfterSave = false;
+			}
+		}
 	}
 
 	protected void saveAndClose() {
-		setState(ActionState.SAVING_FILE);
-		driver.saveFile(loadedFile.ID, txtCreate.getText(), txtContents.getText());
-		this.closeAfterSave = true;
+		if (this.CurrentViewIsTextContents()) {
+			setState(ActionState.SAVING_FILE);
+			driver.saveFile(loadedFile.ID, txtCreate.getText(), txtContents.getText());
+			this.closeAfterSave = true;
+		} else if (CurrentViewIsPnlDetails()) {
+			JsonObject vals = pnlDetails.collectValues();
+			if (vals != null) {
+				setState(ActionState.SAVING_FILE);
+				driver.editTableRow(loadedFile.ID, vals);
+				this.closeAfterSave = true;
+			}
+		}
 	}
 
 	private void refilter(String string) {
@@ -640,10 +711,10 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 	private void editBtnPressed() {
 		if (this.loadedFile != null) {
 			if (this.loadedFile.FileName.endsWith(".view")) { // Editing view
-				if (currentRightSideContent == txtContents) { // Edit pressed in table -> return
+				if (CurrentViewIsTextContents()) { // Edit pressed in table -> return
 					this.btnEdit.setText("Edit");
 					setTableEditing();
-				} else {
+				} else if (CurrentViewIsTable() || CurrentViewIsPnlDetails()) {
 					this.btnEdit.setText("View");
 					setTextAreaEditing();
 				}
@@ -701,6 +772,7 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 			driver.disconnect();
 			setState(ActionState.DISCONNECTED);
 		} else {
+			loadedFile = file;
 			setState(ActionState.EDITING_FILE);
 			lblOverview.setText(file.FileName);
 			if (closeAfterSave) {
@@ -714,6 +786,16 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 	public void fileCreated(FileCreationInfo file) {
 		txtCreate.setText("");
 		reloadFiles();
+	}
+
+	@Override
+	public void editOK() {
+		fileSaved(loadedFile, true);
+	}
+
+	@Override
+	public void editFailed() {
+		fileSaved(loadedFile, false);
 	}
 
 }

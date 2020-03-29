@@ -2,18 +2,22 @@ package cz.rion.buildserver.ui;
 
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
+import javax.swing.ScrollPaneConstants;
 
 import cz.rion.buildserver.db.SQLiteDB.Field;
+import cz.rion.buildserver.db.SQLiteDB.FieldType;
+import cz.rion.buildserver.json.JsonValue.JsonObject;
+import cz.rion.buildserver.json.JsonValue.JsonNumber;
+import cz.rion.buildserver.json.JsonValue.JsonString;
 import cz.rion.buildserver.ui.utils.MyLabel;
 import cz.rion.buildserver.ui.utils.MyTextArea;
 import cz.rion.buildserver.ui.utils.MyTextField;
 import net.miginfocom.swing.MigLayout;
-import java.sql.Date;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
-import java.awt.Dimension;
-import java.awt.event.ComponentAdapter;
-import java.awt.event.ComponentEvent;
 
 public class DetailsPanel extends JPanel {
 
@@ -22,47 +26,71 @@ public class DetailsPanel extends JPanel {
 	}
 
 	List<MyTextArea> areas = new ArrayList<>();
+	private Field[] headers;
+	private SimpleDateFormat format;
+	private ComponentManipulator[] retrievers;
 
-	public DetailsPanel(Field[] headers, String[] data, final DetailsPanelCloseListener detailsPanelCloseListener) {
-		addComponentListener(new ComponentAdapter() {
-			private final Dimension dim = new Dimension(100, 100);
+	private interface ComponentManipulator {
+		public String getText();
 
-			@Override
-			public void componentResized(ComponentEvent e) {
-				for (MyTextArea area : areas) {
-					// Forced recalculation (could be more effective
-					area.setSize(100, 100);
-					area.setPreferredSize(dim);
-				}
+		public void setEnabled(boolean enabled);
+	}
+
+	@Override
+	public void setEnabled(boolean enabled) {
+		if (retrievers != null) {
+			for (ComponentManipulator retriever : retrievers) {
+				retriever.setEnabled(enabled);
 			}
-		});
+		}
+	}
+
+	public void reset(Field[] headers, String[] data, final DetailsPanelCloseListener detailsPanelCloseListener, SimpleDateFormat format, boolean editingTable) {
+		this.headers = headers;
+		this.format = format;
+		this.retrievers = new ComponentManipulator[data.length];
+		this.removeAll();
 		StringBuilder sb = new StringBuilder();
 		for (int i = 0; i < headers.length; i++) {
-			if (headers[i].IsBigString) {
+			if (headers[i].IsBigString()) {
 				sb.append("[][250px::250px]");
 			} else {
 				sb.append("[]");
 			}
 		}
-		sb.append("[grow]");
 		setLayout(new MigLayout("", "[:100px:][grow][:100px:]", sb.toString()));
 		int totalDoubleTextsPlaced = 0;
 		for (int i = 0; i < headers.length; i++) {
 			add(new MyLabel(headers[i].name + ":"), "cell 0 " + (i + totalDoubleTextsPlaced) + ",alignx right");
-			if (headers[i].IsBigString) {
+			boolean editable = !headers[i].name.equals("ID") && editingTable;
+			if (headers[i].IsBigString()) {
 				String dataEditPos = "cell 1 " + (i + totalDoubleTextsPlaced) + " 2 2,growx,growy";
-				MyTextArea area = new MyTextArea(data[i]);
+				final MyTextArea area = new MyTextArea(data[i]);
+				retrievers[i] = new ComponentManipulator() {
+
+					@Override
+					public String getText() {
+						return area.getText();
+					}
+
+					@Override
+					public void setEnabled(boolean enabled) {
+						area.setEnabled(enabled);
+					}
+				};
+
 				areas.add(area);
 				area.setLineWrap(true);
-				area.setEditable(false);
+				area.setEditable(editable);
 				JScrollPane scroller = new JScrollPane(area);
 				scroller.getVerticalScrollBar().setUnitIncrement(16);
+				scroller.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
 				add(scroller, dataEditPos);
 				totalDoubleTextsPlaced++;
 			} else {
 				String dataEditPos = "cell 1 " + (i + totalDoubleTextsPlaced) + " 2 1,growx,growy";
 				String str = data[i];
-				if (headers[i].IsDate) {
+				if (headers[i].IsDate()) {
 					long val = Long.parseLong(str);
 					if ((val + "").toString().length() < "1000000000000".length()) { // int -> long
 						val *= 1000;
@@ -70,10 +98,49 @@ public class DetailsPanel extends JPanel {
 					str = TableView.dateFormat.format(new Date(val));
 				}
 
-				MyTextField textField = new MyTextField(str);
-				textField.setEditable(false);
+				final MyTextField textField = new MyTextField(str);
+
+				retrievers[i] = new ComponentManipulator() {
+
+					@Override
+					public String getText() {
+						return textField.getText();
+					}
+
+					@Override
+					public void setEnabled(boolean enabled) {
+						textField.setEnabled(enabled);
+					}
+				};
+
+				textField.setEditable(editable);
 				add(textField, dataEditPos);
 			}
 		}
+	}
+
+	public JsonObject collectValues() {
+		JsonObject obj = new JsonObject();
+		for (int i = 0; i < headers.length; i++) {
+			Field f = headers[i];
+			String d = retrievers[i].getText();
+			if (f.IsBigString() || f.type == FieldType.STRING) {
+				obj.add(f.name, new JsonString(d));
+			} else if (f.IsDate()) {
+				try {
+					Date val = format.parse(d);
+					obj.add(f.name, new JsonNumber((int) val.getTime(), val.getTime() + ""));
+				} catch (ParseException e) {
+					return null;
+				}
+			} else if (f.type == FieldType.INT) {
+				try {
+					obj.add(f.name, new JsonNumber(Integer.parseInt(d), d));
+				} catch (Exception e) { // Not an integer
+					return null;
+				}
+			}
+		}
+		return obj;
 	}
 }

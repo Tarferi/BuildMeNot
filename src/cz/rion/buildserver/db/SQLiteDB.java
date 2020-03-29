@@ -20,31 +20,38 @@ public class SQLiteDB {
 
 	private final Connection conn;
 
+	public static enum FieldType {
+		INT(0), STRING(1), BIGSTRING(2), DATE(3);
+
+		public final int code;
+
+		private FieldType(int code) {
+			this.code = code;
+		}
+	}
+
 	public static class Field {
 		public final String name;
 		private final String modifiers;
-		public final boolean IsDate;
-		public final boolean IsBigString;
+		public final FieldType type;
 
-		private Field(String name, String modifiers) {
-			this(name, modifiers, false, false);
+		public boolean IsBigString() {
+			return type == FieldType.BIGSTRING;
 		}
 
-		private Field(String name, String modifiers, boolean isDate) {
-			this(name, modifiers, isDate, false);
+		public boolean IsDate() {
+			return type == FieldType.DATE;
 		}
 
-		public Field(String name, String modifiers, boolean isDate, boolean isBigString) {
+		public Field(String name, String modifiers, FieldType type) {
 			this.name = name;
 			this.modifiers = modifiers;
-			this.IsDate = isDate;
-			this.IsBigString = isBigString;
+			this.type = type;
 		}
 
 		public String getDecodableRepresentation() {
 			StringBuilder sb = new StringBuilder();
-			sb.append(IsDate ? "1" : "0");
-			sb.append(IsBigString ? "1" : "0");
+			sb.append(type.code);
 			sb.append(modifiers);
 			sb.append("@");
 			sb.append(name);
@@ -52,12 +59,13 @@ public class SQLiteDB {
 		}
 
 		public static Field fromDecodableRepresentation(String str) {
-			boolean date = str.charAt(0) == '1';
-			boolean bigString = str.charAt(1) == '1';
-			String[] parts = str.substring(2).split("@", 2);
+			String typeStr = str.substring(0, 1);
+			Integer typeInt = Integer.parseInt(typeStr);
+			FieldType type = FieldType.values()[typeInt];
+			String[] parts = str.substring(1).split("@", 2);
 			String modifiers = parts[0];
 			String name = parts[1];
-			return new Field(name, modifiers, date, bigString);
+			return new Field(name, modifiers, type);
 		}
 
 		@Override
@@ -67,23 +75,23 @@ public class SQLiteDB {
 	}
 
 	protected Field KEY(String name) {
-		return new Field(name, "INTEGER PRIMARY KEY AUTOINCREMENT");
+		return new Field(name, "INTEGER PRIMARY KEY AUTOINCREMENT", FieldType.INT);
 	}
 
 	protected Field TEXT(String name) {
-		return new Field(name, "TEXT");
+		return new Field(name, "TEXT", FieldType.STRING);
 	}
 
 	protected Field BIGTEXT(String name) {
-		return new Field(name, "TEXT", false, true);
+		return new Field(name, "TEXT", FieldType.BIGSTRING);
 	}
 
 	protected Field NUMBER(String name) {
-		return new Field(name, "INTEGER");
+		return new Field(name, "INTEGER", FieldType.INT);
 	}
 
 	protected Field DATE(String name) {
-		return new Field(name, "INTEGER", true);
+		return new Field(name, "INTEGER", FieldType.DATE);
 	}
 
 	public SQLiteDB(String fileName) throws DatabaseException {
@@ -128,7 +136,7 @@ public class SQLiteDB {
 
 	private final Object syncer = new Object();
 
-	protected boolean execute(String sql, Object... params) throws DatabaseException {
+	public boolean execute(String sql, Object... params) throws DatabaseException {
 		synchronized (syncer) {
 			PreparedStatement stmt = null;
 			try {

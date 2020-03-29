@@ -1,9 +1,6 @@
 package cz.rion.buildserver.ui.provider;
 
 import java.io.IOException;
-import java.net.Socket;
-import java.nio.channels.ClosedChannelException;
-import java.nio.channels.SelectableChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.util.ArrayList;
@@ -14,19 +11,21 @@ import java.util.Set;
 import cz.rion.buildserver.BuildThread;
 import cz.rion.buildserver.db.RuntimeDB;
 import cz.rion.buildserver.db.RuntimeDB.RuntimeUserStats;
+import cz.rion.buildserver.db.layers.common.LayeredDBFileWrapperDB;
+import cz.rion.buildserver.db.layers.staticDB.LayeredFilesDB.DatabaseFile;
+import cz.rion.buildserver.db.layers.staticDB.LayeredUserDB.LocalUser;
 import cz.rion.buildserver.db.StaticDB;
-import cz.rion.buildserver.db.layers.LayeredDBFileWrapperDB;
-import cz.rion.buildserver.db.layers.LayeredFilesDB.DatabaseFile;
-import cz.rion.buildserver.db.layers.LayeredUserDB.LocalUser;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.BuildThread.BuilderStats;
 import cz.rion.buildserver.http.HTTPServer;
-import cz.rion.buildserver.http.MySocketClient;
+import cz.rion.buildserver.http.CompatibleSocketClient;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
+import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonNumber;
 import cz.rion.buildserver.json.JsonValue.JsonString;
 import cz.rion.buildserver.ui.events.BuilderUpdateEvent;
 import cz.rion.buildserver.ui.events.BuildersLoadedEvent;
+import cz.rion.buildserver.ui.events.DatabaseTableRowEditEvent;
 import cz.rion.buildserver.ui.events.FileCreatedEvent;
 import cz.rion.buildserver.ui.events.FileListLoadedEvent;
 import cz.rion.buildserver.ui.events.FileLoadedEvent;
@@ -73,7 +72,7 @@ public class RemoteUIProviderServer {
 		thread.start();
 	}
 
-	public void addClient(MySocketClient socket) {
+	public void addClient(CompatibleSocketClient socket) {
 		try {
 			socket.configureBlocking(false);
 		} catch (IOException e1) {
@@ -124,8 +123,42 @@ public class RemoteUIProviderServer {
 		} else if (code == FileCreatedEvent.ID) {
 			createFile(inBuffer, outBuffer);
 			return true;
+		} else if (code == DatabaseTableRowEditEvent.ID) {
+			handleEditDatabaseTableROw(inBuffer, outBuffer);
+			return true;
 		}
 		return false;
+	}
+
+	private void handleEditDatabaseTableROw(InputPacketRequest inBuffer, MemoryBuffer outBuffer) throws IOException {
+		int returnCode = 99;
+		int fileID = inBuffer.readInt();
+		String jsn = inBuffer.readString();
+
+		JsonValue val = JsonValue.parse(jsn);
+		if (val.isObject()) {
+			JsonObject obj = val.asObject();
+			FileInfo f;
+			try {
+				f = this.sdb.getFile(fileID);
+				if (f != null) { // SDB database
+					if (LayeredDBFileWrapperDB.editRow(sdb, f, obj)) {
+						returnCode = 42;
+					}
+				} else { // DB database ?
+					f = LayeredDBFileWrapperDB.getFile(db, fileID);
+					if (f != null) {
+						if (LayeredDBFileWrapperDB.editRow(db, f, obj)) {
+							returnCode = 42;
+						}
+					}
+				}
+			} catch (DatabaseException e) {
+				e.printStackTrace();
+			}
+		}
+		outBuffer.writeInt(DatabaseTableRowEditEvent.ID);
+		outBuffer.writeInt(returnCode);
 	}
 
 	private void createFile(InputPacketRequest inBuffer, MemoryBuffer outBuffer) throws IOException {
@@ -251,7 +284,6 @@ public class RemoteUIProviderServer {
 	}
 
 	private void dispatch(MemoryBuffer outBuffer) {
-		System.out.println("[RemoteUI] sending " + RemoteUIClient.RemoteOperation.fromCode(outBuffer.get()[4]));
 		if (outBuffer.isForSingleClient()) {
 			RemoteUIClient client = outBuffer.getClient();
 			if (!client.write(outBuffer, false)) {
@@ -347,7 +379,6 @@ public class RemoteUIProviderServer {
 			byte[] b = new byte[1];
 			request.read(b);
 			int code = b[0];
-			System.out.println("[RemoteUIProvider]: received " + RemoteUIClient.RemoteOperation.fromCode(code));
 			MemoryBuffer toSend = new MemoryBuffer.SignleClientMemoryBuffer(128, client);
 			if (!handle(code, request, toSend)) {
 				synchronized (clients) {
@@ -396,7 +427,7 @@ public class RemoteUIProviderServer {
 						}
 					}
 					if (client != null) {
-						if(!client.isConnected()) {
+						if (!client.isConnected()) {
 							closeClient(client);
 						}
 					}
