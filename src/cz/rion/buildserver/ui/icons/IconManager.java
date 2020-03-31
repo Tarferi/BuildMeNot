@@ -1,5 +1,9 @@
 package cz.rion.buildserver.ui.icons;
 
+import java.awt.Image;
+import java.util.HashMap;
+import java.util.Map;
+
 import javax.swing.ImageIcon;
 
 public class IconManager {
@@ -13,8 +17,9 @@ public class IconManager {
 	public final static ImageIcon TableIcon = IconLoader.LoadIcon("table.png");
 	public final static ImageIcon ViewIcon = IconLoader.LoadIcon("view.png");
 
-	public static final ImageIcon IconForFile(String path) {
-		path = path.toLowerCase();
+	private static final Map<String, ImageIcon> icons = new HashMap<>();
+
+	private static final ImageIcon loadIcon(String path) {
 		if (path.endsWith(".jsn") || path.endsWith(".json")) {
 			return JSONIcon;
 		} else if (path.endsWith("..")) {
@@ -35,5 +40,16 @@ public class IconManager {
 			}
 		}
 		return FileIcon;
+	}
+
+	public static final ImageIcon IconForFile(String path, int width, int height) {
+		path = path.toLowerCase();
+		String mapPath = path + "@" + width + ":" + height;
+		if (!icons.containsKey(mapPath)) {
+			ImageIcon ico = loadIcon(path);
+			ico.setImage(ico.getImage().getScaledInstance(width, height, Image.SCALE_SMOOTH));
+			icons.put(mapPath, ico);
+		}
+		return icons.get(mapPath);
 	}
 }

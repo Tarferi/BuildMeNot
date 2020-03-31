@@ -26,6 +26,19 @@ public class MAIN {
 		});
 	}
 
+	public static void main_retest(String[] args) {
+		try {
+			Retester rt = new Retester();
+			String test_id = "test07_04";
+			//rt.runTests(test_id);
+			//rt.backupData();
+			rt.updateData();
+			// rt.restoreData();
+		} catch (DatabaseException e) {
+			e.printStackTrace();
+		}
+	}
+
 	public static void main(String[] args) throws InvocationTargetException, InterruptedException {
 		setUI();
 		if (Settings.RunOnlyUI()) {

@@ -1,7 +1,6 @@
 package cz.rion.buildserver.ui.utils;
 
 import java.awt.Component;
-import java.awt.Image;
 
 import javax.swing.DefaultListCellRenderer;
 import javax.swing.ImageIcon;
@@ -22,8 +21,7 @@ public class BetterListCellRenderer extends DefaultListCellRenderer {
 		label.setFont(list.getFont());
 		if (icons) {
 			String path = value.toString();
-			ImageIcon ico = IconManager.IconForFile(path);
-			ico.setImage(ico.getImage().getScaledInstance(32, 32, Image.SCALE_SMOOTH));
+			ImageIcon ico = IconManager.IconForFile(path, 32, 32);
 			label.setIcon(ico);
 		}
 		return label;

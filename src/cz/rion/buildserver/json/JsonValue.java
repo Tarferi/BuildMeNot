@@ -586,6 +586,10 @@ public abstract class JsonValue {
 			return Value.entrySet();
 		}
 
+		public boolean contains(String col) {
+			return Value.containsKey(col);
+		}
+
 		public JsonValue get(String col) {
 			return Value.get(col);
 		}

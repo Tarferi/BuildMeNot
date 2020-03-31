@@ -36,6 +36,7 @@ public class JsonTestManager {
 		private final boolean secret;
 		private final String[] allowedInstructions;
 		public final boolean replace;
+		private final ReplacementEntry[] replacement;
 
 		@Override
 		public String getID() {
@@ -51,7 +52,7 @@ public class JsonTestManager {
 			for (TestVerificationData test : tests) {
 				try {
 					MyExecResult result = input.execute(test.stdin, test.arguments, test.timeout);
-					TestResultsExpectations data = new TestResultsExpectations(test.code, result.returnCode, test.stdout, result.stdout, test.stderr, result.stderr);
+					TestResultsExpectations data = new TestResultsExpectations(test.code, result.returnCode, test.stdout, result.stdout, test.stderr, result.stderr, test.stdin);
 					results[index] = data;
 					if (!data.passed) {
 						passed++;
@@ -73,7 +74,7 @@ public class JsonTestManager {
 			}
 		}
 
-		private JsonTest(String id, String title, String description, List<TestVerificationData> tests, String initialASM, String append, String prepend, boolean isHidden, boolean isSecret, String[] allowedInstructions, boolean replace) {
+		private JsonTest(String id, String title, String description, List<TestVerificationData> tests, String initialASM, String append, String prepend, boolean isHidden, boolean isSecret, String[] allowedInstructions, boolean replace, ReplacementEntry[] replacement) {
 			this.id = id;
 			this.title = title;
 			this.description = description;
@@ -86,6 +87,7 @@ public class JsonTestManager {
 			this.secret = isSecret;
 			this.allowedInstructions = allowedInstructions;
 			this.replace = replace;
+			this.replacement = replacement;
 		}
 
 		@Override
@@ -114,7 +116,7 @@ public class JsonTestManager {
 						lt = lt.split(";")[0].trim();
 					}
 					if (lt.contains(":")) {
-						if(lt.endsWith(":")) {
+						if (lt.endsWith(":")) {
 							continue;
 						}
 						String[] d = lt.split(":");
@@ -131,9 +133,18 @@ public class JsonTestManager {
 							} else {
 								boolean validStart = false;
 								for (String instruction : allowedInstructions) {
-									if (lt.startsWith(instruction.toLowerCase())) {
-										validStart = true;
-										break;
+									if (lt.startsWith(instruction.toLowerCase())) { // Could allow "MOVX" if "MOV" is allowed
+										String next = lt.substring(instruction.length());
+										if (next.length() == 0) {
+											validStart = true;
+											break;
+										} else {
+											char c = next.charAt(0);
+											if (c == ' ' || c == '\r' || c == '\n') {
+												validStart = true;
+												break;
+											}
+										}
 									}
 								}
 								if (!validStart) {
@@ -173,6 +184,11 @@ public class JsonTestManager {
 			if (replace) {
 				asm = asm.replaceAll("\\$LOGIN\\$", login);
 			}
+			if (replacement != null) {
+				for (ReplacementEntry rep : replacement) {
+					asm = asm.replaceAll(rep.source, rep.replacement);
+				}
+			}
 			asm = prepend + "\r\n" + asm + "\r\n" + append;
 			this.finalASM = asm;
 			return asm;
@@ -195,6 +211,16 @@ public class JsonTestManager {
 			this.arguments = arguments;
 			this.stderr = stderr;
 			this.code = code;
+		}
+	}
+
+	private static final class ReplacementEntry {
+		public final String source;
+		public final String replacement;
+
+		private ReplacementEntry(String source, String replacement) {
+			this.source = source;
+			this.replacement = replacement;
 		}
 	}
 
@@ -313,6 +339,19 @@ public class JsonTestManager {
 				}
 			}
 
+			ReplacementEntry[] replacement = null;
+			if (obj.containsArray("replacement")) {
+				JsonArray replacements = obj.getArray("replacement");
+				replacement = new ReplacementEntry[replacements.Value.size()];
+				int index = 0;
+				for (JsonValue val : replacements.Value) {
+					String source = val.asObject().getString("from").Value;
+					String to = val.asObject().getString("to").Value;
+					replacement[index] = new ReplacementEntry(source, to);
+					index++;
+				}
+			}
+
 			String id = obj.getString("id").Value;
 			String description = obj.getString("description").Value;
 			String title = obj.getString("title").Value;
@@ -323,7 +362,8 @@ public class JsonTestManager {
 			boolean hidden = obj.containsNumber("hidden") ? obj.getNumber("hidden").Value == 1 : false;
 			boolean secret = obj.containsNumber("secret") ? obj.getNumber("secret").Value == 1 : false;
 			boolean replace = obj.containsNumber("replace") ? obj.getNumber("replace").Value == 1 : false;
-			return new JsonTest(id, title, description, tvd, initialASM, append, prepend, hidden, secret, allowedInstructions, replace);
+
+			return new JsonTest(id, title, description, tvd, initialASM, append, prepend, hidden, secret, allowedInstructions, replace, replacement);
 		}
 		return null;
 	}

@@ -17,16 +17,18 @@ public class MyExec {
 		public final String returnedSTDOUT;
 		public final String expectedSTDERR;
 		public final String returnedSTDERR;
+		public final String STDIN;
 
 		public final boolean passed;
 
-		public TestResultsExpectations(int expectedCode, int returnedCode, String expectedSTDOUT, String returnedSTDOUT, String expectedSTDERR, String returnedSTDERR) {
+		public TestResultsExpectations(int expectedCode, int returnedCode, String expectedSTDOUT, String returnedSTDOUT, String expectedSTDERR, String returnedSTDERR, String STDIN) {
 			this.expectedCode = expectedCode;
 			this.returnedCode = returnedCode;
 			this.expectedSTDOUT = expectedSTDOUT;
 			this.returnedSTDOUT = returnedSTDOUT;
 			this.expectedSTDERR = expectedSTDERR;
 			this.returnedSTDERR = returnedSTDERR;
+			this.STDIN = STDIN;
 
 			this.passed = expectedCode == returnedCode && expectedSTDOUT.equals(returnedSTDOUT) && expectedSTDERR.equals(returnedSTDERR);
 		}

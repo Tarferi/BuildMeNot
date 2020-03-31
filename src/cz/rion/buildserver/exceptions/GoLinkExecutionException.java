@@ -6,7 +6,7 @@ public class GoLinkExecutionException extends Exception {
 
 	public final String description;
 	private final Exception exception;
-	private final MyExecResult execResult;
+	public final MyExecResult execResult;
 
 	public GoLinkExecutionException(String description) {
 		this(description, null);

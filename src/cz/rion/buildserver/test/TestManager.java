@@ -38,6 +38,31 @@ public class TestManager {
 			this.full = full;
 		}
 
+		public int getGoodTests() {
+			int ret = 0;
+			for (int i = 0; i < full.length; i++) {
+				if (full[i] != null) {
+					if (full[i].passed) {
+						ret++;
+					}
+				}
+			}
+			return ret;
+		}
+
+		public int getBadTests() {
+			int ret = 0;
+			for (int i = 0; i < full.length; i++) {
+				if (full[i] != null) {
+					if (full[i].passed) {
+						continue;
+					}
+				}
+				ret++;
+			}
+			return ret;
+		}
+
 		public JsonObject getFailedDescriptionData() {
 			JsonObject res = new JsonObject();
 			JsonArray result = new JsonArray(new ArrayList<JsonValue>());
@@ -47,23 +72,30 @@ public class TestManager {
 				if (full[i] != null) {
 					if (!full[i].passed) {
 						JsonObject obj = new JsonObject();
+						boolean showStdin = false;
 						if (full[i].expectedCode != full[i].returnedCode) {
 							JsonObject codeObj = new JsonObject();
 							codeObj.add("expected", new JsonNumber(full[i].expectedCode));
 							codeObj.add("got", new JsonNumber(full[i].returnedCode));
 							obj.add("code", codeObj);
+							showStdin = true;
 						}
 						if (!full[i].expectedSTDOUT.equals(full[i].returnedSTDOUT)) {
 							JsonObject codeObj = new JsonObject();
 							codeObj.add("expected", new JsonString(full[i].expectedSTDOUT));
 							codeObj.add("got", new JsonString(full[i].returnedSTDOUT));
 							obj.add("stdout", codeObj);
+							showStdin = true;
 						}
 						if (!full[i].expectedSTDERR.equals(full[i].returnedSTDERR)) {
 							JsonObject codeObj = new JsonObject();
 							codeObj.add("expected", new JsonString(full[i].expectedSTDERR));
 							codeObj.add("got", new JsonString(full[i].returnedSTDERR));
 							obj.add("stderr", codeObj);
+							showStdin = true;
+						}
+						if (showStdin) {
+							obj.add("stdin", new JsonString(full[i].STDIN));
 						}
 						result.add(obj);
 					}
@@ -144,26 +176,57 @@ public class TestManager {
 			}
 		}
 		int code = 1;
+		int good = 0;
+		int bad = 0;
+		JsonArray rawMessage = new JsonArray(new ArrayList<JsonValue>());
 		String message = "<span class='log_err'>Neznámá chyba</span>";
 		TestResult testResult = null;
 		if (test == null) {
 			code = 1;
+			rawMessage.add(new JsonString("Uvedený test nebyl nalezen"));
 			message = "<span class='log_err'>Uvedený test nebyl nalezen</span>";
 		} else {
 			String err = test.VerifyCode(asm);
 			if (err != null) {
+				rawMessage.add(new JsonString(err));
 				message = "<span class='log_err'>" + err + "</span>";
 			} else {
 				asm = test.GetFinalASM(login, asm);
 				RunResult result = null;
 				try {
-					result = NasmWrapper.run("./test" + builderID, asm, "", 2000, false, false);
+					result = NasmWrapper.run("./test_" + builderID, asm, "", 2000, false, false);
 				} catch (NasmExecutionException e) {
 					code = 1;
+					JsonObject obj = new JsonObject();
+					obj.add("description", new JsonString("NASM failed"));
+					if (e.execResult != null) {
+						obj.add("stdout", new JsonString(e.execResult.stdout));
+						obj.add("stderr", new JsonString(e.execResult.stderr));
+						obj.add("ret", new JsonNumber(e.execResult.returnCode));
+					}
+					rawMessage.add(obj);
 					message = "<span class='log_err'>Nepodaøilo se pøeložit kód<br />" + e.getDescription().replaceAll("\n", "<br />") + "</span>";
 				} catch (GoLinkExecutionException e) {
+					code = 1;
+					JsonObject obj = new JsonObject();
+					obj.add("description", new JsonString("LINKER failed"));
+					if (e.execResult != null) {
+						obj.add("stdout", new JsonString(e.execResult.stdout));
+						obj.add("stderr", new JsonString(e.execResult.stderr));
+						obj.add("ret", new JsonNumber(e.execResult.returnCode));
+					}
+					rawMessage.add(obj);
 					message = "<span class='log_err'>Nepodaøilo se pøeložit kód</span>";
 				} catch (RuntimeExecutionException e) { // Should never happen
+					code = 1;
+					JsonObject obj = new JsonObject();
+					obj.add("description", new JsonString("RUN failed"));
+					if (e.execResult != null) {
+						obj.add("stdout", new JsonString(e.execResult.stdout));
+						obj.add("stderr", new JsonString(e.execResult.stderr));
+						obj.add("ret", new JsonNumber(e.execResult.returnCode));
+					}
+					rawMessage.add(obj);
 					message = "<span class='log_err'>Nepodaøilo se pøeložit kód</span>";
 				}
 				if (result != null) {
@@ -174,14 +237,20 @@ public class TestManager {
 				if (testResult != null) {
 					code = testResult.passed ? 0 : 1;
 					message = testResult.data;
+					good = testResult.getGoodTests();
+					bad = testResult.getBadTests();
 				}
 			}
 		}
 		JsonObject obj = new JsonObject();
 		obj.add("code", new JsonNumber(code));
 		obj.add("result", new JsonString(message));
+		obj.add("good", new JsonNumber(good));
+		obj.add("bad", new JsonNumber(bad));
 		if (testResult != null) {
 			obj.add("details", testResult.getFailedDescriptionData());
+		} else if (!rawMessage.Value.isEmpty()) {
+			obj.add("details", rawMessage);
 		}
 		return obj;
 	}

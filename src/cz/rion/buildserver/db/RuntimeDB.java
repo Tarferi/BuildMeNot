@@ -30,6 +30,7 @@ public class RuntimeDB extends LayeredMetaDB {
 		makeTable("pageLoads", KEY("ID"), NUMBER("session_id"), TEXT("address"), NUMBER("port"), TEXT("target"), DATE("creation_time"), NUMBER("result"));
 		makeTable("dbV1", KEY("ID"), TEXT("address"), NUMBER("port"), BIGTEXT("asm"), TEXT("test_id"), DATE("creation_time"), NUMBER("code"), BIGTEXT("result"), BIGTEXT("full"));
 		makeTable("dbV1Good", KEY("ID"), TEXT("address"), NUMBER("port"), BIGTEXT("asm"), TEXT("test_id"), DATE("creation_time"), NUMBER("code"), BIGTEXT("result"), BIGTEXT("full"));
+		makeRetestsTable();
 	}
 
 	private String reverse(String str) {
@@ -100,7 +101,7 @@ public class RuntimeDB extends LayeredMetaDB {
 		}
 	}
 
-	public void storeCompilation(String remoteAddress, Date time, String asm, int session_id, String test_id, int resultCode, String result, String full, int user_id) throws DatabaseException {
+	public void storeCompilation(String remoteAddress, Date time, String asm, int session_id, String test_id, int resultCode, String result, String full, int user_id, String details, int good_test, int bad_tests) throws DatabaseException {
 		synchronized (syncer) {
 			String[] addrParts = reverse(remoteAddress).split(":", 2);
 			String address = remoteAddress;
@@ -109,8 +110,17 @@ public class RuntimeDB extends LayeredMetaDB {
 				address = reverse(addrParts[1]);
 				port = Integer.parseInt(reverse(addrParts[0]));
 			}
-			executeExc("INSERT INTO compilations (address, port, asm, test_id, user_id, session_id, creation_time, code, result, full) VALUES ('?', ?, '?', '?', ?, ?, ?, ?, '?', '?');", address, port, asm, test_id, user_id, session_id, time.getTime(), resultCode, result, full);
+			executeExc("INSERT INTO compilations (address, port, asm, test_id, user_id, session_id, creation_time, code, result, full, bad_tests_details, bad_tests, good_tests) VALUES ('?', ?, '?', '?', ?, ?, ?, ?, '?', '?', '?', ?, ?);", address, port, asm, test_id, user_id, session_id, time.getTime(), resultCode, result, full, details, bad_tests, good_test);
 		}
+	}
+
+	private void makeRetestsTable() throws DatabaseException {
+		this.makeTable("retests", KEY("ID"), NUMBER("compilation_id"), DATE("creation_time"), NUMBER("code"), TEXT("result"), TEXT("full"), NUMBER("good_tests"), NUMBER("bad_tests"), BIGTEXT("bad_tests_details"), NUMBER("original_code"), BIGTEXT("original_result"), BIGTEXT("original_full"));
+	}
+	
+	public void resetRetestsDB() throws DatabaseException {
+		execute("DROP TABLE IF EXISTS retests");
+		makeRetestsTable();
 	}
 
 	public int getUserIDFromLogin(String login) throws DatabaseException {

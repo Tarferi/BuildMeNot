@@ -157,9 +157,6 @@ public class HTTPTestClient extends HTTPFileProviderClient {
 
 							returnValue = tests.run(BuilderID, test_id, asm, getPermissions().Login);
 							testsPassed = returnValue.containsNumber("code") ? returnValue.getNumber("code").Value == 0 : false;
-							if (returnValue.containsObject("details") && !this.getPermissions().allowDetails(test_id)) {
-								returnValue.remove("details");
-							}
 
 						} else if (obj.containsString("action")) {
 							String act = obj.getString("action").Value;
@@ -226,8 +223,16 @@ public class HTTPTestClient extends HTTPFileProviderClient {
 				}
 			}
 		}
-		String resutJson = returnValue.getJsonString();
-		return encode(resutJson);
+		String resultJson;
+		if (returnValue.containsObject("details") && !this.getPermissions().allowDetails(test_id)) {
+			JsonValue details = returnValue.get("details");
+			returnValue.remove("details");
+			resultJson = returnValue.getJsonString(); // So that the "details" are not sent
+			returnValue.add("details", details);
+		} else {
+			resultJson = returnValue.getJsonString();
+		}
+		return encode(resultJson);
 	}
 
 	public boolean haveTestsPassed() {
@@ -252,7 +257,11 @@ public class HTTPTestClient extends HTTPFileProviderClient {
 		if (this.getIntention() == HTTPClientIntentType.PERFORM_TEST) {
 			int code = returnValue.asObject().getNumber("code").Value;
 			String result = returnValue.asObject().getString("result").Value;
-			db.storeCompilation(client.getRemoteSocketAddress().toString(), new Date(), asm, getPermissions().getSessionID(), test_id, code, result, getReducedResult(), getPermissions().UserID);
+			String details = returnValue.asObject().contains("details") ? returnValue.asObject().get("details").getJsonString() : "[]";
+			int good_tests = returnValue.asObject().containsNumber("good") ? returnValue.asObject().getNumber("good").Value : 0;
+			int bad_tests = returnValue.asObject().containsNumber("bad") ? returnValue.asObject().getNumber("bad").Value : 0;
+
+			db.storeCompilation(client.getRemoteSocketAddress().toString(), new Date(), asm, getPermissions().getSessionID(), test_id, code, result, getReducedResult(), getPermissions().UserID, details, good_tests, bad_tests);
 		}
 	}
 }

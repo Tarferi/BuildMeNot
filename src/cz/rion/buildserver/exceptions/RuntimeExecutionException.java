@@ -6,7 +6,7 @@ public class RuntimeExecutionException extends Exception {
 
 	public final String description;
 	private final Exception exception;
-	private final MyExecResult execResult;
+	public final MyExecResult execResult;
 
 	public RuntimeExecutionException(String description) {
 		this(description, null);

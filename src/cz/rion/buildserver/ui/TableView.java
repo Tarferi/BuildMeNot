@@ -11,6 +11,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.regex.Matcher;
 
+import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
@@ -116,6 +117,7 @@ public class TableView extends JPanel {
 		this.setLayout(new BorderLayout());
 		table = new JTable();
 		table.getTableHeader().setFont(FontProvider.LabelFont);
+
 		table.addComponentListener(new ComponentAdapter() {
 			@Override
 			public void componentResized(ComponentEvent e) {
@@ -146,6 +148,7 @@ public class TableView extends JPanel {
 		// table.getTableHeader().setFont(FontProvider.LabelFont);
 		renderRight.setHorizontalAlignment(SwingConstants.RIGHT);
 		renderBigString.setHorizontalAlignment(SwingConstants.CENTER);
+		((DefaultTableCellRenderer) table.getTableHeader().getDefaultRenderer()).setHorizontalAlignment(JLabel.CENTER);
 
 		table.addMouseListener(new MouseAdapter() {
 			public void mousePressed(MouseEvent mouseEvent) {
