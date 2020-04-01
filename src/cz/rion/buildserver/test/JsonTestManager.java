@@ -184,10 +184,15 @@ public class JsonTestManager {
 			if (replace) {
 				asm = asm.replaceAll("\\$LOGIN\\$", login);
 			}
+			asm = asm.replaceAll("(?i)cextern", "cextern");
+			asm = asm.replaceAll("(?i)extern", "extern");
 			if (replacement != null) {
 				for (ReplacementEntry rep : replacement) {
 					asm = asm.replaceAll(rep.source, rep.replacement);
 				}
+			}
+			if (asm.toLowerCase().contains("extern")) {
+				return null;
 			}
 			asm = prepend + "\r\n" + asm + "\r\n" + append;
 			this.finalASM = asm;
