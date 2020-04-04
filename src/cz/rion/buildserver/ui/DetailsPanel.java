@@ -4,8 +4,10 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.ScrollPaneConstants;
 
+import cz.rion.buildserver.compression.Decompressor;
 import cz.rion.buildserver.db.SQLiteDB.Field;
 import cz.rion.buildserver.db.SQLiteDB.FieldType;
+import cz.rion.buildserver.exceptions.CompressionException;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.json.JsonValue.JsonNumber;
 import cz.rion.buildserver.json.JsonValue.JsonString;
@@ -65,7 +67,16 @@ public class DetailsPanel extends JPanel {
 			boolean editable = !headers[i].name.equals("ID") && editingTable;
 			if (headers[i].IsBigString()) {
 				String dataEditPos = "cell 1 " + (i + totalDoubleTextsPlaced) + " 2 2,growx,growy";
-				final MyTextArea area = new MyTextArea(data[i]);
+				String textData = data[i];
+
+				try {
+					textData = Decompressor.decompress(textData);
+				} catch (CompressionException e) {
+					e.printStackTrace();
+					textData = "<failed to decompress>";
+				}
+
+				final MyTextArea area = new MyTextArea(textData);
 				retrievers[i] = new ComponentManipulator() {
 
 					@Override

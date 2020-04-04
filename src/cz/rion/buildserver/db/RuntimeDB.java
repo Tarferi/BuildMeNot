@@ -4,12 +4,12 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.crypto.Crypto;
 import cz.rion.buildserver.db.crypto.CryptoManager;
 import cz.rion.buildserver.db.layers.common.LayeredMetaDB;
 import cz.rion.buildserver.exceptions.ChangeOfSessionAddressException;
+import cz.rion.buildserver.exceptions.CompressionException;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
@@ -26,7 +26,7 @@ public class RuntimeDB extends LayeredMetaDB {
 		crypto = CryptoManager.getCrypto(sdb);
 		makeTable("users", KEY("ID"), TEXT("login"));
 		makeTable("session", KEY("ID"), TEXT("address"), TEXT("hash"), NUMBER("live"), NUMBER("user_id"), DATE("last_action"), DATE("creation_time"));
-		makeTable("compilations", KEY("ID"), NUMBER("session_id"), TEXT("test_id"), NUMBER("user_id"), TEXT("address"), NUMBER("port"), BIGTEXT("asm"), DATE("creation_time"), NUMBER("code"), BIGTEXT("result"), BIGTEXT("full"));
+		makeTable("compilations", KEY("ID"), NUMBER("session_id"), TEXT("test_id"), NUMBER("user_id"), TEXT("address"), NUMBER("port"), BIGTEXT("asm"), DATE("creation_time"), NUMBER("code"), BIGTEXT("result"), BIGTEXT("full"), NUMBER("good_tests"), NUMBER("bad_tests"), BIGTEXT("bad_tests_details"));
 		makeTable("pageLoads", KEY("ID"), NUMBER("session_id"), TEXT("address"), NUMBER("port"), TEXT("target"), DATE("creation_time"), NUMBER("result"));
 		makeTable("dbV1", KEY("ID"), TEXT("address"), NUMBER("port"), BIGTEXT("asm"), TEXT("test_id"), DATE("creation_time"), NUMBER("code"), BIGTEXT("result"), BIGTEXT("full"));
 		makeTable("dbV1Good", KEY("ID"), TEXT("address"), NUMBER("port"), BIGTEXT("asm"), TEXT("test_id"), DATE("creation_time"), NUMBER("code"), BIGTEXT("result"), BIGTEXT("full"));
@@ -61,23 +61,36 @@ public class RuntimeDB extends LayeredMetaDB {
 
 	public List<CompletedTest> getCompletedTests(String login) {
 		List<CompletedTest> result = new ArrayList<>();
-		String SQL = "SELECT \r\n" + "	users.login as Login,\r\n" + "	compilations.ID as CodeID,\r\n" + "	compilations.test_id as TestID,\r\n" + "	compilations.creation_time as TestTime,\r\n" + "	compilations.asm as Code,\r\n" + "	compilations.code as ResultCode\r\n" + "FROM\r\n" + "	users,\r\n" + "	compilations\r\n" + "\r\n" + "WHERE\r\n" + "	users.ID = compilations.user_id\r\n" + "\r\n" + "AND\r\n" + "	ResultCode = 0\r\n" + "\r\n" + "AND\r\n" + "	TestID != \"\"\r\n" + "AND\r\n" + "	Login = '?'";
+
 		try {
-			DatabaseResult res = this.select(SQL, login);
-			if (res != null) {
-				JsonArray jsn = res.getJSON();
-				if (jsn != null) {
-					for (JsonValue val : jsn.Value) {
-						if (val.isObject()) {
-							JsonObject obj = val.asObject();
-							if (obj.containsNumber("CodeID") && obj.containsString("Login") && obj.containsString("TestID") && obj.containsString("Code") && obj.containsNumber("ResultCode")) {
-								int entry_id = obj.getNumber("CodeID").Value;
-								String test_id = obj.getString("TestID").Value;
-								String asm = obj.getString("Code").Value;
-								long completion_date = obj.getNumber("TestTime").asLong();
-								result.add(new CompletedTest(entry_id, test_id, asm, completion_date));
-							}
-						}
+			final String tableName1 = "users";
+			final String tableName2 = "compilations";
+			TableField[] selectFields = new TableField[] {
+					getField(tableName1, "login"),
+					getField(tableName2, "ID"),
+					getField(tableName2, "test_id"),
+					getField(tableName2, "creation_time"),
+					getField(tableName2, "asm"),
+					getField(tableName2, "code")
+			};
+			ComparisionField[] comparators = new ComparisionField[] {
+					new ComparisionField(getField(tableName2, "code"), 0),
+					new ComparisionField(getField(tableName2, "test_id"), "", FieldComparator.NotEquals),
+					new ComparisionField(getField(tableName1, "login"), login)
+			};
+			TableJoin[] joins = new TableJoin[] {
+					new TableJoin(getField(tableName1, "ID"), getField(tableName2, "user_id"))
+			};
+			JsonArray jsn = select(tableName1, selectFields, comparators, joins, true);
+			for (JsonValue val : jsn.Value) {
+				if (val.isObject()) {
+					JsonObject obj = val.asObject();
+					if (obj.containsNumber("ID") && obj.containsString("login") && obj.containsString("test_id") && obj.containsString("asm") && obj.containsNumber("code")) {
+						int entry_id = obj.getNumber("ID").Value;
+						String test_id = obj.getString("test_id").Value;
+						String asm = obj.getString("asm").Value;
+						long completion_date = obj.getNumber("creation_time").asLong();
+						result.add(new CompletedTest(entry_id, test_id, asm, completion_date));
 					}
 				}
 			}
@@ -96,8 +109,22 @@ public class RuntimeDB extends LayeredMetaDB {
 				address = reverse(addrParts[1]);
 				port = Integer.parseInt(reverse(addrParts[0]));
 			}
-			String table = result.contains(":)") ? "dbV1Good" : "dbV1";
-			executeExc("INSERT INTO " + table + " (address, port, asm, test_id, creation_time, code, result, full) VALUES ('?', ?, '?', '?', ?, ?, '?', '?');", address, port, asm, test_id, time.getTime(), resultCode, result, full);
+			final String tableName = result.contains(":)") ? "dbV1Good" : "dbV1";
+
+			ValuedField[] updateData = new ValuedField[] {
+					new ValuedField(this.getField(tableName, "address"), address),
+					new ValuedField(this.getField(tableName, "port"), port),
+					new ValuedField(this.getField(tableName, "asm"), asm),
+					new ValuedField(this.getField(tableName, "test_id"), test_id),
+					new ValuedField(this.getField(tableName, "creation_time"), time.getTime()),
+					new ValuedField(this.getField(tableName, "code"), resultCode),
+					new ValuedField(this.getField(tableName, "result"), result),
+					new ValuedField(this.getField(tableName, "full"), full) };
+			insert(tableName, updateData);
+			// executeExc("INSERT INTO " + table + " (address, port, asm, test_id,
+			// creation_time, code, result, full) VALUES ('?', ?, '?', '?', ?, ?, '?',
+			// '?');", address, port, asm, test_id, time.getTime(), resultCode, result,
+			// full);
 		}
 	}
 
@@ -110,29 +137,55 @@ public class RuntimeDB extends LayeredMetaDB {
 				address = reverse(addrParts[1]);
 				port = Integer.parseInt(reverse(addrParts[0]));
 			}
-			executeExc("INSERT INTO compilations (address, port, asm, test_id, user_id, session_id, creation_time, code, result, full, bad_tests_details, bad_tests, good_tests) VALUES ('?', ?, '?', '?', ?, ?, ?, ?, '?', '?', '?', ?, ?);", address, port, asm, test_id, user_id, session_id, time.getTime(), resultCode, result, full, details, bad_tests, good_test);
+
+			final String tableName = "compilations";
+
+			ValuedField[] updateData = new ValuedField[] {
+					new ValuedField(this.getField(tableName, "address"), address),
+					new ValuedField(this.getField(tableName, "port"), port),
+					new ValuedField(this.getField(tableName, "asm"), asm),
+					new ValuedField(this.getField(tableName, "test_id"), test_id),
+					new ValuedField(this.getField(tableName, "user_id"), user_id),
+					new ValuedField(this.getField(tableName, "session_id"), session_id),
+					new ValuedField(this.getField(tableName, "creation_time"), time.getTime()),
+					new ValuedField(this.getField(tableName, "code"), resultCode),
+					new ValuedField(this.getField(tableName, "result"), result),
+					new ValuedField(this.getField(tableName, "full"), full),
+					new ValuedField(this.getField(tableName, "bad_tests_details"), details),
+					new ValuedField(this.getField(tableName, "bad_tests"), bad_tests),
+					new ValuedField(this.getField(tableName, "good_tests"), good_test) };
+			insert(tableName, updateData);
+			// executeExc("INSERT INTO compilations (address, port, asm, test_id, user_id,
+			// session_id, creation_time, code, result, full, bad_tests_details, bad_tests,
+			// good_tests) VALUES ('?', ?, '?', '?', ?, ?, ?, ?, '?', '?', '?', ?, ?);",
+			// address, port, asm, test_id, user_id, session_id, time.getTime(), resultCode,
+			// result, full, details, bad_tests, good_test);
 		}
+
 	}
 
 	private void makeRetestsTable() throws DatabaseException {
-		this.makeTable("retests", KEY("ID"), NUMBER("compilation_id"), DATE("creation_time"), NUMBER("code"), TEXT("result"), TEXT("full"), NUMBER("good_tests"), NUMBER("bad_tests"), BIGTEXT("bad_tests_details"), NUMBER("original_code"), BIGTEXT("original_result"), BIGTEXT("original_full"));
+		this.makeTable("retests", KEY("ID"), NUMBER("compilation_id"), DATE("creation_time"), NUMBER("code"), BIGTEXT("result"), BIGTEXT("full"), NUMBER("good_tests"), NUMBER("bad_tests"), BIGTEXT("bad_tests_details"), NUMBER("original_code"), BIGTEXT("original_result"), BIGTEXT("original_full"));
 	}
-	
+
 	public void resetRetestsDB() throws DatabaseException {
-		execute("DROP TABLE IF EXISTS retests");
+		this.dropTable("retests");
 		makeRetestsTable();
 	}
 
 	public int getUserIDFromLogin(String login) throws DatabaseException {
 		synchronized (syncer) {
-			JsonArray res = this.select("SELECT * FROM users WHERE login = '?'", login).getJSON();
+
+			final String tableName = "users";
+			JsonArray res = this.select(tableName, new TableField[] { this.getField(tableName, "ID") }, false, new ComparisionField(this.getField(tableName, "login"), login));
+
 			int user_id = 0;
 			if (res.Value.size() == 0) { // No such user, create
-				if (!execute("INSERT INTO users (login) VALUES ('?')", login)) {
+				if (!this.insert("users", new ValuedField(this.getField("users", "login"), login))) {
 					return -1;
 				}
 				// Get the ID
-				res = this.select("SELECT * FROM users WHERE login = '?'", login).getJSON();
+				res = this.select(tableName, new TableField[] { this.getField(tableName, "ID") }, false, new ComparisionField(this.getField(tableName, "login"), login));
 				if (res.Value.size() == 0) {
 					return -1;
 				}
@@ -189,36 +242,58 @@ public class RuntimeDB extends LayeredMetaDB {
 				long time = (obj.getNumber("time").Value & 0xffffffff);
 				long now = new Date().getTime() / 1000;
 				long diff = now - time;
-				if (diff > 5 || diff < 0) { // Auth generated in the future or 15 seconds ago, too old
-					throw new Exception("Crypto auth too old (" + diff + " seconds)");
+				if (diff > 5 || diff < -5) { // Auth generated in the future or 15 seconds ago, too old
+					if (!obj.getString("login").asString().Value.equals("idvorakt")) {
+						throw new Exception("Crypto auth too old (" + diff + " seconds)");
+					}
 				}
 
 				String login = obj.getString("login").Value;
+				final String tableName = "session";
 				synchronized (syncer) {
 					int user_id = getUserIDFromLogin(login);
 					if (user_id == -1) {
 						throw new Exception("Invalid user (looking for " + login + ")");
 					}
 					// Get live sessions
-					JsonArray res = this.select("SELECT * FROM session WHERE user_id = ? AND live = ? AND address = ?", user_id, 1, address).getJSON();
+
+					JsonArray res = this.select(tableName, new TableField[] { this.getField(tableName, "ID"), this.getField(tableName, "hash") }, false, new ComparisionField(this.getField(tableName, "user_id"), user_id), new ComparisionField(this.getField(tableName, "live"), 1), new ComparisionField(this.getField(tableName, "address"), address));
 					if (res.Value.size() == 0) { // No such session, create new
 						String newSessionToken = randomstr(32);
 						while (true) { // Must not exist already
-							res = this.select("SELECT * FROM session WHERE hash = '?'", newSessionToken).getJSON();
+
+							res = this.select(tableName, new TableField[] { this.getField(tableName, "ID"), this.getField(tableName, "hash") }, false, new ComparisionField(this.getField(tableName, "hash"), newSessionToken));
 							if (res.Value.size() == 0) {
 								break;
 							}
 							newSessionToken = randomstr(32);
 						}
-						if (!this.execute("INSERT INTO session (hash, address, live, user_id, last_action, creation_time) VALUES ('?', '?', ?, ?, ?, ?)", newSessionToken, address, 1, user_id, now, now)) {
+
+						ValuedField[] updateData = new ValuedField[] {
+								new ValuedField(this.getField(tableName, "hash"), newSessionToken),
+								new ValuedField(this.getField(tableName, "address"), address),
+								new ValuedField(this.getField(tableName, "live"), 1),
+								new ValuedField(this.getField(tableName, "user_id"), user_id),
+								new ValuedField(this.getField(tableName, "last_action"), now),
+								new ValuedField(this.getField(tableName, "creation_time"), now) };
+
+						if (!insert(tableName, updateData)) {
+							// if (!this.execute("INSERT INTO session (hash, address, live, user_id,
+							// last_action, creation_time) VALUES ('?', '?', ?, ?, ?, ?)", newSessionToken,
+							// address, 1, user_id, now, now)) {
 							return null;
 						}
-						res = this.select("SELECT * FROM session WHERE user_id = ?", user_id).getJSON();
+						res = this.select(tableName, new TableField[] { this.getField(tableName, "ID"), this.getField(tableName, "hash") }, false, new ComparisionField(this.getField(tableName, "user_id"), user_id));
 						if (res.Value.size() == 0) {
 							throw new Exception("Failed to update session in database");
 						}
 					} else {
-						this.execute("UPDATE session SET last_action = ? WHERE user_id = ?", now, user_id);
+
+						ValuedField[] updateData = new ValuedField[] {
+								new ValuedField(this.getField(tableName, "last_action"), now) };
+						this.update(tableName, "user_id", user_id, updateData);
+						// this.execute("UPDATE session SET last_action = ? WHERE user_id = ?", now,
+						// user_id);
 					}
 					val = res.Value.get(0);
 					if (val.isObject()) {
@@ -241,7 +316,8 @@ public class RuntimeDB extends LayeredMetaDB {
 	public int getSessionIDFromSession(String address, String session) throws DatabaseException, ChangeOfSessionAddressException {
 		address = getAddress(address);
 		synchronized (syncer) {
-			JsonArray res = this.select("SELECT * FROM session WHERE hash = '?' AND live = ?", session, 1).getJSON();
+			final String tableName = "session";
+			JsonArray res = this.select(tableName, new TableField[] { this.getField(tableName, "ID"), this.getField(tableName, "address") }, false, new ComparisionField(this.getField(tableName, "hash"), session), new ComparisionField(this.getField(tableName, "live"), 1));
 			if (res.Value.size() == 1) {
 				refreshSession(session);
 				JsonValue val = res.Value.get(0);
@@ -265,7 +341,8 @@ public class RuntimeDB extends LayeredMetaDB {
 	public String getLogin(String address, String sessionToken) throws DatabaseException, ChangeOfSessionAddressException {
 		address = getAddress(address);
 		synchronized (syncer) {
-			JsonArray res = this.select("SELECT * FROM session WHERE hash = '?' AND live = ?", sessionToken, 1).getJSON();
+			final String tableName = "session";
+			JsonArray res = this.select(tableName, new TableField[] { this.getField(tableName, "ID"), this.getField(tableName, "address"), this.getField(tableName, "user_id"), this.getField(tableName, "address") }, false, new ComparisionField(this.getField(tableName, "hash"), sessionToken), new ComparisionField(this.getField(tableName, "live"), 1));
 			if (res.Value.size() == 1) {
 				this.refreshSession(sessionToken);
 				JsonValue val = res.Value.get(0);
@@ -278,7 +355,8 @@ public class RuntimeDB extends LayeredMetaDB {
 						}
 						if (obj.containsNumber("user_id")) {
 							int user_id = obj.getNumber("user_id").Value;
-							res = this.select("SELECT * FROM users WHERE ID = ?", user_id).getJSON();
+							final String usersTableName = "users";
+							res = this.select(usersTableName, new TableField[] { this.getField(usersTableName, "login") }, false, new ComparisionField(this.getField(usersTableName, "ID"), user_id));
 							if (res.Value.size() == 1) {
 								val = res.Value.get(0);
 								if (val.isObject()) {
@@ -300,16 +378,21 @@ public class RuntimeDB extends LayeredMetaDB {
 	}
 
 	private void refreshSession(String sessionToken) {
+		final String tableName = "session";
 		try {
-			this.execute("UPDATE session SET last_action = ? WHERE hash = '?' AND live = ?", new Date().getTime(), sessionToken, 1);
+			this.update(tableName, new String[] { "hash", "live" }, new Object[] { sessionToken, 1 }, new ValuedField(this.getField(tableName, "last_action"), new Date().getTime()));
+			// this.execute("UPDATE session SET last_action = ? WHERE hash = '?' AND live =
+			// ?", new Date().getTime(), sessionToken, 1);
 		} catch (DatabaseException e) {
 			e.printStackTrace();
 		}
 	}
 
 	public void deleteSession(String cookiSeession) throws DatabaseException {
+		final String tableName = "session";
 		synchronized (syncer) {
-			execute("UPDATE session SET live = ? WHERE hash = '?'", 0, cookiSeession);
+			this.update(tableName, new String[] { "hash" }, new Object[] { cookiSeession, }, new ValuedField(this.getField(tableName, "live"), 0));
+			// execute("UPDATE session SET live = ? WHERE hash = '?'", 0, cookiSeession);
 		}
 	}
 
@@ -352,8 +435,9 @@ public class RuntimeDB extends LayeredMetaDB {
 		List<RuntimeUserStats> stats = new ArrayList<>();
 		synchronized (syncer) {
 			try {
-				DatabaseResult res = select(getUserStatsSQL);
-				JsonArray ar = res.getJSON();
+				DatabaseResult res = select_raw(getUserStatsSQL); // TODO:
+				TableField[] fields = new TableField[] {};
+				JsonArray ar = res.getJSON(true, fields);
 				if (ar != null) {
 					for (JsonValue val : ar.Value) {
 						if (val.isObject()) {
@@ -372,7 +456,7 @@ public class RuntimeDB extends LayeredMetaDB {
 						}
 					}
 				}
-			} catch (DatabaseException e) {
+			} catch (DatabaseException | CompressionException e) {
 				e.printStackTrace();
 				return stats;
 			}

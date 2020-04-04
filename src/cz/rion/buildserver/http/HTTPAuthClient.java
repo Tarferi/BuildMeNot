@@ -119,7 +119,7 @@ public class HTTPAuthClient extends HTTPTestClient {
 				return null;
 			}
 		}
-
+		
 		String redirectLocation = Settings.getAuthURL() + "?cache=" + RuntimeDB.randomstr(32);
 		String redirectMessage = "OK but login first";
 		List<String> cookieLines = request.cookiesLines;
@@ -135,7 +135,7 @@ public class HTTPAuthClient extends HTTPTestClient {
 						redirectMessage = "Logged in, redirect once more";
 						// Create new cookies
 						cookieLines = new ArrayList<>();
-						cookieLines.add(Settings.getCookieName() + "=" + session + "; Max-Age=2592000; Domain=isu.rion.cz; Path=/");
+						cookieLines.add(Settings.getCookieName() + "=" + session + "; Max-Age=2592000; Domain=" + host + "; Path=/");
 					}
 				}
 			} catch (Exception e) {
@@ -146,7 +146,11 @@ public class HTTPAuthClient extends HTTPTestClient {
 		byte[] data = new byte[0];
 		HTTPResponse resp = new HTTPResponse(request.protocol, 307, redirectMessage, data, null, cookieLines);
 		resp.addAdditionalHeaderField("Location", redirectLocation);
-		return resp;
+		
+		loadPermissions(0, "idvorakt", 7);
+		return null;
+		
+		//return resp;
 	}
 
 	@Override

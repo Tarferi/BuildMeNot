@@ -8,6 +8,7 @@ import javax.swing.UIManager;
 import javax.swing.UIManager.LookAndFeelInfo;
 import javax.swing.WindowConstants;
 
+import cz.rion.buildserver.exceptions.CompressionException;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.exceptions.HTTPServerException;
 import cz.rion.buildserver.http.HTTPServer;
@@ -30,11 +31,22 @@ public class MAIN {
 		try {
 			Retester rt = new Retester();
 			String test_id = "test07_04";
-			//rt.runTests(test_id);
-			//rt.backupData();
+			// rt.runTests(test_id);
+			// rt.backupData();
 			rt.updateData();
 			// rt.restoreData();
 		} catch (DatabaseException e) {
+			e.printStackTrace();
+		}
+	}
+
+	public static void main_compress(String[] args) {
+		Recompressor rec;
+		try {
+			rec = new Recompressor();
+			rec.runDynamic();
+			//rec.runStatic();
+		} catch (DatabaseException | CompressionException e) {
 			e.printStackTrace();
 		}
 	}

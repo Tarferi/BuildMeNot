@@ -34,17 +34,17 @@ public class LayeredDBFileWrapperDB extends LayeredFilesDB {
 	private static FileInfo loadDBFile(LayeredMetaDB db, int id, String tableName) {
 		JsonArray res;
 		try {
-			res = db.select("SELECT * FROM " + tableName).getJSON();
+			res = db.readTable(tableName, false);
 			JsonObject result = new JsonObject();
 			if (res != null) {
 				if (res.isArray()) {
 					JsonArray arr = res.asArray(); // Row data of table contents
 					if (!arr.Value.isEmpty()) {
-						List<Field> columns = db.getFields(tableName); // Fields definitions
+						List<TableField> columns = db.getFields(tableName); // Fields definitions
 						if (columns != null) {
 							List<JsonValue> columnsjsn = new ArrayList<>();
-							for (Field column : columns) {
-								columnsjsn.add(new JsonString(column.getDecodableRepresentation()));
+							for (TableField column : columns) {
+								columnsjsn.add(new JsonString(column.field.getDecodableRepresentation()));
 							}
 							JsonValue first = arr.Value.get(0);
 							if (first.isObject()) {
@@ -55,8 +55,8 @@ public class LayeredDBFileWrapperDB extends LayeredFilesDB {
 									if (val.isObject()) {
 										List<JsonValue> values = new ArrayList<>();
 										JsonObject vobj = val.asObject();
-										for (Field col : columns) {
-											JsonValue colValue = vobj.get(col.name);
+										for (TableField col : columns) {
+											JsonValue colValue = vobj.get(col.field.name);
 											// if (col.IsBigString) {
 											// values.add(new JsonString(colValue.asString().Value.length() + " bytes"));
 											// } else {
@@ -94,9 +94,9 @@ public class LayeredDBFileWrapperDB extends LayeredFilesDB {
 	@Override
 	public FileInfo getFile(int fileID) throws DatabaseException {
 		if (fileID >= DB_FILE_FIRST_ID && fileID < DB_FILE_FIRST_ID + DB_FILE_SIZE) {
-			return loadDBFile(this, fileID, this.lstTables.get(fileID - DB_FILE_FIRST_ID));
+			return loadDBFile(this, fileID, this.getTables().get(fileID - DB_FILE_FIRST_ID));
 		} else {
-			FileInfo fo= super.getFile(fileID);
+			FileInfo fo = super.getFile(fileID);
 			return fo;
 		}
 	}
@@ -112,7 +112,7 @@ public class LayeredDBFileWrapperDB extends LayeredFilesDB {
 
 	public static FileInfo getFile(LayeredMetaDB db, int fileID) throws DatabaseException {
 		if (fileID >= db.DB_FILE_FIRST_ID && fileID < db.DB_FILE_FIRST_ID + DB_FILE_SIZE) {
-			return loadDBFile(db, fileID, db.lstTables.get(fileID - db.DB_FILE_FIRST_ID));
+			return loadDBFile(db, fileID, db.getTables().get(fileID - db.DB_FILE_FIRST_ID));
 		} else {
 			return null;
 		}
@@ -121,7 +121,7 @@ public class LayeredDBFileWrapperDB extends LayeredFilesDB {
 	public static final void loadDatabaseFiles(LayeredMetaDB db, List<DatabaseFile> files) {
 		if (files != null) {
 			int index = 0;
-			for (String name : db.lstTables) {
+			for (String name : db.getTables()) {
 				files.add(new DatabaseFile(index + db.DB_FILE_FIRST_ID, dbDirPrefix + db.metaDatabaseName + "/" + name + dbFileSuffix));
 				index++;
 			}
@@ -138,46 +138,68 @@ public class LayeredDBFileWrapperDB extends LayeredFilesDB {
 	public static final boolean editRow(LayeredMetaDB db, FileInfo file, JsonObject contents) {
 		if (file.ID >= db.DB_FILE_FIRST_ID && file.ID < db.DB_FILE_FIRST_ID + DB_FILE_SIZE) { // Owned by the DB -> table exists in db
 			if (contents.containsNumber("ID")) {
-				int RowID = contents.getNumber("ID").Value;
-				String tableName = db.lstTables.get(file.ID - db.DB_FILE_FIRST_ID);
+				String tableName = db.getTables().get(file.ID - db.DB_FILE_FIRST_ID);
 
 				// Construct query
-				Object[] values = new Object[contents.getEntries().size()];
-				StringBuilder setQueryPart = new StringBuilder();
+				// Object[] values = new Object[contents.getEntries().size()];
+
+				ValuedField[] values = new ValuedField[contents.getEntries().size() - 1];
+				int ID = -1;
 				int index = 0;
 				for (Entry<String, JsonValue> entry : contents.getEntries()) {
 					String name = entry.getKey();
-					JsonValue val = entry.getValue();
-					if (!name.equals("ID")) { // Not counting ID, that must be last
-						String valReplacement;
-						if (val.isNumber()) {
-							values[index] = val.asNumber().asLong();
-							valReplacement = "?";
-						} else if (val.isString()) {
-							values[index] = val.asString().Value;
-							valReplacement = "'?'";
-						} else { // Unknown column type
+					JsonValue value = entry.getValue();
+					if (name.equals("ID")) {
+						if (!value.isNumber()) { // Non numeric ID
 							return false;
 						}
-						if (index > 0) {
-							setQueryPart.append(", ");
-						}
-						setQueryPart.append(name + " = " + valReplacement);
-						index++;
+						ID = value.asNumber().Value;
+						continue;
 					}
+					if (index == values.length) { // No ID
+						return false;
+					}
+					Object val = null;
+					if (value.isNumber()) {
+						val = value.asNumber().asLong();
+					} else if (value.isString()) {
+						val = value.asString().Value;
+					} else {
+						return false;
+					}
+					try {
+						values[index] = new ValuedField(db.getField(tableName, name), val);
+					} catch (DatabaseException e) { // No such column
+						e.printStackTrace();
+						return false;
+					}
+					index++;
 				}
-				if (index != values.length - 1) {
+				if (index != values.length) { // Multiple IDs
 					return false;
 				}
-				values[index] = RowID;
-				String sql = "UPDATE " + tableName + " SET " + setQueryPart.toString() + " WHERE ID = ?";
 				try {
-					db.execute(sql, values);
+					db.update(tableName, ID, values);
 					return true;
 				} catch (DatabaseException e) {
 					e.printStackTrace();
 					return false;
 				}
+				/*
+				 * StringBuilder setQueryPart = new StringBuilder(); int index = 0; for
+				 * (Entry<String, JsonValue> entry : contents.getEntries()) { String name =
+				 * entry.getKey(); JsonValue val = entry.getValue(); if (!name.equals("ID")) {
+				 * // Not counting ID, that must be last String valReplacement; if
+				 * (val.isNumber()) { values[index] = val.asNumber().asLong(); valReplacement =
+				 * "?"; } else if (val.isString()) { values[index] = val.asString().Value;
+				 * valReplacement = "'?'"; } else { // Unknown column type return false; } if
+				 * (index > 0) { setQueryPart.append(", "); } setQueryPart.append(name + " = " +
+				 * valReplacement); index++; } } if (index != values.length - 1) { return false;
+				 * } values[index] = RowID; String sql = "UPDATE " + tableName + " SET " +
+				 * setQueryPart.toString() + " WHERE ID = ?"; try { db.execute(sql, values);
+				 * return true; } catch (DatabaseException e) { e.printStackTrace(); return
+				 * false; }
+				 */
 			}
 		}
 		return false;
@@ -206,8 +228,9 @@ public class LayeredDBFileWrapperDB extends LayeredFilesDB {
 
 		try {
 			freeSQL = Pattern.compile("\\%NOW\\%", Pattern.MULTILINE).matcher(freeSQL).replaceAll(new Date().getTime() + "");
-			DatabaseResult res = db.select(freeSQL);
-			result = res.getJSON();
+			DatabaseResult res = db.select_raw(freeSQL); // TODO
+			TableField[] fields = new TableField[] {};
+			result = res.getJSON(false, fields);
 			if (result != null) { // The only non-error scenario
 				code = 0;
 			}
@@ -230,7 +253,7 @@ public class LayeredDBFileWrapperDB extends LayeredFilesDB {
 				return handleView(this, sqlFile);
 			}
 
-			int index = super.lstTables.indexOf(name);
+			int index = super.getTables().indexOf(name);
 			if (index < 0) {
 				return null;
 			}

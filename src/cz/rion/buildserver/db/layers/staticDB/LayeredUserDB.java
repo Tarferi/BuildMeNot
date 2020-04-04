@@ -22,8 +22,8 @@ public abstract class LayeredUserDB extends LayeredDBFileWrapperDB {
 	public LayeredUserDB(String dbName) throws DatabaseException {
 		super(dbName);
 		this.makeTable("users", KEY("ID"), TEXT("name"), TEXT("usergroup"), TEXT("login"), BIGTEXT("permissions"));
-		loadLocalUsers();
-		loadRemoteUsers();
+		//loadLocalUsers();
+		//loadRemoteUsers();
 	}
 
 	private static class RemoteUser {
@@ -51,28 +51,27 @@ public abstract class LayeredUserDB extends LayeredDBFileWrapperDB {
 		LoadedUsers.clear();
 		LoadedUsersByLogin.clear();
 		try {
-			DatabaseResult res = this.select("SELECT * FROM users");
-			JsonArray data = res.getJSON();
-			if (data != null) {
-				for (JsonValue val : data.Value) {
-					if (!val.isObject()) {
-						return false;
-					}
-					JsonObject obj = val.asObject();
-					if (!obj.containsNumber("ID") || !obj.containsString("name") || !obj.containsString("login") || !obj.containsString("usergroup")) {
-						return false;
-					}
+
+			final String tableName = "users";
+			JsonArray data = select(tableName, new TableField[] { getField(tableName, "ID"), getField(tableName, "name"), getField(tableName, "login"), getField(tableName, "usergroup") }, true);
+			for (JsonValue val : data.Value) {
+				if (!val.isObject()) {
+					return false;
 				}
-				for (JsonValue val : data.Value) {
-					JsonObject obj = val.asObject();
-					int id = obj.getNumber("ID").Value;
-					String name = obj.getString("name").Value;
-					String usergroup = obj.getString("usergroup").Value;
-					String login = obj.getString("login").Value;
-					LocalUser user = new LocalUser(id, login, usergroup, name);
-					LoadedUsers.add(user);
-					LoadedUsersByLogin.put(login, user);
+				JsonObject obj = val.asObject();
+				if (!obj.containsNumber("ID") || !obj.containsString("name") || !obj.containsString("login") || !obj.containsString("usergroup")) {
+					return false;
 				}
+			}
+			for (JsonValue val : data.Value) {
+				JsonObject obj = val.asObject();
+				int id = obj.getNumber("ID").Value;
+				String name = obj.getString("name").Value;
+				String usergroup = obj.getString("usergroup").Value;
+				String login = obj.getString("login").Value;
+				LocalUser user = new LocalUser(id, login, usergroup, name);
+				LoadedUsers.add(user);
+				LoadedUsersByLogin.put(login, user);
 			}
 		} catch (DatabaseException e) {
 			e.printStackTrace();
@@ -128,7 +127,10 @@ public abstract class LayeredUserDB extends LayeredDBFileWrapperDB {
 
 		for (LocalUser user : toUpdate) {
 			try {
-				execute("UPDATE users SET name = '?', usergroup = '?', login = '?' WHERE ID = ?", user.FullName, user.Group, user.Login, user.ID);
+				final String tableName = "users";
+				this.update(tableName, user.ID, new ValuedField(this.getField(tableName, "name"), user.FullName), new ValuedField(this.getField(tableName, "usergroup"), user.Group), new ValuedField(this.getField(tableName, "login"), user.Login));
+				// execute("UPDATE users SET name = '?', usergroup = '?', login = '?' WHERE ID =
+				// ?", user.FullName, user.Group, user.Login, user.ID);
 			} catch (DatabaseException e) {
 				e.printStackTrace();
 			}
@@ -136,7 +138,10 @@ public abstract class LayeredUserDB extends LayeredDBFileWrapperDB {
 
 		for (RemoteUser user : toCreate) {
 			try {
-				execute("INSERT INTO users (name, usergroup, login) VALUES ('?', '?', '?')", user.FullName, user.Group, user.Login);
+				final String tableName = "users";
+				this.insert(tableName, new ValuedField(this.getField(tableName, "name"), user.FullName), new ValuedField(this.getField(tableName, "usergroup"), user.Group), new ValuedField(this.getField(tableName, "login"), user.Login));
+				// execute("INSERT INTO users (name, usergroup, login) VALUES ('?', '?', '?')",
+				// user.FullName, user.Group, user.Login);
 			} catch (DatabaseException e) {
 				e.printStackTrace();
 			}

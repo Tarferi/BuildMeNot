@@ -73,6 +73,7 @@ public abstract class MemoryBuffer {
 		data[2] = (byte) ((x >> 8) & 0xff);
 		data[3] = (byte) (x & 0xff);
 		write(data);
+
 	}
 
 	public static class BroadcastMemoryBuffer extends MemoryBuffer {

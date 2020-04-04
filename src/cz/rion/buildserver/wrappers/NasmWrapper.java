@@ -42,6 +42,7 @@ public class NasmWrapper {
 		}
 		try {
 			MyFS.copyFile(NASM_PATH + "/rw32-2018.inc", workingDir + "/rw32-2018.inc");
+			MyFS.copyFile(NASM_PATH + "/rw32-2020.inc", workingDir + "/rw32-2020.inc");
 		} catch (FileCopyException e) {
 			throw new NasmExecutionException("Failed to copy inc file", e);
 		}
@@ -98,6 +99,7 @@ public class NasmWrapper {
 		MyFS.deleteFileSilent(workingDir + "/" + Settings.getObjectFileName());
 		MyFS.deleteFileSilent(workingDir + "/" + Settings.getExecutableFileName());
 		MyFS.deleteFileSilent(workingDir + "/rw32-2018.inc");
+		MyFS.deleteFileSilent(workingDir + "/rw32-2020.inc");
 	}
 
 	public static RunResult run(String workingDir, String asm, String stdin, int timeout, boolean clean, boolean runExe) throws NasmExecutionException, GoLinkExecutionException, RuntimeExecutionException {

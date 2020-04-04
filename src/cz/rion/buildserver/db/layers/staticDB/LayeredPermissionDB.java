@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 
 import cz.rion.buildserver.Settings;
+import cz.rion.buildserver.db.SQLiteDB.ValuedField;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
@@ -148,6 +149,7 @@ public class LayeredPermissionDB extends LayeredTestDB {
 	}
 
 	private void linkGroups() {
+		final String tableName = "groups";
 		try {
 			String file = MyFS.readFile("groups.json");
 			if (file != null) {
@@ -167,7 +169,9 @@ public class LayeredPermissionDB extends LayeredTestDB {
 
 								if (grp.containsString("Parent")) {
 									String parent = grp.getString("Parent").Value;
-									JsonArray res = this.select("SELECT * FROM groups WHERE name = '?'", parent).getJSON();
+									JsonArray res = this.select(tableName, new TableField[] { getField(tableName, "ID") }, false, new ComparisionField(getField(tableName, "name"), parent));
+									// JsonArray res = this.select("SELECT * FROM groups WHERE name = '?'",
+									// parent).getJSON();
 									if (res != null) {
 										if (!res.Value.isEmpty()) {
 											parentID = res.Value.get(0).asObject().getNumber("ID").Value;
@@ -180,23 +184,17 @@ public class LayeredPermissionDB extends LayeredTestDB {
 								}
 
 								// Select or create new
-								JsonArray res = this.select("SELECT * FROM groups WHERE name = '?'", name).getJSON();
-								if (res == null) {
-									throw new Exception("Database error?");
-								}
+								JsonArray res = this.select(tableName, new TableField[] { getField(tableName, "ID") }, false, new ComparisionField(getField(tableName, "name"), name));
 								if (res.Value.isEmpty()) {
-									this.execute("INSERT INTO groups (parent_group_id, name, permissions) VALUES (?, '?', '?')", 0, name, "[]");
-									res = this.select("SELECT * FROM groups WHERE name = '?'", name).getJSON();
-								}
-								if (res == null) {
-									throw new Exception("Database error?");
+									this.insert(tableName, new ValuedField(this.getField(tableName, "parent_group_id"), 0), new ValuedField(this.getField(tableName, "name"), name), new ValuedField(this.getField(tableName, "permissions"), "[]"));
+									res = this.select(tableName, new TableField[] { getField(tableName, "ID") }, false, new ComparisionField(getField(tableName, "name"), name));
 								}
 								if (res.Value.isEmpty()) {
 									throw new Exception("Database error?");
 								}
 								id = res.Value.get(0).asObject().getNumber("ID").Value;
 								// Update
-								this.execute("UPDATE groups SET permissions = '?', parent_group_id = ? WHERE ID = ?", permissions, parentID, id);
+								this.update(tableName, id, new ValuedField(this.getField(tableName, "parent_group_id"), parentID), new ValuedField(this.getField(tableName, "permissions"), permissions));
 							}
 						}
 					}
@@ -227,16 +225,13 @@ public class LayeredPermissionDB extends LayeredTestDB {
 
 	private void initIUSGroup(String name, List<String> members) throws Exception {
 		try {
-			JsonArray res = this.select("SELECT * FROM groups WHERE name = '?'", name).getJSON();
-			if (res == null) { // New group
-				throw new Exception("Failed to create new group");
-			}
+			final String tableName = "groups";
+			JsonArray res = this.select(tableName, new TableField[] { getField(tableName, "ID") }, false, new ComparisionField(getField(tableName, "name"), name));
 			if (res.asArray().Value.isEmpty()) {
-				this.execute("INSERT INTO groups (parent_group_id, name, permissions) VALUES (?, '?', '?')", 0, name, "[]");
-				res = this.select("SELECT * FROM groups WHERE name = '?'", name).getJSON();
-				if (res == null) {
-					throw new Exception("Failed to create new group");
-				}
+				this.insert(tableName, new ValuedField(this.getField(tableName, "parent_group_id"), 0), new ValuedField(this.getField(tableName, "name"), name), new ValuedField(this.getField(tableName, "permissions"), "[]"));
+				// this.execute("INSERT INTO groups (parent_group_id, name, permissions) VALUES
+				// (?, '?', '?')", 0, name, "[]");
+				res = this.select(tableName, new TableField[] { getField(tableName, "ID") }, false, new ComparisionField(getField(tableName, "name"), name));
 				if (res.asArray().Value.isEmpty()) {
 					throw new Exception("Failed to create new group");
 				}
@@ -244,21 +239,22 @@ public class LayeredPermissionDB extends LayeredTestDB {
 			int groupID = res.asArray().Value.get(0).asObject().getNumber("ID").Value;
 			// Validate members
 			if (members != null) {
+				final String usersTableName = "users";
 				if (!members.isEmpty()) {
 					Map<String, Boolean> presenceInGroup = new HashMap<>();
 					Map<String, Integer> usersByID = new HashMap<>();
-					res = select("SELECT * FROM users").getJSON();
-					if (res != null) {
-						if (res.isArray()) {
-							for (JsonValue val : res.asArray().Value) {
-								int id = val.asObject().getNumber("ID").Value;
-								String login = val.asObject().getString("login").Value;
-								usersByID.put(login, id);
-							}
-						}
+					res = this.select(usersTableName, new TableField[] { getField(usersTableName, "ID") }, false);
+					for (JsonValue val : res.Value) {
+						int id = val.asObject().getNumber("ID").Value;
+						String login = val.asObject().getString("login").Value;
+						usersByID.put(login, id);
 					}
+					final String tableName2 = "user_group";
 
-					res = select("SELECT users.login FROM users, users_group WHERE users_group.group_id = ? and users_group.user_id = users.ID", groupID).getJSON();
+					res = this.select(usersTableName, new TableField[] { getField(usersTableName, "login") }, new ComparisionField[] { new ComparisionField(getField(tableName2, "group_id"), groupID) }, new TableJoin[] { new TableJoin(getField(tableName2, "user_id"), getField(usersTableName, "ID")) }, false);
+					// res = select("SELECT users.login FROM users, users_group WHERE
+					// users_group.group_id = ? and users_group.user_id = users.ID",
+					// groupID).getJSON();
 					if (res != null) {
 						if (res.isArray()) {
 							for (JsonValue val : res.asArray().Value) {
@@ -270,7 +266,9 @@ public class LayeredPermissionDB extends LayeredTestDB {
 					for (String member : members) {
 						if (!presenceInGroup.containsKey(member) && usersByID.containsKey(member)) {
 							int userID = usersByID.get(member);
-							this.execute("INSERT INTO users_group (user_id, group_id, primary_group) VALUES (?, ?, ?)", userID, groupID, 1);
+							this.insert(tableName2, new ValuedField(this.getField(tableName2, "user_id"), userID), new ValuedField(this.getField(tableName2, "group_id"), groupID), new ValuedField(this.getField(tableName2, "primary_group"), 1));
+							// this.execute("INSERT INTO users_group (user_id, group_id, primary_group)
+							// VALUES (?, ?, ?)", userID, groupID, 1);
 						}
 					}
 				}
@@ -325,34 +323,39 @@ public class LayeredPermissionDB extends LayeredTestDB {
 
 	private int getDefaultGroupID() throws DatabaseException {
 		final String defaultGroupName = Settings.GetDefaultGroup();
-		JsonArray res = this.select("SELECT ID FROM groups WHERE name = '?'", defaultGroupName).getJSON();
-		if (res != null) {
-			if (res.Value.isEmpty()) {
-				execute("INSERT INTO groups (name, permissions) VALUES ('?', '?')", defaultGroupName, "[]");
-				res = this.select("SELECT ID FROM groups WHERE name = '?'", defaultGroupName).getJSON();
-			}
-			if (res != null) {
-				if (!res.Value.isEmpty()) {
-					return res.Value.get(0).asObject().getNumber("ID").Value;
-				}
-			}
+		final String tableName = "groups";
+
+		JsonArray res = this.select(tableName, new TableField[] { getField(tableName, "ID") }, false, new ComparisionField(getField(tableName, "name"), defaultGroupName));
+
+		// JsonArray res = this.select("SELECT ID FROM groups WHERE name = '?'",
+		// defaultGroupName).getJSON();
+		if (res.Value.isEmpty()) {
+			this.insert(tableName, new ValuedField(this.getField(tableName, "name"), defaultGroupName), new ValuedField(this.getField(tableName, "permissions"), "[]"));
+			// execute("INSERT INTO groups (name, permissions) VALUES ('?', '?')",
+			// defaultGroupName, "[]");
+			res = this.select(tableName, new TableField[] { getField(tableName, "ID") }, false, new ComparisionField(getField(tableName, "name"), defaultGroupName));
+		}
+		if (!res.Value.isEmpty()) {
+			return res.Value.get(0).asObject().getNumber("ID").Value;
 		}
 		return -1;
 	}
 
 	private int getUserIDFromLogin(String login) throws DatabaseException {
-		JsonArray res = this.select("SELECT ID FROM users WHERE login = '?'", login).getJSON();
-		if (res != null) {
-			if (!res.Value.isEmpty()) {
-				return res.Value.get(0).asObject().getNumber("ID").Value;
-			}
+		final String tableName = "users";
+		JsonArray res = this.select(tableName, new TableField[] { getField(tableName, "ID") }, false, new ComparisionField(getField(tableName, "login"), login));
+		if (!res.Value.isEmpty()) {
+			return res.Value.get(0).asObject().getNumber("ID").Value;
 		}
 		return -1;
 	}
 
 	private void addUser(String name, String group, String login) {
 		try {
-			this.execute("INSERT INTO users (name, usergroup, login, permissions) VALUES ('?', '?', '?', '?')", name, group, login, "[]");
+			final String tableName = "users";
+			this.insert(tableName, new ValuedField(this.getField(tableName, "name"), name), new ValuedField(this.getField(tableName, "usergroup"), group), new ValuedField(this.getField(tableName, "login"), login), new ValuedField(this.getField(tableName, "permissions"), "[]"));
+			// this.execute("INSERT INTO users (name, usergroup, login, permissions) VALUES
+			// ('?', '?', '?', '?')", name, group, login, "[]");
 		} catch (DatabaseException e) {
 			e.printStackTrace();
 		}
@@ -361,33 +364,65 @@ public class LayeredPermissionDB extends LayeredTestDB {
 	private void getPermissionsFor(String login, Permission perms, List<String> primary) {
 		try {
 			List<Integer> inspectGroups = new ArrayList<>();
-			JsonArray res = this.select("SELECT users.permissions as up, users_group.primary_group, groups.name, groups.parent_group_id, groups.permissions FROM users, groups, users_group WHERE groups.ID = users_group.group_id AND users_group.user_id = users.ID AND users.login = '?'", login).getJSON();
-			if (res != null) {
-				if (res.Value.isEmpty()) {
-					int userID = getUserIDFromLogin(login);
-					if (userID == -1) {
-						addUser(login, "FIT", login);
-						userID = getUserIDFromLogin(login);
-					}
 
-					int defaultGroupID = getDefaultGroupID();
-					if (userID >= 0 && defaultGroupID >= 0) {
-						this.execute("INSERT INTO users_group (user_id, group_id, primary_group) VALUES (?, ?, ?)", userID, defaultGroupID, 1);
+			final String usersTableName = "users";
+			final String groupsTableName = "groups";
+			final String userGroupsTableName = "users_group";
+
+			final TableField[] fields = new TableField[] {
+					getField(usersTableName, "permissions").getRenamedInstance("up"),
+
+					getField(userGroupsTableName, "primary_group"),
+
+					getField(groupsTableName, "name"),
+					getField(groupsTableName, "parent_group_id"),
+					getField(groupsTableName, "permissions")
+			};
+			final ComparisionField[] comparators = new ComparisionField[] {
+					new ComparisionField(getField(usersTableName, "login"), login)
+			};
+
+			final TableJoin[] joins = new TableJoin[] {
+					new TableJoin(getField(usersTableName, "ID"), getField(userGroupsTableName, "user_id")),
+					new TableJoin(getField(groupsTableName, "ID"), getField(userGroupsTableName, "group_id"))
+			};
+
+			JsonArray res = this.select(usersTableName, fields, comparators, joins, true);
+
+			// JsonArray res = this.select("SELECT users.permissions as up,
+			// users_group.primary_group, groups.name, groups.parent_group_id,
+			// groups.permissions FROM users, groups, users_group WHERE groups.ID =
+			// users_group.group_id AND users_group.user_id = users.ID AND users.login =
+			// '?'", login).getJSON();
+			if (res.Value.isEmpty()) {
+				int userID = getUserIDFromLogin(login);
+				if (userID == -1) {
+					addUser(login, "FIT", login);
+					userID = getUserIDFromLogin(login);
+				}
+
+				int defaultGroupID = getDefaultGroupID();
+				if (userID >= 0 && defaultGroupID >= 0) {
+					final String tableName = "users_group";
+					this.insert(tableName, new ValuedField(this.getField(tableName, "user_id"), userID), new ValuedField(this.getField(tableName, "group_id"), defaultGroupID), new ValuedField(this.getField(tableName, "primary_group"), 1));
+					// this.execute("INSERT INTO users_group (user_id, group_id, primary_group)
+					// VALUES (?, ?, ?)", userID, defaultGroupID, 1);
+				}
+			} else {
+				try {
+					for (JsonValue perm : JsonValue.parse(res.Value.get(0).asObject().getString("up").Value).asArray().Value) {
+						perms.add(Permission.getBranch(perm.asString().Value));
 					}
-				} else {
-					try {
-						for (JsonValue perm : JsonValue.parse(res.Value.get(0).asObject().getString("up").Value).asArray().Value) {
-							perms.add(Permission.getBranch(perm.asString().Value));
-						}
-					} catch (Exception e) {
-						e.printStackTrace();
-					}
+				} catch (Exception e) {
+					e.printStackTrace();
 				}
 			}
 			parsePermResult(res, perms, inspectGroups, primary);
 			while (!inspectGroups.isEmpty()) {
 				int id = inspectGroups.remove(0);
-				res = this.select("SELECT groups.parent_group_id, groups.permissions FROM groups WHERE groups.ID = ?", id).getJSON();
+
+				final String tableName = "groups";
+				res = this.select(tableName, new TableField[] { getField(tableName, "parent_group_id"), getField(tableName, "permissions") }, true, new ComparisionField(getField(tableName, "ID"), id));
 				parsePermResult(res, perms, inspectGroups, primary);
 			}
 
@@ -398,14 +433,13 @@ public class LayeredPermissionDB extends LayeredTestDB {
 
 	public Object[] getFullNameAndGroup(String login) {
 		try {
-			JsonArray res = this.select("SELECT * FROM users WHERE login = '?'", login).getJSON();
-			if (res != null) {
-				if (!res.Value.isEmpty()) {
-					String name = res.Value.get(0).asObject().getString("name").Value;
-					String grp = res.Value.get(0).asObject().getString("usergroup").Value;
-					int id = res.Value.get(0).asObject().getNumber("ID").Value;
-					return new Object[] { name, grp, id };
-				}
+			final String tableName = "users";
+			JsonArray res = this.select(tableName, new TableField[] { getField(tableName, "name"), getField(tableName, "usergroup"), getField(tableName, "ID") }, true, new ComparisionField(getField(tableName, "login"), login));
+			if (!res.Value.isEmpty()) {
+				String name = res.Value.get(0).asObject().getString("name").Value;
+				String grp = res.Value.get(0).asObject().getString("usergroup").Value;
+				int id = res.Value.get(0).asObject().getNumber("ID").Value;
+				return new Object[] { name, grp, id };
 			}
 		} catch (DatabaseException e) {
 			e.printStackTrace();
