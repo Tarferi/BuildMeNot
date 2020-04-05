@@ -26,13 +26,15 @@ public class LayeredMetaDB extends SQLiteDB {
 
 	private final Field dataField;
 	private final Field nameField;
+	private final Field idField;
 
 	public LayeredMetaDB(String fileName, String metaDatabaseName) throws DatabaseException {
 		super(fileName);
 		this.metaDatabaseName = metaDatabaseName;
 		this.dataField = BIGTEXT("data");
 		this.nameField = TEXT("name");
-		this.makeTable("meta_tables", KEY("ID"), nameField, dataField);
+		this.idField = KEY("ID");
+		this.makeTable("meta_tables", idField, nameField, dataField);
 		synchronized (incSyncer) {
 			this.DB_FILE_FIRST_ID = DB_FILE_FIRST_ID_ALL;
 			DB_FILE_FIRST_ID_ALL += DB_FILE_SIZE;
@@ -96,7 +98,7 @@ public class LayeredMetaDB extends SQLiteDB {
 			}
 		}
 		if (resultField == null) {
-			throw new DatabaseException("Invalida field in table " + tableName + ": " + fieldName);
+			throw new DatabaseException("Invalid field in table " + tableName + ": " + fieldName);
 		}
 		return resultField;
 	}
@@ -105,13 +107,22 @@ public class LayeredMetaDB extends SQLiteDB {
 		JsonArray res;
 		try {
 			final String tableName = "meta_tables";
+			if (tableName.equals(name)) {
+				List<TableField> lst = new ArrayList<>();
+				lst.add(new TableField(idField, name));
+				lst.add(new TableField(dataField, name));
+				lst.add(new TableField(nameField, name));
+				return lst;
+			}
 			res = this.select(tableName, new TableField[] { new TableField(dataField, tableName) }, true, new ComparisionField(new TableField(nameField, tableName), name));
 			if (res.Value.size() != 0) {
 				JsonValue val = res.Value.get(0);
 				if (val.isObject()) {
 					if (val.asObject().containsString("data")) {
 						String data = val.asObject().getString("data").Value;
+						// data= Decompressor.decompress(data);
 						val = JsonValue.parse(data);
+
 						if (val != null) {
 							if (val.isArray()) {
 								List<TableField> lst = new ArrayList<>();
