@@ -22,8 +22,8 @@ public abstract class LayeredUserDB extends LayeredDBFileWrapperDB {
 	public LayeredUserDB(String dbName) throws DatabaseException {
 		super(dbName);
 		this.makeTable("users", KEY("ID"), TEXT("name"), TEXT("usergroup"), TEXT("login"), BIGTEXT("permissions"));
-		//loadLocalUsers();
-		//loadRemoteUsers();
+		loadLocalUsers();
+		loadRemoteUsers();
 	}
 
 	private static class RemoteUser {

@@ -147,10 +147,7 @@ public class HTTPAuthClient extends HTTPTestClient {
 		HTTPResponse resp = new HTTPResponse(request.protocol, 307, redirectMessage, data, null, cookieLines);
 		resp.addAdditionalHeaderField("Location", redirectLocation);
 		
-		loadPermissions(0, "idvorakt", 7);
-		return null;
-		
-		//return resp;
+		return resp;
 	}
 
 	@Override

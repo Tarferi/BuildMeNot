@@ -2,14 +2,18 @@ package cz.rion.buildserver.db;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.crypto.Crypto;
 import cz.rion.buildserver.db.crypto.CryptoManager;
 import cz.rion.buildserver.db.layers.common.LayeredMetaDB;
 import cz.rion.buildserver.exceptions.ChangeOfSessionAddressException;
-import cz.rion.buildserver.exceptions.CompressionException;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
@@ -19,7 +23,10 @@ public class RuntimeDB extends LayeredMetaDB {
 
 	private final Crypto crypto;
 
-	private final Object syncer = new Object();
+	private final Object syncer_compilations = new Object();
+	private final Object syncer_compilations_v1 = new Object();
+	private final Object syncer_users = new Object();
+	private final Object syncer_sessions = new Object();
 
 	public RuntimeDB(String fileName, StaticDB sdb) throws DatabaseException {
 		super(fileName, "RuntimeDB");
@@ -101,7 +108,7 @@ public class RuntimeDB extends LayeredMetaDB {
 	}
 
 	public void storev1Compilation(String remoteAddress, Date time, String asm, String test_id, int resultCode, String result, String full) throws DatabaseException {
-		synchronized (syncer) {
+		synchronized (syncer_compilations_v1) {
 			String[] addrParts = reverse(remoteAddress).split(":", 2);
 			String address = remoteAddress;
 			int port = 0;
@@ -129,7 +136,7 @@ public class RuntimeDB extends LayeredMetaDB {
 	}
 
 	public void storeCompilation(String remoteAddress, Date time, String asm, int session_id, String test_id, int resultCode, String result, String full, int user_id, String details, int good_test, int bad_tests) throws DatabaseException {
-		synchronized (syncer) {
+		synchronized (syncer_compilations) {
 			String[] addrParts = reverse(remoteAddress).split(":", 2);
 			String address = remoteAddress;
 			int port = 0;
@@ -174,7 +181,7 @@ public class RuntimeDB extends LayeredMetaDB {
 	}
 
 	public int getUserIDFromLogin(String login) throws DatabaseException {
-		synchronized (syncer) {
+		synchronized (syncer_users) {
 
 			final String tableName = "users";
 			JsonArray res = this.select(tableName, new TableField[] { this.getField(tableName, "ID") }, false, new ComparisionField(this.getField(tableName, "login"), login));
@@ -243,14 +250,12 @@ public class RuntimeDB extends LayeredMetaDB {
 				long now = new Date().getTime() / 1000;
 				long diff = now - time;
 				if (diff > 5 || diff < -5) { // Auth generated in the future or 15 seconds ago, too old
-					if (!obj.getString("login").asString().Value.equals("idvorakt")) {
-						throw new Exception("Crypto auth too old (" + diff + " seconds)");
-					}
+					throw new Exception("Crypto auth too old (" + diff + " seconds)");
 				}
 
 				String login = obj.getString("login").Value;
 				final String tableName = "session";
-				synchronized (syncer) {
+				synchronized (syncer_sessions) {
 					int user_id = getUserIDFromLogin(login);
 					if (user_id == -1) {
 						throw new Exception("Invalid user (looking for " + login + ")");
@@ -315,7 +320,7 @@ public class RuntimeDB extends LayeredMetaDB {
 
 	public int getSessionIDFromSession(String address, String session) throws DatabaseException, ChangeOfSessionAddressException {
 		address = getAddress(address);
-		synchronized (syncer) {
+		synchronized (syncer_sessions) {
 			final String tableName = "session";
 			JsonArray res = this.select(tableName, new TableField[] { this.getField(tableName, "ID"), this.getField(tableName, "address") }, false, new ComparisionField(this.getField(tableName, "hash"), session), new ComparisionField(this.getField(tableName, "live"), 1));
 			if (res.Value.size() == 1) {
@@ -340,31 +345,33 @@ public class RuntimeDB extends LayeredMetaDB {
 
 	public String getLogin(String address, String sessionToken) throws DatabaseException, ChangeOfSessionAddressException {
 		address = getAddress(address);
-		synchronized (syncer) {
-			final String tableName = "session";
-			JsonArray res = this.select(tableName, new TableField[] { this.getField(tableName, "ID"), this.getField(tableName, "address"), this.getField(tableName, "user_id"), this.getField(tableName, "address") }, false, new ComparisionField(this.getField(tableName, "hash"), sessionToken), new ComparisionField(this.getField(tableName, "live"), 1));
-			if (res.Value.size() == 1) {
-				this.refreshSession(sessionToken);
-				JsonValue val = res.Value.get(0);
-				if (val.isObject()) {
-					JsonObject obj = val.asObject();
-					if (obj.containsString("address")) {
-						String addr = obj.getString("address").Value;
-						if (!addr.equals(address)) {
-							throw new ChangeOfSessionAddressException();
-						}
-						if (obj.containsNumber("user_id")) {
-							int user_id = obj.getNumber("user_id").Value;
-							final String usersTableName = "users";
-							res = this.select(usersTableName, new TableField[] { this.getField(usersTableName, "login") }, false, new ComparisionField(this.getField(usersTableName, "ID"), user_id));
-							if (res.Value.size() == 1) {
-								val = res.Value.get(0);
-								if (val.isObject()) {
-									obj = val.asObject();
-									if (obj.containsString("login")) {
-										String login = obj.getString("login").Value;
-										if (login != null) {
-											return login;
+		synchronized (syncer_sessions) {
+			synchronized (syncer_users) {
+				final String tableName = "session";
+				JsonArray res = this.select(tableName, new TableField[] { this.getField(tableName, "ID"), this.getField(tableName, "address"), this.getField(tableName, "user_id"), this.getField(tableName, "address") }, false, new ComparisionField(this.getField(tableName, "hash"), sessionToken), new ComparisionField(this.getField(tableName, "live"), 1));
+				if (res.Value.size() == 1) {
+					this.refreshSession(sessionToken);
+					JsonValue val = res.Value.get(0);
+					if (val.isObject()) {
+						JsonObject obj = val.asObject();
+						if (obj.containsString("address")) {
+							String addr = obj.getString("address").Value;
+							if (!addr.equals(address)) {
+								throw new ChangeOfSessionAddressException();
+							}
+							if (obj.containsNumber("user_id")) {
+								int user_id = obj.getNumber("user_id").Value;
+								final String usersTableName = "users";
+								res = this.select(usersTableName, new TableField[] { this.getField(usersTableName, "login") }, false, new ComparisionField(this.getField(usersTableName, "ID"), user_id));
+								if (res.Value.size() == 1) {
+									val = res.Value.get(0);
+									if (val.isObject()) {
+										obj = val.asObject();
+										if (obj.containsString("login")) {
+											String login = obj.getString("login").Value;
+											if (login != null) {
+												return login;
+											}
 										}
 									}
 								}
@@ -390,9 +397,8 @@ public class RuntimeDB extends LayeredMetaDB {
 
 	public void deleteSession(String cookiSeession) throws DatabaseException {
 		final String tableName = "session";
-		synchronized (syncer) {
+		synchronized (syncer_sessions) {
 			this.update(tableName, new String[] { "hash" }, new Object[] { cookiSeession, }, new ValuedField(this.getField(tableName, "live"), 0));
-			// execute("UPDATE session SET live = ? WHERE hash = '?'", 0, cookiSeession);
 		}
 	}
 
@@ -419,9 +425,6 @@ public class RuntimeDB extends LayeredMetaDB {
 		}
 	}
 
-	private static final String getUserStatsSQL = "SELECT\r\n" + "	users.id as UserID,\r\n" + "	users.login as Login,\r\n" + "	s1.creation_time as RegistrationTime,\r\n" + "	s2.creation_time as LastLoginTime,\r\n" + "	cmpLast.test_id as LastTestID,\r\n" + "	cmpLast.creation_time as LastTestTime,\r\n" + "	s2.last_action as LastActionTime,\r\n" + "	count(*) as TotalCompilations\r\n" + "\r\n" + "FROM\r\n" + "	users,\r\n" + "	compilations as cmpAggr,\r\n" + "	compilations as cmpLast,\r\n" + "	session as s1,\r\n" + "	session as s2\r\n" + "\r\n" + "WHERE\r\n" + "	userID = cmpAggr.user_id\r\n" + "AND\r\n" + "	userID = cmpLast.user_id\r\n" + "AND\r\n" + "	cmpLast.ID = (SELECT cmpC.ID FROM compilations as cmpC WHERE user_id = userID ORDER BY creation_time DESC LIMIT 1)\r\n"
-			+ "AND\r\n" + "	userID = s1.user_id\r\n" + "AND\r\n" + "	userID = s2.user_id\r\n" + "AND\r\n" + "	s1.ID = (SELECT sc.ID FROM session as sc WHERE user_id = userID ORDER BY sc.last_action ASC LIMIT 1)\r\n" + "AND\r\n" + "	s2.ID = (SELECT sc.ID FROM session as sc WHERE user_id = userID ORDER BY sc.last_action DESC LIMIT 1)\r\n" + "\r\n" + "GROUP BY Login";
-
 	private Date fromInt(long l) {
 		int numLen = (l + "").length();
 		int msLen = "0000000000000".length();
@@ -433,34 +436,104 @@ public class RuntimeDB extends LayeredMetaDB {
 
 	public List<RuntimeUserStats> getUserStats() {
 		List<RuntimeUserStats> stats = new ArrayList<>();
-		synchronized (syncer) {
+		final String usersTableName = "users";
+		final String sessionsTableName = "session";
+		final String compilationsTableName = "compilations";
+		JsonArray users = null;
+		JsonArray sessions = null;
+		JsonArray compilations = null;
+		synchronized (syncer_users) {
 			try {
-				DatabaseResult res = select_raw(getUserStatsSQL); // TODO:
-				TableField[] fields = new TableField[] {};
-				JsonArray ar = res.getJSON(true, fields);
-				if (ar != null) {
-					for (JsonValue val : ar.Value) {
-						if (val.isObject()) {
-							JsonObject obj = val.asObject();
-							if (obj.containsNumber("UserID") && obj.containsString("Login") && obj.containsNumber("RegistrationTime") && obj.containsNumber("LastLoginTime") && obj.containsString("LastTestID") && obj.containsNumber("LastTestTime") && obj.containsNumber("LastActionTime") && obj.containsNumber("TotalCompilations")) {
-								int UserID = obj.getNumber("UserID").Value;
-								String Login = obj.getString("Login").Value;
-								Date RegistrationTime = fromInt(obj.getNumber("RegistrationTime").asLong());
-								Date LastLoginTime = fromInt(obj.getNumber("LastLoginTime").asLong());
-								String LastTestID = obj.getString("LastTestID").Value;
-								Date LastTestTime = fromInt(obj.getNumber("LastTestTime").asLong());
-								Date LastActionTime = fromInt(obj.getNumber("LastActionTime").asLong());
-								int TotalCompilations = obj.getNumber("TotalCompilations").Value;
-								stats.add(new RuntimeUserStats(UserID, Login, TotalCompilations, RegistrationTime, LastLoginTime, LastActionTime, LastTestID, LastTestTime));
-							}
-						}
-					}
-				}
-			} catch (DatabaseException | CompressionException e) {
-				e.printStackTrace();
-				return stats;
+				users = this.select(usersTableName, new TableField[] { getField(usersTableName, "ID"), getField(usersTableName, "login") }, false);
+			} catch (DatabaseException e1) {
+				e1.printStackTrace();
 			}
 		}
+		synchronized (syncer_sessions) {
+			try {
+				sessions = this.select(sessionsTableName, new TableField[] { getField(sessionsTableName, "creation_time"), getField(sessionsTableName, "last_action"), getField(sessionsTableName, "user_id") }, false);
+			} catch (DatabaseException e1) {
+				e1.printStackTrace();
+			}
+		}
+		synchronized (syncer_compilations) {
+			try {
+				compilations = this.select(compilationsTableName, new TableField[] { getField(compilationsTableName, "test_id"), getField(compilationsTableName, "user_id"), getField(compilationsTableName, "creation_time") }, false);
+			} catch (DatabaseException e1) {
+				e1.printStackTrace();
+			}
+		}
+		Map<Integer, String> logins = new HashMap<>();
+		Map<Integer, Object[]> compilation_details = new HashMap<>();
+		Map<Integer, Object[]> session_details = new HashMap<>();
+
+		for (JsonValue user : users.Value) {
+			String login = user.asObject().getString("login").Value;
+			int id = user.asObject().getNumber("ID").Value;
+			logins.put(id, login);
+		}
+
+		for (JsonValue session : sessions.Value) {
+			long creation_time = session.asObject().getNumber("creation_time").asLong();
+			long last_action = session.asObject().getNumber("last_action").asLong();
+			int user_id = session.asObject().getNumber("user_id").Value;
+			if (!session_details.containsKey(user_id)) {
+				session_details.put(user_id, new Object[] { creation_time, last_action, creation_time });
+			} else { // Update last action and creation time
+				Object[] obj = session_details.get(user_id);
+				long other_creation_time = (long) obj[0];
+				long other_last_action = (long) obj[1];
+				long other_registration_time = (long) obj[2];
+				obj[0] = other_creation_time < creation_time ? other_creation_time : creation_time;
+				obj[1] = other_last_action > last_action ? other_last_action : last_action;
+				obj[2] = other_registration_time < creation_time ? other_registration_time : creation_time;
+			}
+		}
+
+		for (JsonValue compilation : compilations.Value) {
+			String test_id = compilation.asObject().getString("test_id").Value;
+			int user_id = compilation.asObject().getNumber("user_id").Value;
+			long creation_time = compilation.asObject().getNumber("creation_time").asLong();
+			if (!compilation_details.containsKey(user_id)) {
+				compilation_details.put(user_id, new Object[] { creation_time, test_id, 1 });
+			} else {
+				Object[] obj = compilation_details.get(user_id);
+				long other_creation_time = (long) obj[0];
+				String other_test_id = (String) obj[1];
+				int total_compilations = (int) obj[2];
+				obj[0] = other_creation_time > creation_time ? other_creation_time : creation_time;
+				obj[1] = other_creation_time > creation_time ? other_test_id : test_id;
+				total_compilations++;
+				obj[2] = total_compilations;
+			}
+		}
+
+		for (Entry<Integer, String> entry : logins.entrySet()) {
+			int user_id = entry.getKey();
+			String login = entry.getValue();
+			if (session_details.containsKey(user_id)) {
+				if (compilation_details.containsKey(user_id)) {
+					Object[] session_obj = session_details.get(user_id);
+					Date session_creation_time = fromInt((long) session_obj[0]);
+					Date session_last_action = fromInt((long) session_obj[1]);
+					Date session_registration_time = fromInt((long) session_obj[2]);
+
+					Object[] compilation_obj = compilation_details.get(user_id);
+					Date compilation_creation_time = fromInt((long) compilation_obj[0]);
+					String compilation_test_id = (String) compilation_obj[1];
+					int total_compilations = (int) compilation_obj[2];
+					stats.add(new RuntimeUserStats(user_id, login, total_compilations, session_registration_time, session_creation_time, session_last_action, compilation_test_id, compilation_creation_time));
+				}
+			}
+		}
+
+		stats.sort(new Comparator<RuntimeUserStats>() {
+
+			@Override
+			public int compare(RuntimeUserStats o1, RuntimeUserStats o2) {
+				return o1.Login.compareTo(o2.Login);
+			}
+		});
 		return stats;
 	}
 }
