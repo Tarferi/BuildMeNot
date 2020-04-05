@@ -105,6 +105,35 @@ public class JsonTestManager {
 			return id + ": " + title;
 		}
 
+		private static final String getInvalidInstruction(String lt, String[] allowedInstructions) {
+			boolean validStart = false;
+			for (String instruction : allowedInstructions) {
+				if (lt.startsWith(instruction.toLowerCase())) { // Could allow "MOVX" if "MOV" is allowed
+					String next = lt.substring(instruction.length());
+					if (next.length() == 0) {
+						validStart = true;
+						break;
+					} else {
+						char c = next.charAt(0);
+						if (c == ' ' || c == '\r' || c == '\n') {
+							if (instruction.toLowerCase().startsWith("rep")) {
+								String inv = getInvalidInstruction(next.trim(), allowedInstructions);
+								if (inv != null) {
+									return inv;
+								}
+							}
+							validStart = true;
+							break;
+						}
+					}
+				}
+			}
+			if (!validStart) {
+				return "Nepovolená instrukce: " + lt.trim().split(" ")[0].toUpperCase();
+			}
+			return null;
+		}
+
 		@Override
 		public String VerifyCode(String asm) {
 			if (allowedInstructions != null) {
@@ -131,24 +160,9 @@ public class JsonTestManager {
 									return null;
 								}
 							} else {
-								boolean validStart = false;
-								for (String instruction : allowedInstructions) {
-									if (lt.startsWith(instruction.toLowerCase())) { // Could allow "MOVX" if "MOV" is allowed
-										String next = lt.substring(instruction.length());
-										if (next.length() == 0) {
-											validStart = true;
-											break;
-										} else {
-											char c = next.charAt(0);
-											if (c == ' ' || c == '\r' || c == '\n') {
-												validStart = true;
-												break;
-											}
-										}
-									}
-								}
-								if (!validStart) {
-									return "Nepovolená instrukce: " + lt.trim().split(" ")[0].toUpperCase();
+								String fail = getInvalidInstruction(lt, allowedInstructions);
+								if (fail != null) {
+									return fail;
 								}
 							}
 						}
