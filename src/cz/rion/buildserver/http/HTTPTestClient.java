@@ -151,6 +151,7 @@ public class HTTPTestClient extends HTTPFileProviderClient {
 					}
 
 					if (authenticated) {
+						completed = db.getCompletedTests(getPermissions().Login);
 						if (obj.containsString("asm") && obj.containsString("id")) {
 
 							test_id = obj.getString("id").Value;
@@ -185,7 +186,6 @@ public class HTTPTestClient extends HTTPFileProviderClient {
 								});
 
 								List<JsonValue> d = new ArrayList<>();
-								completed = db.getCompletedTests(getPermissions().Login);
 								Map<String, CompletedTest> finishedByTestID = new HashMap<>();
 								for (CompletedTest test : completed) {
 									finishedByTestID.put(test.TestID, test);

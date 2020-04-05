@@ -155,10 +155,10 @@ public class RuntimeDB extends LayeredMetaDB {
 				String test_id = val.asObject().getString("test_id").Value;
 				if (code == 0 && !test_id.equals("")) {
 					good++;
-				}
-				if (!known.contains(test_id)) {
-					known.add(test_id);
-					unique++;
+					if (!known.contains(test_id)) {
+						known.add(test_id);
+						unique++;
+					}
 				}
 				total++;
 			}
@@ -172,11 +172,11 @@ public class RuntimeDB extends LayeredMetaDB {
 		synchronized (syncer_compilation_stats) {
 			final String tableName = "compilation_stats";
 			try {
-				JsonArray res = this.select(tableName, new TableField[] { getField(tableName, "user_id"), getField(tableName, "good_tests"), getField(tableName, "total_tests"), getField(tableName, "good_unique_tests") }, false);
+				JsonArray res = this.select(tableName, new TableField[] { getField(tableName, "ID"), getField(tableName, "good_tests"), getField(tableName, "total_tests"), getField(tableName, "good_unique_tests") }, false, new ComparisionField(getField(tableName, "user_id"), user_id));
 				if (res.Value.isEmpty()) { // No stats for this user -> create stats from sratch
 					createCompilationStats(user_id);
 					// Reselect and update
-					res = this.select(tableName, new TableField[] { getField(tableName, "user_id"), getField(tableName, "good_tests"), getField(tableName, "total_tests"), getField(tableName, "good_unique_tests") }, false);
+					res = this.select(tableName, new TableField[] { getField(tableName, "ID"), getField(tableName, "good_tests"), getField(tableName, "total_tests"), getField(tableName, "good_unique_tests") }, false, new ComparisionField(getField(tableName, "user_id"), user_id));
 				}
 				if (res.Value.isEmpty()) { // Failed and shouldn't have
 					throw new DatabaseException("Failed to create user stats for user " + user_id);
@@ -188,16 +188,18 @@ public class RuntimeDB extends LayeredMetaDB {
 				int good = res.Value.get(0).asObject().getNumber("good_tests").Value;
 				int good_unique = res.Value.get(0).asObject().getNumber("good_unique_tests").Value;
 				total++;
-				good = code == 0 && !test_id.equals("") ? good + 1 : good;
-				boolean hasFinishedThisOne = false;
-				for (CompletedTest test : knownCompleted) {
-					if (test.TestID.equals(test_id)) {
-						hasFinishedThisOne = true;
-						break;
+				if (code == 0 && !test_id.equals("")) {
+					good++;
+					boolean hasFinishedThisOne = false;
+					for (CompletedTest test : knownCompleted) {
+						if (test.TestID.equals(test_id)) {
+							hasFinishedThisOne = true;
+							break;
+						}
 					}
-				}
-				if (!hasFinishedThisOne) {
-					good_unique++;
+					if (!hasFinishedThisOne) {
+						good_unique++;
+					}
 				}
 				this.update(tableName, id, new ValuedField(getField(tableName, "good_tests"), good), new ValuedField(getField(tableName, "good_unique_tests"), good_unique), new ValuedField(getField(tableName, "total_tests"), total));
 			} catch (DatabaseException e) {

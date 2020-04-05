@@ -250,13 +250,14 @@ public abstract class SQLiteDB {
 		Object[] params = new Object[fields.length + ID.length];
 		sb.append("UPDATE " + tableName + " SET ");
 		for (int i = 0; i < fields.length; i++) {
+			boolean compress = fields[i].field.field.IsBigString();
 			if (i > 0) {
 				sb.append(", ");
 			}
 			sb.append(fields[i].field.field.name + " = ");
 			sb.append(fields[i].field.field.isStoredAsString ? "'?'" : "?");
 			try {
-				params[i] = fields[i].field.field.isStoredAsString ? Compressor.compress(fields[i].value.toString()) : fields[i].value;
+				params[i] = compress ? Compressor.compress(fields[i].value.toString()) : fields[i].value;
 			} catch (CompressionException e) {
 				e.printStackTrace();
 				throw new DatabaseException("Failed to update " + tableName + ": Compression failed", e);
