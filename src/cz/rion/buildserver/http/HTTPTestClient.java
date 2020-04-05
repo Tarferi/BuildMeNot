@@ -32,6 +32,7 @@ public class HTTPTestClient extends HTTPFileProviderClient {
 	private String test_id;
 	private String asm;
 	private final TestManager tests;
+	private List<CompletedTest> completed = new ArrayList<>();
 
 	private boolean wantsToRedirect = false;
 
@@ -184,7 +185,7 @@ public class HTTPTestClient extends HTTPFileProviderClient {
 								});
 
 								List<JsonValue> d = new ArrayList<>();
-								List<CompletedTest> completed = db.getCompletedTests(getPermissions().Login);
+								completed = db.getCompletedTests(getPermissions().Login);
 								Map<String, CompletedTest> finishedByTestID = new HashMap<>();
 								for (CompletedTest test : completed) {
 									finishedByTestID.put(test.TestID, test);
@@ -260,8 +261,7 @@ public class HTTPTestClient extends HTTPFileProviderClient {
 			String details = returnValue.asObject().contains("details") ? returnValue.asObject().get("details").getJsonString() : "[]";
 			int good_tests = returnValue.asObject().containsNumber("good") ? returnValue.asObject().getNumber("good").Value : 0;
 			int bad_tests = returnValue.asObject().containsNumber("bad") ? returnValue.asObject().getNumber("bad").Value : 0;
-
-			db.storeCompilation(client.getRemoteSocketAddress().toString(), new Date(), asm, getPermissions().getSessionID(), test_id, code, result, getReducedResult(), getPermissions().UserID, details, good_tests, bad_tests);
+			db.storeCompilation(completed, client.getRemoteSocketAddress().toString(), new Date(), asm, getPermissions().getSessionID(), test_id, code, result, getReducedResult(), getPermissions().UserID, details, good_tests, bad_tests);
 		}
 	}
 }

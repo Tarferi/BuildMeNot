@@ -27,6 +27,7 @@ public class RuntimeDB extends LayeredMetaDB {
 	private final Object syncer_compilations_v1 = new Object();
 	private final Object syncer_users = new Object();
 	private final Object syncer_sessions = new Object();
+	private final Object syncer_compilation_stats = new Object();
 
 	public RuntimeDB(String fileName, StaticDB sdb) throws DatabaseException {
 		super(fileName, "RuntimeDB");
@@ -37,7 +38,12 @@ public class RuntimeDB extends LayeredMetaDB {
 		makeTable("pageLoads", KEY("ID"), NUMBER("session_id"), TEXT("address"), NUMBER("port"), TEXT("target"), DATE("creation_time"), NUMBER("result"));
 		makeTable("dbV1", KEY("ID"), TEXT("address"), NUMBER("port"), BIGTEXT("asm"), TEXT("test_id"), DATE("creation_time"), NUMBER("code"), BIGTEXT("result"), BIGTEXT("full"));
 		makeTable("dbV1Good", KEY("ID"), TEXT("address"), NUMBER("port"), BIGTEXT("asm"), TEXT("test_id"), DATE("creation_time"), NUMBER("code"), BIGTEXT("result"), BIGTEXT("full"));
+		makeCompilationStatsTable();
 		makeRetestsTable();
+	}
+
+	private void makeCompilationStatsTable() throws DatabaseException {
+		makeTable("compilation_stats", KEY("ID"), NUMBER("user_id"), NUMBER("good_tests"), NUMBER("good_unique_tests"), NUMBER("total_tests"));
 	}
 
 	private String reverse(String str) {
@@ -135,8 +141,93 @@ public class RuntimeDB extends LayeredMetaDB {
 		}
 	}
 
-	public void storeCompilation(String remoteAddress, Date time, String asm, int session_id, String test_id, int resultCode, String result, String full, int user_id, String details, int good_test, int bad_tests) throws DatabaseException {
+	private void createCompilationStats(int user_id) throws DatabaseException {
 		synchronized (syncer_compilations) {
+			final String compilationsTableName = "compilations";
+			final String statsTableName = "compilation_stats";
+			int total = 0;
+			int unique = 0;
+			int good = 0;
+			List<String> known = new ArrayList<>();
+			JsonArray res = this.select(compilationsTableName, new TableField[] { getField(compilationsTableName, "user_id"), getField(compilationsTableName, "test_id"), getField(compilationsTableName, "code") }, false, new ComparisionField(getField(compilationsTableName, "user_id"), user_id));
+			for (JsonValue val : res.Value) {
+				int code = val.asObject().getNumber("code").Value;
+				String test_id = val.asObject().getString("test_id").Value;
+				if (code == 0 && !test_id.equals("")) {
+					good++;
+				}
+				if (!known.contains(test_id)) {
+					known.add(test_id);
+					unique++;
+				}
+				total++;
+			}
+			synchronized (syncer_compilation_stats) {
+				this.insert(statsTableName, new ValuedField(getField(statsTableName, "user_id"), user_id), new ValuedField(getField(statsTableName, "good_unique_tests"), unique), new ValuedField(getField(statsTableName, "good_tests"), good), new ValuedField(getField(statsTableName, "total_tests"), total));
+			}
+		}
+	}
+
+	private void storeCompilationStats(int user_id, int code, String test_id, List<CompletedTest> knownCompleted) {
+		synchronized (syncer_compilation_stats) {
+			final String tableName = "compilation_stats";
+			try {
+				JsonArray res = this.select(tableName, new TableField[] { getField(tableName, "user_id"), getField(tableName, "good_tests"), getField(tableName, "total_tests"), getField(tableName, "good_unique_tests") }, false);
+				if (res.Value.isEmpty()) { // No stats for this user -> create stats from sratch
+					createCompilationStats(user_id);
+					// Reselect and update
+					res = this.select(tableName, new TableField[] { getField(tableName, "user_id"), getField(tableName, "good_tests"), getField(tableName, "total_tests"), getField(tableName, "good_unique_tests") }, false);
+				}
+				if (res.Value.isEmpty()) { // Failed and shouldn't have
+					throw new DatabaseException("Failed to create user stats for user " + user_id);
+				}
+
+				// Stats exist -> update
+				int id = res.Value.get(0).asObject().getNumber("ID").Value;
+				int total = res.Value.get(0).asObject().getNumber("total_tests").Value;
+				int good = res.Value.get(0).asObject().getNumber("good_tests").Value;
+				int good_unique = res.Value.get(0).asObject().getNumber("good_unique_tests").Value;
+				total++;
+				good = code == 0 && !test_id.equals("") ? good + 1 : good;
+				boolean hasFinishedThisOne = false;
+				for (CompletedTest test : knownCompleted) {
+					if (test.TestID.equals(test_id)) {
+						hasFinishedThisOne = true;
+						break;
+					}
+				}
+				if (!hasFinishedThisOne) {
+					good_unique++;
+				}
+				this.update(tableName, id, new ValuedField(getField(tableName, "good_tests"), good), new ValuedField(getField(tableName, "good_unique_tests"), good_unique), new ValuedField(getField(tableName, "total_tests"), total));
+			} catch (DatabaseException e) {
+				e.printStackTrace();
+			}
+		}
+	}
+
+	public void updateStatsForAllUsers() throws DatabaseException {
+		synchronized (syncer_users) {
+			synchronized (syncer_compilation_stats) {
+				final String tableName = "users";
+				this.dropTable("compilation_stats");
+				makeCompilationStatsTable();
+				JsonArray res = this.select(tableName, new TableField[] { getField(tableName, "ID") }, false);
+				int index = 0;
+				int total = res.Value.size();
+				for (JsonValue val : res.Value) {
+					int id = val.asObject().getNumber("ID").Value;
+					createCompilationStats(id);
+					index++;
+					System.out.println("Creating compilations... " + index + "/" + total);
+				}
+			}
+		}
+	}
+
+	public void storeCompilation(List<CompletedTest> knownCompleted, String remoteAddress, Date time, String asm, int session_id, String test_id, int resultCode, String result, String full, int user_id, String details, int good_test, int bad_tests) throws DatabaseException {
+		synchronized (syncer_compilations) {
+			storeCompilationStats(user_id, resultCode, test_id, knownCompleted);
 			String[] addrParts = reverse(remoteAddress).split(":", 2);
 			String address = remoteAddress;
 			int port = 0;

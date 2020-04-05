@@ -90,6 +90,9 @@ public class LayeredMetaDB extends SQLiteDB {
 			return tableCache.get(fieldName);
 		}
 		List<TableField> fields = getFields(tableName);
+		if (fields == null) {
+			throw new DatabaseException("No valid fieldas for " + tableName);
+		}
 		TableField resultField = null;
 		for (TableField ff : fields) {
 			tableCache.put(ff.field.name.toLowerCase(), ff);

@@ -8,6 +8,8 @@ import javax.swing.UIManager;
 import javax.swing.UIManager.LookAndFeelInfo;
 import javax.swing.WindowConstants;
 
+import cz.rion.buildserver.db.RuntimeDB;
+import cz.rion.buildserver.db.StaticDB;
 import cz.rion.buildserver.exceptions.CompressionException;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.exceptions.HTTPServerException;
@@ -25,6 +27,16 @@ public class MAIN {
 				wnd.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
 			}
 		});
+	}
+
+	public static void main_statscalc(String[] args) {
+		try {
+			StaticDB sdb = new StaticDB("static.sqlite");
+			RuntimeDB db = new RuntimeDB("data.sqlite", sdb);
+			db.updateStatsForAllUsers();
+		} catch (DatabaseException e) {
+			e.printStackTrace();
+		}
 	}
 
 	public static void main_retest(String[] args) {
@@ -45,7 +57,7 @@ public class MAIN {
 		try {
 			rec = new Recompressor();
 			rec.runDynamic();
-			//rec.runStatic();
+			// rec.runStatic();
 		} catch (DatabaseException | CompressionException e) {
 			e.printStackTrace();
 		}
