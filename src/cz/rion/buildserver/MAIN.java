@@ -29,7 +29,7 @@ public class MAIN {
 		});
 	}
 
-	public static void main_statscalc(String[] args) {
+	public static void main_recalcstats(String[] args) {
 		try {
 			StaticDB sdb = new StaticDB("static.sqlite");
 			RuntimeDB db = new RuntimeDB("data.sqlite", sdb);
@@ -39,18 +39,19 @@ public class MAIN {
 		}
 	}
 
-	public static void main_retest(String[] args) {
+	public static void main_retests(String[] args) {
 		try {
 			Retester rt = new Retester();
-			String test_id = "test07_04";
-			// rt.runTests(test_id);
-			// rt.backupData();
-			rt.updateData();
+			String test_id = "test09_03";
+			//rt.runTests(test_id);
+			//rt.backupData(test_id);
+			//rt.updateData(test_id);
 			// rt.restoreData();
 		} catch (DatabaseException e) {
 			e.printStackTrace();
 		}
 	}
+
 
 	public static void main_compress(String[] args) {
 		Recompressor rec;

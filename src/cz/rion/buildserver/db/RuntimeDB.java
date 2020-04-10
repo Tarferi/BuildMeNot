@@ -38,8 +38,14 @@ public class RuntimeDB extends LayeredMetaDB {
 		makeTable("pageLoads", KEY("ID"), NUMBER("session_id"), TEXT("address"), NUMBER("port"), TEXT("target"), DATE("creation_time"), NUMBER("result"));
 		makeTable("dbV1", KEY("ID"), TEXT("address"), NUMBER("port"), BIGTEXT("asm"), TEXT("test_id"), DATE("creation_time"), NUMBER("code"), BIGTEXT("result"), BIGTEXT("full"));
 		makeTable("dbV1Good", KEY("ID"), TEXT("address"), NUMBER("port"), BIGTEXT("asm"), TEXT("test_id"), DATE("creation_time"), NUMBER("code"), BIGTEXT("result"), BIGTEXT("full"));
+		makeTable("crypto_expire_log", KEY("ID"), TEXT("address"), BIGTEXT("crypto"), NUMBER("creation_time"), TEXT("description"));
 		makeCompilationStatsTable();
 		makeRetestsTable();
+	}
+
+	private void log_expired_crypto(String address, String crypto, String description) throws DatabaseException {
+		final String tableName = "crypto_expire_log";
+		this.insert(tableName, new ValuedField(getField(tableName, "description"), description), new ValuedField(getField(tableName, "address"), address), new ValuedField(getField(tableName, "crypto"), crypto), new ValuedField(getField(tableName, "creation_time"), new Date().getTime()));
 	}
 
 	private void makeCompilationStatsTable() throws DatabaseException {
@@ -330,10 +336,12 @@ public class RuntimeDB extends LayeredMetaDB {
 		}
 		String dec = crypto.decrypt(Settings.getAuthKeyFilename(), authToken);
 		if (dec == null) {
+			this.log_expired_crypto(address, authToken, "Parse failed - Crypto failed to decrypt");
 			throw new Exception("Crypto failed");
 		}
 		JsonValue val = JsonValue.parse(dec);
 		if (val == null) {
+			this.log_expired_crypto(address, authToken, "Parse failed - Not a JSON object");
 			throw new Exception("Auth data not in JSON: " + dec);
 		}
 		if (val.isObject()) {
@@ -343,6 +351,7 @@ public class RuntimeDB extends LayeredMetaDB {
 				long now = new Date().getTime() / 1000;
 				long diff = now - time;
 				if (diff > 5 || diff < -5) { // Auth generated in the future or 15 seconds ago, too old
+					this.log_expired_crypto(address, authToken, "Too old - " + diff + " seconds");
 					throw new Exception("Crypto auth too old (" + diff + " seconds)");
 				}
 
@@ -351,6 +360,7 @@ public class RuntimeDB extends LayeredMetaDB {
 				synchronized (syncer_sessions) {
 					int user_id = getUserIDFromLogin(login);
 					if (user_id == -1) {
+						this.log_expired_crypto(address, authToken, "Invalid user - looking for: " + login);
 						throw new Exception("Invalid user (looking for " + login + ")");
 					}
 					// Get live sessions
@@ -404,6 +414,7 @@ public class RuntimeDB extends LayeredMetaDB {
 					throw new Exception("Database error?");
 				}
 			} else {
+				this.log_expired_crypto(address, authToken, "Parse failed - missing fields");
 				throw new Exception("Invalid auth structure: missing fields");
 			}
 		} else {

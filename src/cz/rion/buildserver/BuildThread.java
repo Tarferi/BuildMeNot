@@ -152,7 +152,7 @@ public class BuildThread {
 
 	public int getQueueSize() {
 		synchronized (jobs) {
-			return jobs.size();
+			return jobs.size() + (waiting ? 0 : 1);
 		}
 	}
 

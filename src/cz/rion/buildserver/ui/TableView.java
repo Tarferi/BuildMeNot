@@ -8,7 +8,9 @@ import java.sql.Date;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 
 import javax.swing.JLabel;
@@ -31,21 +33,23 @@ import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.ui.DetailsPanel.DetailsPanelCloseListener;
+import cz.rion.buildserver.ui.events.UsersLoadedEvent;
+import cz.rion.buildserver.ui.events.UsersLoadedEvent.UserInfo;
+import cz.rion.buildserver.ui.events.UsersLoadedEvent.UserListLoadedListener;
 import cz.rion.buildserver.ui.utils.FontProvider;
 import cz.rion.buildserver.ui.utils.MyTextField;
 
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
 
-public class TableView extends JPanel {
+public class TableView extends JPanel implements UserListLoadedListener {
 
 	protected static final SimpleDateFormat dateFormat = new SimpleDateFormat("dd. MM. yyyy - HH:mm");
 
 	private final DefaultTableCellRenderer renderBigString = new DefaultTableCellRenderer();
 	private final DefaultTableCellRenderer renderRight = new DefaultTableCellRenderer();
 	private final DefaultTableCellRenderer renderDefault = new DefaultTableCellRenderer();
-	private String[] _headers = new String[0];
-	private String[][] _data = new String[0][0];
+	private TableValue[][] _data = new TableValue[0][0];
 	private Field[] _fields = new Field[0];
 	private MyTextField[] _filters = new MyTextField[0];
 	private boolean editingTable = false;
@@ -53,10 +57,10 @@ public class TableView extends JPanel {
 
 	private static final class MyFilter extends RowFilter<TableModel, Integer> {
 
-		private String[] filters;
+		private Object[] filters;
 		private boolean[] fast;
 
-		private MyFilter(String[] filters, boolean[] columnFiltering) {
+		private MyFilter(Object[] filters, boolean[] columnFiltering) {
 			this.filters = filters;
 			this.fast = columnFiltering;
 		}
@@ -65,10 +69,13 @@ public class TableView extends JPanel {
 		public boolean include(Entry<? extends TableModel, ? extends Integer> entry) {
 			for (int i = 0; i < fast.length; i++) {
 				if (fast[i]) {
-					String value = entry.getValue(i).toString();
-					String filter = filters[i];
-					if (!value.contains(filter)) {
-						return false;
+					Object value = entry.getValue(i);
+					Object filter = filters[i];
+					if (value instanceof TableValue && filter instanceof String) {
+						TableValue tvalue = (TableValue) value;
+						if (!tvalue.coveredByFilter((String) filter)) {
+							return false;
+						}
 					}
 				}
 			}
@@ -77,14 +84,132 @@ public class TableView extends JPanel {
 
 	}
 
+	abstract static class TableValue implements Comparable<TableValue> {
+		public final String DisplayedValue;
+		public final String EditValue;
+
+		private TableValue(String displayedValue, String editValue) {
+			this.DisplayedValue = displayedValue;
+			this.EditValue = editValue;
+		}
+
+		@Override
+		public String toString() {
+			return DisplayedValue;
+		}
+
+		public boolean coveredByFilter(String filter) {
+			return DisplayedValue.toString().toLowerCase().contains(filter.toLowerCase());
+		}
+
+		protected int baseCompareTo(TableValue another) {
+			return DisplayedValue.compareTo(another.DisplayedValue);
+		}
+	}
+
+	private static class BigStringTableValue extends TableValue {
+		public final String BigString;
+
+		private BigStringTableValue(String displayedValue) {
+			super(displayedValue.length() + " bytes", displayedValue);
+			this.BigString = displayedValue;
+		}
+
+		@Override
+		public int compareTo(TableValue o) {
+			if (o instanceof BigStringTableValue) {
+				int myLength = BigString.length();
+				int otherLength = ((BigStringTableValue) o).BigString.length();
+				return Integer.compare(myLength, otherLength);
+			}
+			return super.baseCompareTo(o);
+		}
+	}
+
+	private static class StringTableValue extends TableValue {
+		public final String String;
+
+		private StringTableValue(String displayedValue) {
+			super(displayedValue, displayedValue);
+			this.String = displayedValue;
+		}
+
+		@Override
+		public int compareTo(TableValue o) {
+			if (o instanceof StringTableValue) {
+				return String.compareTo(((StringTableValue) o).String);
+			}
+			return super.baseCompareTo(o);
+		}
+	}
+
+	private static class DateTableValue extends TableValue {
+		public final Date Date;
+
+		public DateTableValue(Date date) {
+			super(dateFormat.format(date), dateFormat.format(date));
+			this.Date = date;
+		}
+
+		@Override
+		public int compareTo(TableValue o) {
+			if (o instanceof DateTableValue) {
+				long myTime = Date.getTime();
+				long otherTime = ((DateTableValue) o).Date.getTime();
+				return Long.compare(myTime, otherTime);
+			}
+			return super.baseCompareTo(o);
+		}
+	}
+
+	private static class NumberTableValue extends TableValue {
+		public final long Value;
+
+		private NumberTableValue(long value) {
+			super(value + "", value + "");
+			this.Value = value;
+		}
+
+		@Override
+		public boolean coveredByFilter(String filter) {
+			if (filter.startsWith(">")) {
+				int val = Integer.parseInt(filter.substring(1).trim());
+				return Value > val;
+			} else if (filter.startsWith("<")) {
+				int val = Integer.parseInt(filter.substring(1).trim());
+				return Value < val;
+			} else if (filter.startsWith("<")) {
+				int val = Integer.parseInt(filter.substring(1).trim());
+				return Value < val;
+			} else if (filter.startsWith("!=")) {
+				int val = Integer.parseInt(filter.substring(2).trim());
+				return Value != val;
+
+			} else {
+				return DisplayedValue.toString().equals(filter);
+			}
+		}
+
+		@Override
+		public int compareTo(TableValue o) {
+			if (o instanceof NumberTableValue) {
+				long myValue = Value;
+				long otherValue = ((NumberTableValue) o).Value;
+				return Long.compare(myValue, otherValue);
+			}
+			return 0;
+		}
+	}
+
 	private void executeFilters() {
 		final String[] filters = new String[_filters.length];
 		final boolean[] filtersBool = new boolean[_filters.length];
 		boolean execute = false;
 		for (int i = 0; i < filters.length; i++) {
-			filters[i] = _filters[i].getText();
-			execute |= !filters[i].isEmpty();
-			filtersBool[i] = !filters[i].isEmpty();
+			String value = _filters[i].getText();
+			execute |= !value.isEmpty();
+			filtersBool[i] = !value.isEmpty();
+			filters[i] = value;
 		}
 		TableRowSorter<? extends TableModel> sorter = (TableRowSorter<? extends TableModel>) table.getRowSorter();
 		if (sorter == null) {
@@ -104,13 +229,16 @@ public class TableView extends JPanel {
 
 	private DetailsPanel pnlDetails;
 
+	private final Map<String, UserInfo> userData = new HashMap<>();
+
 	public static interface ShowDetailsPanelCallback {
 		public void showDetails();
 
 		public void closeDetails();
 	}
 
-	public TableView(DetailsPanel pnlDetails, ShowDetailsPanelCallback detailsCB) {
+	public TableView(DetailsPanel pnlDetails, ShowDetailsPanelCallback detailsCB, UIDriver driver) {
+		UsersLoadedEvent.addStatusChangeListener(driver.EventManager, this);
 		this.pnlDetails = pnlDetails;
 		this.detailsCB = detailsCB;
 
@@ -166,7 +294,7 @@ public class TableView extends JPanel {
 	protected void updateFiltersLocation() {
 		pnlFilters.setLayout(null);
 		int pos = 0;
-		for (int i = 0; i < _headers.length; i++) {
+		for (int i = 0; i < _fields.length; i++) {
 			int width = table.getColumnModel().getColumn(i).getWidth();
 			_filters[i].setLocation(pos, 0);
 			_filters[i].setSize(width + 2, 30);
@@ -201,13 +329,32 @@ public class TableView extends JPanel {
 		this.repaint();
 	}
 
-	private String[][] parse(Field[] fields, JsonArray datajsn) {
-		String[][] data = new String[datajsn.Value.size()][fields.length];
+	private TableValue fromString(String colData, Field f) {
+		if (f.IsDate()) {
+			long val = Long.parseLong(colData.toString());
+			if ((val + "").toString().length() < "1000000000000".length()) { // int -> long
+				val *= 1000;
+			}
+			return new DateTableValue(new Date(val));
+		} else if (f.IsBigString()) {
+			return new BigStringTableValue(colData);
+		} else if (f.type == FieldType.INT) {
+			return new NumberTableValue(Long.parseLong(colData));
+		} else if (f.type == FieldType.STRING) {
+			return new StringTableValue(colData);
+		} else {
+			return new StringTableValue("Unknown: " + colData); // Should never happen
+		}
+	}
+
+	private TableValue[][] parse(Field[] fields, JsonArray datajsn) {
+		TableValue[][] data = new TableValue[datajsn.Value.size()][fields.length];
 		int index = 0;
 		for (JsonValue row : datajsn.Value) {
 			if (row.isArray()) {
 				JsonArray rw = row.asArray();
 				for (int colIndex = 0; colIndex < fields.length; colIndex++) {
+					Field f = fields[colIndex];
 					JsonValue colVal = rw.Value.get(colIndex);
 					String colData = "";
 					if (colVal.isNumber()) {
@@ -217,7 +364,7 @@ public class TableView extends JPanel {
 					} else {
 						colData = colVal.getJsonString();
 					}
-					data[index][colIndex] = colData;
+					data[index][colIndex] = fromString(colData, f);
 				}
 				index++;
 			} else if (row.isObject()) {
@@ -236,7 +383,7 @@ public class TableView extends JPanel {
 					} else {
 						colData = colVal.getJsonString();
 					}
-					data[index][colIndex] = colData;
+					data[index][colIndex] = fromString(colData, f);
 				}
 				index++;
 			}
@@ -246,7 +393,7 @@ public class TableView extends JPanel {
 
 	private void parseTable(JsonValue val) {
 		String[] headers = new String[0];
-		String[][] data = new String[0][0];
+		TableValue[][] data = new TableValue[0][0];
 		Field[] fields = new Field[0];
 		if (val.isObject()) {
 			JsonObject vobj = val.asObject();
@@ -267,7 +414,6 @@ public class TableView extends JPanel {
 				}
 			}
 		}
-		this._headers = headers;
 		this._data = data;
 		this._fields = fields;
 	}
@@ -284,8 +430,9 @@ public class TableView extends JPanel {
 
 	private void parseView(JsonValue val) {
 		String[] headers = new String[0];
-		String[][] data = new String[0][0];
+		TableValue[][] data = new TableValue[0][0];
 		Field[] fields = new Field[0];
+		List<Field> loginFields = new ArrayList<>();
 		if (val.isObject()) {
 			JsonObject vobj = val.asObject();
 			if (vobj.containsArray("result") && vobj.containsString("SQL") && vobj.containsNumber("code")) {
@@ -310,6 +457,9 @@ public class TableView extends JPanel {
 							f = new Field(field, "", FieldType.INT);
 						} else if (fn.equals("DATE")) {
 							f = new Field(field, "", FieldType.DATE);
+						} else if (fn.equals("LOGIN")) {
+							f = new Field(field, "", FieldType.STRING);
+							loginFields.add(f);
 						} else {
 							return;
 						}
@@ -336,10 +486,87 @@ public class TableView extends JPanel {
 				}
 			}
 		}
-		this._headers = headers;
 		this._data = data;
 		this._fields = fields;
+		if (!loginFields.isEmpty()) {
+			addLogins(loginFields);
+		}
+	}
 
+	private void addLogins(List<Field> loginFields) {
+		if (userData.isEmpty()) { // Only works with loaded user list
+			return;
+		}
+		int totalLoginsToAdd = loginFields.size();
+		int additionalFieldsPerLogin = 3;
+		Field[] fields = new Field[this._fields.length + (totalLoginsToAdd * additionalFieldsPerLogin)];
+		TableValue[][] data = new TableValue[_data.length][fields.length];
+
+		// Find login fields in new header indexes
+		int remapping[] = new int[this._fields.length]; // Index is current index, value is new index
+		int[] newLoginIndexes = new int[totalLoginsToAdd];
+
+		int foundIndexes = 0;
+		for (int i = 0; i < this._fields.length; i++) {
+			Field f = _fields[i];
+			remapping[i] = i + (foundIndexes * additionalFieldsPerLogin); // Remapping, done always
+			if (loginFields.contains(f)) { // is Login field
+				newLoginIndexes[foundIndexes] = i;
+				foundIndexes++;
+			}
+		}
+
+		// Update data
+		for (int rowIndex = 0; rowIndex < data.length; rowIndex++) {
+
+			// Move existing data -> make space for login fields
+			for (int colIndex = 0; colIndex < _fields.length; colIndex++) {
+				int newColIndex = remapping[colIndex];
+				data[rowIndex][newColIndex] = _data[rowIndex][colIndex];
+			}
+
+			// Add login fields
+			for (int loginFieldIndex : newLoginIndexes) {
+				String name = "???";
+				String group = "???";
+				String permGroup = "???";
+
+				TableValue loginValue = data[rowIndex][loginFieldIndex];
+				if (loginValue instanceof StringTableValue) {
+					String login = loginValue.DisplayedValue;
+					if (userData.containsKey(login.toLowerCase())) {
+						UserInfo user = userData.get(login.toLowerCase());
+						name = user.FullName;
+						group = user.Group;
+						permGroup = user.PermissionGroup;
+						String[] pd = permGroup.split("\\.");
+						permGroup = pd[pd.length == 0 ? 0 : pd.length - 1];
+					}
+				}
+
+				data[rowIndex][loginFieldIndex + 1] = new StringTableValue(name);
+				data[rowIndex][loginFieldIndex + 2] = new StringTableValue(group);
+				data[rowIndex][loginFieldIndex + 3] = new StringTableValue(permGroup);
+			}
+		}
+
+		// Update fields
+		for (int colIndex = 0; colIndex < _fields.length; colIndex++) {
+			int newColIndex = remapping[colIndex];
+			fields[newColIndex] = _fields[colIndex];
+		}
+
+		int loginIndex = 0;
+		for (int loginFieldIndex : newLoginIndexes) {
+			Field loginField = loginFields.get(loginIndex);
+			fields[loginFieldIndex + 1] = new Field(loginField.name + "_FullName", "", FieldType.STRING);
+			fields[loginFieldIndex + 2] = new Field(loginField.name + "_Group", "", FieldType.STRING);
+			fields[loginFieldIndex + 3] = new Field(loginField.name + "_PermGroup", "", FieldType.STRING);
+			loginIndex++;
+		}
+
+		this._data = data;
+		this._fields = fields;
 	}
 
 	private void projectTable() {
@@ -355,17 +582,17 @@ public class TableView extends JPanel {
 
 			@Override
 			public int getColumnCount() {
-				return _headers.length;
+				return _fields.length;
 			}
 
 			@Override
 			public String getColumnName(int columnIndex) {
-				return _headers[columnIndex];
+				return _fields[columnIndex].name;
 			}
 
 			@Override
 			public Class<?> getColumnClass(int columnIndex) {
-				return String.class;
+				return TableValue.class;
 			}
 
 			@Override
@@ -375,15 +602,6 @@ public class TableView extends JPanel {
 
 			@Override
 			public Object getValueAt(int rowIndex, int columnIndex) {
-				if (_fields[columnIndex].IsDate()) {
-					long val = Long.parseLong(_data[rowIndex][columnIndex]);
-					if ((val + "").toString().length() < "1000000000000".length()) { // int -> long
-						val *= 1000;
-					}
-					return dateFormat.format(new Date(val));
-				} else if (_fields[columnIndex].IsBigString()) {
-					return _data[rowIndex][columnIndex].length() + " bytes";
-				}
 				return _data[rowIndex][columnIndex];
 			}
 
@@ -401,7 +619,9 @@ public class TableView extends JPanel {
 
 		});
 
-		for (int i = 0; i < this._headers.length; i++) {
+		TableRowSorter<? extends TableModel> sorter = (TableRowSorter<? extends TableModel>) table.getRowSorter();
+
+		for (int i = 0; i < this._fields.length; i++) {
 			Field f = _fields[i];
 			DefaultTableCellRenderer r = renderDefault;
 			if (f.IsBigString()) {
@@ -410,9 +630,16 @@ public class TableView extends JPanel {
 				r = renderRight;
 			}
 			table.getColumnModel().getColumn(i).setCellRenderer(r);
+			sorter.setComparator(i, new Comparator<TableValue>() {
+
+				@Override
+				public int compare(TableValue o1, TableValue o2) {
+					return o1.compareTo(o2);
+				}
+			});
 		}
 
-		_filters = new MyTextField[_headers.length];
+		_filters = new MyTextField[_fields.length];
 
 		pnlFilters.removeAll();
 		for (int i = 0; i < _filters.length; i++) {
@@ -458,10 +685,17 @@ public class TableView extends JPanel {
 	}
 
 	public void clearData() {
-		_headers = new String[0];
-		_data = new String[0][0];
+		_data = new TableValue[0][0];
 		_fields = new Field[0];
 		projectTable();
+	}
+
+	@Override
+	public void userListLoaded(List<UserInfo> users) {
+		userData.clear();
+		for (UserInfo user : users) {
+			userData.put(user.Login.toLowerCase(), user);
+		}
 	}
 
 }

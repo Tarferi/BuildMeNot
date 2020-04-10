@@ -454,7 +454,7 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 					btnSaveAndClose.setEnabled(false);
 				}
 			}
-		});
+		}, driver);
 
 		txtFileFilter = new MyTextField();
 		txtFileFilter.getDocument().addDocumentListener(new DocumentListener() {

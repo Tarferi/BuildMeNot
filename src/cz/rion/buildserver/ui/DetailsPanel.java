@@ -11,6 +11,7 @@ import cz.rion.buildserver.exceptions.CompressionException;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.json.JsonValue.JsonNumber;
 import cz.rion.buildserver.json.JsonValue.JsonString;
+import cz.rion.buildserver.ui.TableView.TableValue;
 import cz.rion.buildserver.ui.utils.MyLabel;
 import cz.rion.buildserver.ui.utils.MyTextArea;
 import cz.rion.buildserver.ui.utils.MyTextField;
@@ -47,7 +48,7 @@ public class DetailsPanel extends JPanel {
 		}
 	}
 
-	public void reset(Field[] headers, String[] data, final DetailsPanelCloseListener detailsPanelCloseListener, SimpleDateFormat format, boolean editingTable) {
+	public void reset(Field[] headers, TableValue[] data, final DetailsPanelCloseListener detailsPanelCloseListener, SimpleDateFormat format, boolean editingTable) {
 		this.headers = headers;
 		this.format = format;
 		this.retrievers = new ComponentManipulator[data.length];
@@ -67,7 +68,7 @@ public class DetailsPanel extends JPanel {
 			boolean editable = !headers[i].name.equals("ID") && editingTable;
 			if (headers[i].IsBigString()) {
 				String dataEditPos = "cell 1 " + (i + totalDoubleTextsPlaced) + " 2 2,growx,growy";
-				String textData = data[i];
+				String textData = data[i].EditValue;
 
 				try {
 					textData = Decompressor.decompress(textData);
@@ -100,14 +101,7 @@ public class DetailsPanel extends JPanel {
 				totalDoubleTextsPlaced++;
 			} else {
 				String dataEditPos = "cell 1 " + (i + totalDoubleTextsPlaced) + " 2 1,growx,growy";
-				String str = data[i];
-				if (headers[i].IsDate()) {
-					long val = Long.parseLong(str);
-					if ((val + "").toString().length() < "1000000000000".length()) { // int -> long
-						val *= 1000;
-					}
-					str = TableView.dateFormat.format(new Date(val));
-				}
+				String str = data[i].EditValue;
 
 				final MyTextField textField = new MyTextField(str);
 

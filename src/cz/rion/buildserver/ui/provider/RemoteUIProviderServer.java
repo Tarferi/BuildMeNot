@@ -255,15 +255,18 @@ public class RemoteUIProviderServer {
 	private void writeUserList(InputPacketRequest inBuffer, MemoryBuffer outBuffer) {
 		List<RuntimeUserStats> stats = this.db.getUserStats();
 		Map<String, LocalUser> statics = this.sdb.LoadedUsersByLogin;
+
 		outBuffer.writeInt(UsersLoadedEvent.ID);
 		outBuffer.writeInt(stats.size());
 		for (RuntimeUserStats stat : stats) {
 			LocalUser usr = statics.get(stat.Login);
 			String fullName = "???";
 			String group = "???";
+			String permGroup = "??";
 			if (usr != null) {
 				fullName = usr.FullName;
 				group = usr.Group;
+				permGroup = usr.PrimaryPermGroup;
 			}
 			outBuffer.writeInt(stat.UserID);
 			outBuffer.writeString(stat.Login);
@@ -275,6 +278,7 @@ public class RemoteUIProviderServer {
 			outBuffer.writeDate(stat.LastTestDate);
 			outBuffer.writeString(fullName);
 			outBuffer.writeString(group);
+			outBuffer.writeString(permGroup);
 		}
 	}
 

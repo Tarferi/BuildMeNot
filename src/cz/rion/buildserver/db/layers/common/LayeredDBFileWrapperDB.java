@@ -17,6 +17,8 @@ import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 
 public class LayeredDBFileWrapperDB extends LayeredFilesDB {
 
+	public static final Pattern FreeSQLSyntaxMatcher = Pattern.compile("(LOGIN|TEXT|BIGTEXT|INT|DATE)\\((\\w+)\\)", Pattern.MULTILINE);
+
 	private static final String dbDirPrefix = "database/";
 	private static final String dbFileSuffix = ".table";
 	private static final String viewFileSuffix = ".view";
@@ -213,8 +215,6 @@ public class LayeredDBFileWrapperDB extends LayeredFilesDB {
 			super.storeFile(file, newFileName, newContents);
 		}
 	}
-
-	public static final Pattern FreeSQLSyntaxMatcher = Pattern.compile("(TEXT|BIGTEXT|INT|DATE)\\((\\w+)\\)", Pattern.MULTILINE);
 
 	private static FileInfo handleView(LayeredMetaDB db, FileInfo sqlFile) {
 		if (sqlFile == null) { // Pass error

@@ -16,6 +16,7 @@ public class UsersLoadedEvent extends Event {
 		public final String Login;
 		public final String FullName;
 		public final String Group;
+		public final String PermissionGroup;
 
 		public final Date RegistrationDate;
 		public final Date LastActiveDate;
@@ -29,7 +30,7 @@ public class UsersLoadedEvent extends Event {
 			return Login + " (" + FullName + ")";
 		}
 
-		public UserInfo(int id, String login, String fullName, String group, Date RegistrationDate, Date LastActiveDate, Date LastLoginDate, int TotalTestsSubmitted, String LastTestID, Date LastTestDate) {
+		public UserInfo(int id, String login, String fullName, String group, Date RegistrationDate, Date LastActiveDate, Date LastLoginDate, int TotalTestsSubmitted, String LastTestID, Date LastTestDate, String PermissionGroup) {
 			this.ID = id;
 			this.Login = login;
 			this.FullName = fullName;
@@ -40,6 +41,7 @@ public class UsersLoadedEvent extends Event {
 			this.TotalTestsSubmitted = TotalTestsSubmitted;
 			this.LastTestID = LastTestID;
 			this.LastTestDate = LastTestDate;
+			this.PermissionGroup = PermissionGroup;
 		}
 	}
 

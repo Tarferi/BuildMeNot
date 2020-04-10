@@ -295,7 +295,8 @@ public class UIDriver {
 			Date LastTestDate = inBuffer.readDate();
 			String fullName = inBuffer.readString();
 			String group = inBuffer.readString();
-			UserInfo ui = new UserInfo(UserID, Login, fullName, group, RegistrationDate, LastActiveDate, lastLoginDate, TotalTestsSubmitted, LastTestID, LastTestDate);
+			String PermissionGroup = inBuffer.readString();
+			UserInfo ui = new UserInfo(UserID, Login, fullName, group, RegistrationDate, LastActiveDate, lastLoginDate, TotalTestsSubmitted, LastTestID, LastTestDate, PermissionGroup);
 			lst.add(ui);
 		}
 		return lst;

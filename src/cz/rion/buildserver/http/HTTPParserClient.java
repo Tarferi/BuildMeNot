@@ -271,7 +271,7 @@ public class HTTPParserClient extends HTTPPermissionClient {
 			if (!keepAlive) {
 				try {
 					synchronized (this) {
-						this.wait(1000);
+						this.wait(10);
 					}
 					client.flush();
 				} catch (IOException e) {

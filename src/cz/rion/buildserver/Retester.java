@@ -103,53 +103,45 @@ public class Retester {
 					new ValuedField(db.getField(tableName, "full"), test.BackupFull),
 					new ValuedField(db.getField(tableName, "code"), test.BackupCode) };
 			this.db.update(tableName, test.Past.RowID, fieldData);
-			// this.db.execute("UPDATE compilations SET good_tests = ?, bad_tests = ?,
-			// result = '?', full = '?', code = ? WHERE ID = ?", 0, 0, test.BackupResult,
-			// test.BackupFull, test.BackupCode, test.Past.RowID);
 			index++;
 			System.out.println("Updating " + index + "/" + total);
 		}
 	}
 
-	public void backupData() throws DatabaseException {
+	public void backupData(String test_id) throws DatabaseException {
 		List<StoredNewTestResult> data = loadNew();
 		int index = 0;
 		int total = data.size();
 		final String tableName = "retests";
 		for (StoredNewTestResult test : data) {
-			ValuedField[] fieldData = new ValuedField[] {
-					new ValuedField(db.getField(tableName, "original_result"), test.Past.Result),
-					new ValuedField(db.getField(tableName, "original_full"), test.Past.Full),
-					new ValuedField(db.getField(tableName, "original_code"), test.Past.Code) };
-			this.db.update(tableName, test.ID, fieldData);
-			// this.db.execute("UPDATE retests SET original_result = '?', original_full =
-			// '?', original_code = ? WHERE ID = ?", test.Past.Result, test.Past.Full,
-			// test.Past.Code, test.ID);
+			if (test.Past.TestID.equals(test_id)) {
+				ValuedField[] fieldData = new ValuedField[] {
+						new ValuedField(db.getField(tableName, "original_result"), test.Past.Result),
+						new ValuedField(db.getField(tableName, "original_full"), test.Past.Full),
+						new ValuedField(db.getField(tableName, "original_code"), test.Past.Code) };
+				this.db.update(tableName, test.ID, fieldData);
+			}
 			index++;
 			System.out.println("Updating " + index + "/" + total);
 		}
 	}
 
-	public void updateData() throws DatabaseException {
+	public void updateData(String test_id) throws DatabaseException {
 		List<StoredNewTestResult> data = loadNew();
 		int index = 0;
 		int total = data.size();
 		final String tableName = "compilations";
-		// this.db.execute("UPDATE compilations SET good_tests = ?, bad_tests = ?,
-		// bad_tests_details = '?'", 0, 0, "[]");
 		for (StoredNewTestResult test : data) {
-			ValuedField[] fieldData = new ValuedField[] {
-					new ValuedField(db.getField(tableName, "good_tests"), test.Good),
-					new ValuedField(db.getField(tableName, "bad_tests"), test.Bad),
-					new ValuedField(db.getField(tableName, "bad_tests_details"), test.Details),
-					new ValuedField(db.getField(tableName, "result"), test.Result),
-					new ValuedField(db.getField(tableName, "full"), test.Full),
-					new ValuedField(db.getField(tableName, "code"), test.Code) };
-			this.db.update(tableName, test.Past.RowID, fieldData);
-			// this.db.execute("UPDATE compilations SET good_tests = ?, bad_tests = ?,
-			// bad_tests_details = '?', result = '?', full = '?', code = ? WHERE ID = ?",
-			// test.Good, test.Bad, test.Details, test.Result, test.Full, test.Code,
-			// test.Past.RowID);
+			if (test.Past.TestID.equals(test_id)) {
+				ValuedField[] fieldData = new ValuedField[] {
+						new ValuedField(db.getField(tableName, "good_tests"), test.Good),
+						new ValuedField(db.getField(tableName, "bad_tests"), test.Bad),
+						new ValuedField(db.getField(tableName, "bad_tests_details"), test.Details),
+						new ValuedField(db.getField(tableName, "result"), test.Result),
+						new ValuedField(db.getField(tableName, "full"), test.Full),
+						new ValuedField(db.getField(tableName, "code"), test.Code) };
+				this.db.update(tableName, test.Past.RowID, fieldData);
+			}
 			index++;
 			System.out.println("Updating " + index + "/" + total);
 		}
@@ -157,9 +149,7 @@ public class Retester {
 
 	private int getretestIDForCompilation(int compilation_id) throws DatabaseException {
 		final String tableName = "retests";
-		JsonArray res = db.select(tableName, new TableField[] { db.getField(tableName, "ID") }, false);
-		// JsonArray res = db.select("SELECT * FROM retests WHERE compilation_id = ?",
-		// compilation_id).getJSON();
+		JsonArray res = db.select(tableName, new TableField[] { db.getField(tableName, "ID") }, false, new ComparisionField(db.getField(tableName, "compilation_id"), compilation_id));
 		if (!res.Value.isEmpty()) {
 			return res.Value.get(0).asObject().getNumber("ID").Value;
 		}
@@ -186,10 +176,6 @@ public class Retester {
 							new ValuedField(db.getField(tableName, "bad_tests"), ntest.Bad),
 							new ValuedField(db.getField(tableName, "bad_tests_details"), ntest.Details) };
 					db.insert(tableName, updateData);
-					// db.execute("INSERT INTO retests (compilation_id, code, result, full,
-					// creation_time, good_tests, bad_tests, bad_tests_details) VALUES (?, ?, '?',
-					// '?', ?, ?, ?, ?)", ntest.Past.RowID, ntest.Code, ntest.Result, ntest.Full,
-					// new Date().getTime(), ntest.Good, ntest.Bad, ntest.Details);
 				} else { // Updates
 					ValuedField[] updateData = new ValuedField[] {
 							new ValuedField(db.getField(tableName, "code"), ntest.Code),
@@ -200,10 +186,6 @@ public class Retester {
 							new ValuedField(db.getField(tableName, "bad_tests"), ntest.Bad),
 							new ValuedField(db.getField(tableName, "bad_tests_details"), ntest.Details) };
 					this.db.update("retests", existingID, updateData);
-					// db.execute("UPDATE retests SET code = ?, result = '?', full = '?',
-					// creation_time = ?, good_tests = ?, bad_tests = ?, bad_tests_details = '?'
-					// WHERE ID = ?", ntest.Code, ntest.Result, ntest.Full, new Date().getTime(),
-					// ntest.Good, ntest.Bad, ntest.Details, existingID);
 				}
 			}
 			System.out.println("Done " + index + "/" + total);
@@ -229,10 +211,6 @@ public class Retester {
 					new ValuedField(db.getField(tableName, "bad_tests"), ntest.Bad),
 					new ValuedField(db.getField(tableName, "bad_tests_details"), ntest.Details) };
 			db.insert(tableName, updateData);
-			// db.execute("INSERT INTO retests (compilation_id, code, result, full,
-			// creation_time, good_tests, bad_tests, bad_tests_details) VALUES (?, ?, '?',
-			// '?', ?, ?, ?, ?)", ntest.Past.RowID, ntest.Code, ntest.Result, ntest.Full,
-			// new Date().getTime(), ntest.Good, ntest.Bad, ntest.Details);
 			System.out.println("Done " + index + "/" + total);
 			index++;
 		}
@@ -260,10 +238,6 @@ public class Retester {
 				db.getField(tableName, "original_result")
 		};
 		JsonArray res = db.select(tableName, selectFields, true);
-		// JsonArray res = db.select("SELECT retests.ID, retests.compilation_id,
-		// retests.code, retests.result, retests.full, retests.good_tests,
-		// retests.bad_tests, retests.bad_tests_details, retests.original_code,
-		// retests.original_full, retests.original_result FROM retests").getJSON();
 		for (JsonValue val : res.Value) {
 			JsonObject obj = val.asObject();
 			int id = obj.getNumber("ID").Value;
@@ -308,10 +282,6 @@ public class Retester {
 				new TableJoin(db.getField(tableName1, "user_id"), db.getField(tableName2, "ID"))
 		};
 		JsonArray res = db.select(tableName1, selectFields, new ComparisionField[0], joins, true);
-		// JsonArray res = db.select("SELECT compilations.ID, compilations.asm,
-		// compilations.test_id, compilations.full, compilations.code,
-		// compilations.result, users.login FROM compilations, users WHERE
-		// compilations.user_id = users.id").getJSON();
 		for (JsonValue val : res.Value) {
 			JsonObject obj = val.asObject();
 			int id = obj.getNumber("ID").Value;
