@@ -31,6 +31,7 @@ import cz.rion.buildserver.ui.events.FileListLoadedEvent;
 import cz.rion.buildserver.ui.events.FileLoadedEvent;
 import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 import cz.rion.buildserver.ui.events.FileSavedEvent;
+import cz.rion.buildserver.ui.events.PingEvent;
 import cz.rion.buildserver.ui.events.StatusMessageEvent;
 import cz.rion.buildserver.ui.events.UsersLoadedEvent;
 import cz.rion.buildserver.ui.events.StatusMessageEvent.StatusMessageType;
@@ -99,7 +100,7 @@ public class RemoteUIProviderServer {
 		outBuffer.writeInt(builder.getBuilderStatus().code);
 	}
 
-	private boolean handle(int code, InputPacketRequest inBuffer, MemoryBuffer outBuffer) throws IOException {
+	private boolean handle(RemoteUIClient sender, int code, InputPacketRequest inBuffer, MemoryBuffer outBuffer) throws IOException {
 		if (code == BuildersLoadedEvent.ID) {
 			int totalBuilders = server.builders.size();
 			outBuffer.writeInt(BuildersLoadedEvent.ID);
@@ -124,13 +125,16 @@ public class RemoteUIProviderServer {
 			createFile(inBuffer, outBuffer);
 			return true;
 		} else if (code == DatabaseTableRowEditEvent.ID) {
-			handleEditDatabaseTableROw(inBuffer, outBuffer);
+			handleEditDatabaseTableRow(inBuffer, outBuffer);
+			return true;
+		} else if (code == PingEvent.ID) {
+			sender.updateLastOperation();
 			return true;
 		}
 		return false;
 	}
 
-	private void handleEditDatabaseTableROw(InputPacketRequest inBuffer, MemoryBuffer outBuffer) throws IOException {
+	private void handleEditDatabaseTableRow(InputPacketRequest inBuffer, MemoryBuffer outBuffer) throws IOException {
 		int returnCode = 99;
 		int fileID = inBuffer.readInt();
 		String jsn = inBuffer.readString();
@@ -287,26 +291,49 @@ public class RemoteUIProviderServer {
 		outBuffer.writeString(raw);
 	}
 
+	private List<MemoryBuffer> outBuffersFromAnotherThreads = new ArrayList<>();
+
 	private void dispatch(MemoryBuffer outBuffer) {
-		if (outBuffer.isForSingleClient()) {
-			RemoteUIClient client = outBuffer.getClient();
-			if (!client.write(outBuffer, false)) {
-				closeClient(client);
+		if (outBuffer.get().length == 0) { // Not sending empty packet
+			return;
+		}
+		if (Thread.currentThread() != thread) { // Not a senders thread
+			synchronized (outBuffersFromAnotherThreads) {
+				outBuffersFromAnotherThreads.add(outBuffer);
+				selector.wakeup();
 			}
 		} else {
-			List<RemoteUIClient> toClose = new ArrayList<>();
-			synchronized (clients) {
-				for (RemoteUIClient client : clients) {
-					if (!client.write(outBuffer, false)) {
-						toClose.add(client);
+			if (outBuffer.isForSingleClient()) {
+				RemoteUIClient client = outBuffer.getClient();
+				if (!client.write(outBuffer, false)) {
+					closeClient(client);
+					synchronized (clients) {
+						clients.remove(client);
 					}
 				}
-				for (RemoteUIClient client : toClose) {
-					client.close();
-					clients.remove(client);
+			} else {
+				List<RemoteUIClient> toClose = new ArrayList<>();
+				synchronized (clients) {
+					for (RemoteUIClient client : clients) {
+						if (!client.write(outBuffer, false)) {
+							toClose.add(client);
+						}
+					}
+					for (RemoteUIClient client : toClose) {
+						client.close();
+						clients.remove(client);
+					}
 				}
 			}
 		}
+	}
+
+	public void writePing(RemoteUIClient client) {
+		MemoryBuffer outBuffer = new MemoryBuffer.SignleClientMemoryBuffer(32, client);
+		String pingData = RuntimeDB.randomstr(16);
+		outBuffer.writeInt(PingEvent.ID);
+		outBuffer.writeString(pingData);
+		dispatch(outBuffer);
 	}
 
 	public void writeGetHTML(String address, String login, int code, String codeDescription, String path) {
@@ -384,7 +411,7 @@ public class RemoteUIProviderServer {
 			request.read(b);
 			int code = b[0];
 			MemoryBuffer toSend = new MemoryBuffer.SignleClientMemoryBuffer(128, client);
-			if (!handle(code, request, toSend)) {
+			if (!handle(client, code, request, toSend)) {
 				synchronized (clients) {
 					client.close();
 				}
@@ -392,7 +419,6 @@ public class RemoteUIProviderServer {
 				dispatch(toSend);
 			}
 		} catch (Exception e) {
-			e.printStackTrace();
 			closeClient(client);
 		}
 	}
@@ -408,6 +434,17 @@ public class RemoteUIProviderServer {
 							clients.add(client);
 						}
 						unregisteredClients.clear();
+					}
+				}
+				synchronized (outBuffersFromAnotherThreads) {
+					if (!outBuffersFromAnotherThreads.isEmpty()) {
+						try {
+							for (MemoryBuffer outBuffer : outBuffersFromAnotherThreads) {
+								dispatch(outBuffer);
+							}
+						} finally {
+							outBuffersFromAnotherThreads.clear();
+						}
 					}
 				}
 				Set<SelectionKey> keys = selector.selectedKeys();
@@ -426,6 +463,7 @@ public class RemoteUIProviderServer {
 									handle(client, packet);
 								}
 							} catch (Throwable t) { // Close client and continue
+								t.printStackTrace();
 								closeClient(client);
 							}
 						}
@@ -441,5 +479,13 @@ public class RemoteUIProviderServer {
 				e.printStackTrace();
 			}
 		}
+	}
+
+	public List<RemoteUIClient> getClients() {
+		List<RemoteUIClient> lst = new ArrayList<>();
+		synchronized (clients) {
+			lst.addAll(clients);
+		}
+		return lst;
 	}
 }

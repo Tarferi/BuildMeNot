@@ -116,36 +116,43 @@ public class BuildThread {
 		}
 	}
 
+	private SocketChannel currentClient;
+
 	private void async() {
 		thread.setName("Worker " + ID);
 		while (true) {
-			SocketChannel sock;
-			synchronized (jobs) {
-				if (jobs.isEmpty()) {
-					waiting = true;
-					try {
-						jobs.wait();
-					} catch (InterruptedException e) {
-					}
-				}
-				sock = jobs.remove(0);
-			}
-			HTTPClient client = new HTTPClient(sock, ID, server.db, server.sdb, server.tests, server.remoteUI);
 			try {
-				client.run();
-			} catch (SwitchClientException e) {
-				server.addRemoteUIClient(e.socket);
-			} catch (Exception | Error e) {
-				e.printStackTrace();
-			} finally {
-				JsonObject result = client.getReturnValue();
-				int code = result == null ? 1 : (result.containsNumber("code") ? result.getNumber("code").Value : 1);
-				String codeDescription = result == null ? null : result.containsString("result") ? result.getString("result").Value : null;
-				String path = client.getDownloadedDocumentPath();
-				String runtimeResult = result == null ? null : result.getJsonString();
-				String test_id = client.getTestID();
-				String asm = client.getASM();
-				account(client.haveTestsPassed(), this.server.remoteUI, client.getIntention(), client.getAddress(), client.getLogin(), code, codeDescription, path, asm, runtimeResult, test_id);
+				currentClient = null;
+				synchronized (jobs) {
+					waiting = false;
+					if (jobs.isEmpty()) {
+						waiting = true;
+						try {
+							jobs.wait();
+						} catch (InterruptedException e) {
+						}
+					}
+					currentClient = jobs.remove(0);
+				}
+				HTTPClient client = new HTTPClient(currentClient, ID, server.db, server.sdb, server.tests, server.remoteUI);
+				try {
+					client.run();
+				} catch (SwitchClientException e) {
+					server.addRemoteUIClient(e.socket);
+				} catch (Exception | Error e) {
+					e.printStackTrace();
+				} finally {
+					JsonObject result = client.getReturnValue();
+					int code = result == null ? 1 : (result.containsNumber("code") ? result.getNumber("code").Value : 1);
+					String codeDescription = result == null ? null : result.containsString("result") ? result.getString("result").Value : null;
+					String path = client.getDownloadedDocumentPath();
+					String runtimeResult = result == null ? null : result.getJsonString();
+					String test_id = client.getTestID();
+					String asm = client.getASM();
+					account(client.haveTestsPassed(), this.server.remoteUI, client.getIntention(), client.getAddress(), client.getLogin(), code, codeDescription, path, asm, runtimeResult, test_id);
+				}
+			} catch (Throwable t) { // Ultimate catcher
+				t.printStackTrace();
 			}
 		}
 	}
@@ -180,5 +187,9 @@ public class BuildThread {
 				return BuilderStatus.WORKING;
 			}
 		}
+	}
+
+	public SocketChannel getClient() {
+		return currentClient;
 	}
 }

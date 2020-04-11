@@ -23,6 +23,7 @@ import cz.rion.buildserver.ui.events.FileLoadedEvent;
 import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 import cz.rion.buildserver.ui.events.FileSavedEvent;
 import cz.rion.buildserver.ui.events.FileSavedEvent.FileSaveResult;
+import cz.rion.buildserver.ui.events.PingEvent;
 import cz.rion.buildserver.ui.events.EventManager.Status;
 import cz.rion.buildserver.ui.events.FileCreatedEvent;
 import cz.rion.buildserver.ui.events.FileCreatedEvent.FileCreationInfo;
@@ -85,6 +86,7 @@ public class UIDriver {
 			try {
 				job.run();
 			} catch (Exception | Error e) {
+				e.printStackTrace();
 			}
 		}
 	}
@@ -223,6 +225,8 @@ public class UIDriver {
 					return new FileCreatedEvent(readFileCreate(inBuffer));
 				} else if (code == DatabaseTableRowEditEvent.ID) {
 					return new DatabaseTableRowEditEvent(readDatabaseEditResult(inBuffer));
+				} else if (code == PingEvent.ID) {
+					return new PingEvent(inBuffer.readString());
 				} else {
 					throw new IOException("Invalid OP code: " + code);
 				}
@@ -232,6 +236,7 @@ public class UIDriver {
 				}
 			}
 		}
+		System.out.print("Empty input buffer");
 		return new StatusChangeEvent(Status.DISCONNECTED);
 	}
 
@@ -426,6 +431,10 @@ public class UIDriver {
 
 	public void editTableRow(int fileID, JsonObject values) {
 		addJob(DatabaseTableRowEditEvent.ID, fileID, values.getJsonString());
+	}
+
+	public void sengPing(String pinger) {
+		addJob(PingEvent.ID, pinger);
 	}
 
 }

@@ -3,8 +3,10 @@ package cz.rion.buildserver.ui;
 import javax.swing.JFrame;
 import javax.swing.JTabbedPane;
 
+import cz.rion.buildserver.ui.events.PingEvent;
 import cz.rion.buildserver.ui.events.StatusChangeEvent;
 import cz.rion.buildserver.ui.events.EventManager.Status;
+import cz.rion.buildserver.ui.events.PingEvent.PingEventListener;
 import cz.rion.buildserver.ui.events.StatusChangeEvent.StatusChangeListener;
 
 import java.awt.BorderLayout;
@@ -12,7 +14,7 @@ import java.awt.Dimension;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
 
-public class MainWindow extends JFrame implements StatusChangeListener {
+public class MainWindow extends JFrame implements StatusChangeListener, PingEventListener {
 	private final ConnectionPanel pnlConnect;
 	private final StatusPanel pnlStatus;
 	private final UsersPanel pnlUsers;
@@ -56,6 +58,7 @@ public class MainWindow extends JFrame implements StatusChangeListener {
 		this.update();
 		this.setVisible(true);
 		StatusChangeEvent.addStatusChangeListener(driver.EventManager, this);
+		PingEvent.addPingEventListener(driver.EventManager, this);
 		this.setLocationRelativeTo(null);
 		this.pack();
 	}
@@ -67,6 +70,11 @@ public class MainWindow extends JFrame implements StatusChangeListener {
 		if (newStatus == Status.DISCONNECTED) {
 			tabbedPane.setSelectedIndex(0);
 		}
+	}
+
+	@Override
+	public void PingReceived(String pingData) {
+		driver.sengPing(pingData);
 	}
 
 }

@@ -9,6 +9,7 @@ import java.util.List;
 
 import cz.rion.buildserver.BuildThread;
 import cz.rion.buildserver.Settings;
+import cz.rion.buildserver.cia.Dexter;
 import cz.rion.buildserver.db.RuntimeDB;
 import cz.rion.buildserver.db.StaticDB;
 import cz.rion.buildserver.exceptions.DatabaseException;
@@ -21,6 +22,7 @@ public class HTTPServer {
 	private final int port;
 	public final List<BuildThread> builders = new ArrayList<>();
 	public final RemoteUIProviderServer remoteUI;
+	private final Dexter dexter;
 
 	public final TestManager tests;
 
@@ -53,6 +55,7 @@ public class HTTPServer {
 		for (int i = 0; i < Settings.getBuildersCount(); i++) {
 			builders.add(new BuildThread(this, i));
 		}
+		dexter = new Dexter(this);
 	}
 
 	public void addRemoteUIClient(CompatibleSocketClient socket) {
@@ -75,8 +78,8 @@ public class HTTPServer {
 			} catch (IOException e) {
 				throw new HTTPServerException("Failed to accept client on port " + port, e);
 			}
-			//HTTPClient myClient;
-			//myClient = new HTTPClient(db, sdb, tests, client, remoteUI);
+			// HTTPClient myClient;
+			// myClient = new HTTPClient(db, sdb, tests, client, remoteUI);
 			getBuilder().addJob(client);
 		}
 	}

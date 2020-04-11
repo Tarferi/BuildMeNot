@@ -16,7 +16,7 @@ public abstract class LayeredFilesDB extends LayeredStaticDB {
 
 	public LayeredFilesDB(String fileName) throws DatabaseException {
 		super(fileName);
-		this.makeTable("files", KEY("ID"), TEXT("name"), BIGTEXT("contents"));
+		this.makeTable("files", KEY("ID"), TEXT("name"), BIGTEXT("contents"), NUMBER("deleted"));
 	}
 
 	private static final char[] hexData = new char[] { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
@@ -63,7 +63,7 @@ public abstract class LayeredFilesDB extends LayeredStaticDB {
 		final String tableName = "files";
 		synchronized (fileTable) {
 			try {
-				this.insert(tableName, new ValuedField(this.getField(tableName, "name"), name), new ValuedField(this.getField(tableName, "contents"), encodeFileContents(contents)));
+				this.insert(tableName, new ValuedField(this.getField(tableName, "name"), name), new ValuedField(this.getField(tableName, "deleted"), 0), new ValuedField(this.getField(tableName, "contents"), encodeFileContents(contents)));
 			} catch (DatabaseException e) {
 				e.printStackTrace();
 			}
@@ -122,7 +122,7 @@ public abstract class LayeredFilesDB extends LayeredStaticDB {
 		List<DatabaseFile> result = new ArrayList<>();
 		try {
 			final String tableName = "files";
-			JsonArray res = select(tableName, new TableField[] { getField(tableName, "ID"), getField(tableName, "name"), getField(tableName, "contents") }, true);
+			JsonArray res = select(tableName, new TableField[] { getField(tableName, "ID"), getField(tableName, "name"), getField(tableName, "contents") }, true, new ComparisionField(getField(tableName, "deleted"), 0));
 			if (res != null) {
 				for (JsonValue val : res.Value) {
 					if (val.isObject()) {
@@ -145,8 +145,6 @@ public abstract class LayeredFilesDB extends LayeredStaticDB {
 		try {
 			final String tableName = "files";
 			this.update(tableName, file.ID, new ValuedField(this.getField(tableName, "name"), newFileName), new ValuedField(this.getField(tableName, "contents"), encodeFileContents(newContents)));
-			// this.execute("UPDATE files SET name = '?', contents = '?' WHERE ID = ?",
-			// newFileName, encodeFileContents(newContents), file.ID);
 		} catch (DatabaseException e) {
 			e.printStackTrace();
 		}

@@ -4,13 +4,14 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.Selector;
+import java.util.Date;
 
 import cz.rion.buildserver.http.CompatibleSocketClient;
 
 public class RemoteUIClient {
 
 	public static enum RemoteOperation {
-		BuildersLoad(0), BuildersUpdate(1), FileCreated(2), FileListLoaded(3), FileLoaded(4), FileSaved(5), StatusChanged(6), StatusMessage(7), UsersLoaded(8), DatabaseTableTowEdit(9);
+		BuildersLoad(0), BuildersUpdate(1), FileCreated(2), FileListLoaded(3), FileLoaded(4), FileSaved(5), StatusChanged(6), StatusMessage(7), UsersLoaded(8), DatabaseTableTowEdit(9), Ping(10);
 
 		public final int code;
 
@@ -28,6 +29,16 @@ public class RemoteUIClient {
 	}
 
 	private final CompatibleSocketClient client;
+
+	private Date lastOperation = new Date();
+
+	public Date getLastOperation() {
+		return lastOperation;
+	}
+
+	public void updateLastOperation() {
+		lastOperation = new Date();
+	}
 
 	public void register(Selector selector, int operations, Object attach) throws ClosedChannelException {
 		client.register(selector, operations, attach);
@@ -50,6 +61,7 @@ public class RemoteUIClient {
 			}
 			return true;
 		} catch (Throwable t) {
+			t.printStackTrace();
 			return false;
 		}
 	}
@@ -117,6 +129,7 @@ public class RemoteUIClient {
 				return new InputPacketRequest(data);
 			}
 		} catch (Throwable t) { // Irrelevant
+			t.printStackTrace();
 		}
 		return null;
 	}
@@ -171,5 +184,9 @@ public class RemoteUIClient {
 
 	public boolean isConnected() {
 		return client.isConnected();
+	}
+
+	public String getRemoteAddress() {
+		return client.getRemoteSocketAddress();
 	}
 }
