@@ -115,7 +115,7 @@ public class JsonTestManager {
 						break;
 					} else {
 						char c = next.charAt(0);
-						if (c == ' ' || c == '\r' || c == '\n') {
+						if (c == ' ' || c == '\r' || c == '\n' || c == '\t') {
 							if (instruction.toLowerCase().startsWith("rep")) {
 								String inv = getInvalidInstruction(next.trim(), allowedInstructions);
 								if (inv != null) {
