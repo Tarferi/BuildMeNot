@@ -35,7 +35,7 @@ public class Settings {
 	private final SettingsValue RemoteUserDatabaseURL = new SettingsValue("RemoteUserDatabaseURL", ValueType.STRING, null);
 	private final SettingsValue DefaultUsername = new SettingsValue("DefaultUsername", ValueType.STRING, "Anonymous");
 	private final SettingsValue DefaultGroup = new SettingsValue("DefaultGroup", ValueType.STRING, "Default");
-	private final SettingsValue InitGroupsAndUsers = new SettingsValue("InitGroupsAndUsers", ValueType.BOOLEAN, false);
+	private final SettingsValue InitGroupsAndUsers = new SettingsValue("InitGroupsAndUsers", ValueType.BOOLEAN, 0);
 
 	private List<SettingsValue> settings;
 
