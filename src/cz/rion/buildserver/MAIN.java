@@ -41,14 +41,14 @@ public class MAIN {
 
 	public static void main_retests(String[] args) {
 		try {
-			Retester rt = new Retester();
-			String test_id = "test09_03";
+			//Retester rt = new Retester();
+			//String test_id = "test09_03";
 			//rt.runTests(test_id);
 			//rt.backupData(test_id);
 			//rt.updateData(test_id);
 			// rt.restoreData();
-		} catch (DatabaseException e) {
-			e.printStackTrace();
+		} catch (Throwable t) {
+			t.printStackTrace();
 		}
 	}
 
@@ -69,7 +69,6 @@ public class MAIN {
 		if (Settings.RunOnlyUI()) {
 			onlyUI();
 		} else {
-
 			if (Settings.showUI()) {
 				new MainWindow("127.0.0.1", Settings.GetHTTPServerPort(), Settings.getPasscode());
 			}

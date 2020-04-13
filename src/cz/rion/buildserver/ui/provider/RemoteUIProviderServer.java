@@ -463,7 +463,6 @@ public class RemoteUIProviderServer {
 									handle(client, packet);
 								}
 							} catch (Throwable t) { // Close client and continue
-								t.printStackTrace();
 								closeClient(client);
 							}
 						}

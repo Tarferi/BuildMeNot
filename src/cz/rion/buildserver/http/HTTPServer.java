@@ -22,7 +22,6 @@ public class HTTPServer {
 	private final int port;
 	public final List<BuildThread> builders = new ArrayList<>();
 	public final RemoteUIProviderServer remoteUI;
-	private final Dexter dexter;
 
 	public final TestManager tests;
 
@@ -55,7 +54,7 @@ public class HTTPServer {
 		for (int i = 0; i < Settings.getBuildersCount(); i++) {
 			builders.add(new BuildThread(this, i));
 		}
-		dexter = new Dexter(this);
+		new Dexter(this);
 	}
 
 	public void addRemoteUIClient(CompatibleSocketClient socket) {

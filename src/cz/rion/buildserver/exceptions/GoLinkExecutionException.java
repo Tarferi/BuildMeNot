@@ -5,20 +5,23 @@ import cz.rion.buildserver.wrappers.MyExec.MyExecResult;
 public class GoLinkExecutionException extends Exception {
 
 	public final String description;
-	private final Exception exception;
 	public final MyExecResult execResult;
 
 	public GoLinkExecutionException(String description) {
-		this(description, null);
+		super(description);
+		this.description = description;
+		this.execResult = null;
 	}
 
 	public GoLinkExecutionException(String description, Exception exception) {
-		this(description, null, null);
+		super(description, exception);
+		this.description = description;
+		this.execResult = null;
 	}
 
 	public GoLinkExecutionException(String description, Exception exception, MyExecResult execResult) {
+		super(description, exception);
 		this.description = description;
-		this.exception = exception;
 		this.execResult = execResult;
 	}
 

@@ -3,15 +3,14 @@ package cz.rion.buildserver.exceptions;
 public class CommandLineExecutionException extends Exception {
 
 	public final String description;
-	private final Exception exception;
 
 	public CommandLineExecutionException(String description) {
-		this(description, null);
+		super(description);
+		this.description = description;
 	}
 
 	public CommandLineExecutionException(String description, Exception exception) {
-		super(exception);
+		super(description, exception);
 		this.description = description;
-		this.exception = exception;
 	}
 }

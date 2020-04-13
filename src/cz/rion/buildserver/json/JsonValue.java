@@ -245,6 +245,7 @@ public abstract class JsonValue {
 				if (next != 'e' && next != 'E') {
 					return null;
 				}
+				inst.nextChar(false);
 				return new JsonBoolean(true);
 			} else if (c == 'f' || c == 'F') {
 				inst.nextChar(false);
@@ -267,6 +268,7 @@ public abstract class JsonValue {
 				if (next != 'e' && next != 'E') {
 					return null;
 				}
+				inst.nextChar(false);
 				return new JsonBoolean(false);
 			} else {
 				return null;

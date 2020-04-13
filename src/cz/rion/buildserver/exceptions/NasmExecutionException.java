@@ -5,7 +5,6 @@ import cz.rion.buildserver.wrappers.MyExec.MyExecResult;
 public class NasmExecutionException extends Exception {
 
 	public final String description;
-	private final Exception exception;
 	public final MyExecResult execResult;
 
 	public String getDescription() {
@@ -13,7 +12,9 @@ public class NasmExecutionException extends Exception {
 	}
 
 	public NasmExecutionException(String description) {
-		this(description, null);
+		super(description);
+		this.description = description;
+		this.execResult = null;
 	}
 
 	public NasmExecutionException(String description, Exception exception) {
@@ -21,8 +22,8 @@ public class NasmExecutionException extends Exception {
 	}
 
 	public NasmExecutionException(String description, Exception exception, MyExecResult execResult) {
+		super(description, exception);
 		this.description = description;
-		this.exception = exception;
 		this.execResult = execResult;
 	}
 

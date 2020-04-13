@@ -228,6 +228,7 @@ public class LayeredDBFileWrapperDB extends LayeredFilesDB {
 
 		try {
 			freeSQL = Pattern.compile("\\%NOW\\%", Pattern.MULTILINE).matcher(freeSQL).replaceAll(new Date().getTime() + "");
+			@SuppressWarnings("deprecation")
 			DatabaseResult res = db.select_raw(freeSQL); // TODO
 			TableField[] fields = new TableField[] {};
 			result = res.getJSON(false, fields);

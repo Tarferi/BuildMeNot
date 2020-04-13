@@ -30,13 +30,11 @@ public class HTTPFileProviderClient extends HTTPParserClient {
 		}
 		return null;
 	}
-	
 
 	public String getDownloadedDocumentPath() {
 		return endPoint;
 	}
-
-
+	
 	protected HTTPResponse handle(HTTPRequest request) throws HTTPClientException {
 		if (request.path.startsWith("/") && request.method.equals("GET")) {
 			int returnCode = 200;

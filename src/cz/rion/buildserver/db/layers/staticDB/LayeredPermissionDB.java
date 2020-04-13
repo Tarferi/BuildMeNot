@@ -7,7 +7,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 
 import cz.rion.buildserver.Settings;
-import cz.rion.buildserver.db.SQLiteDB.ValuedField;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
@@ -134,11 +133,21 @@ public class LayeredPermissionDB extends LayeredTestDB {
 
 	protected LayeredPermissionDB(String dbName) throws DatabaseException {
 		super(dbName);
-		// this.execute("DROP TABLE IF EXISTS groups");
-		// this.execute("DROP TABLE IF EXISTS users_group");
+		if (Settings.GetInitGroupsAndUsers()) {
+			if (Settings.GetInitGroupsAndUsers()) {
+				throw new DatabaseException("Absolutely fucking not");
+			}
+			this.dropTable("groups");
+			this.dropTable("users_group");
+		}
 		this.makeTable("groups", KEY("ID"), NUMBER("parent_group_id"), TEXT("name"), BIGTEXT("permissions"));
 		this.makeTable("users_group", KEY("ID"), NUMBER("user_id"), NUMBER("group_id"), NUMBER("primary_group"));
-		// handleInit();
+		if (Settings.GetInitGroupsAndUsers()) {
+			if (Settings.GetInitGroupsAndUsers()) {
+				throw new DatabaseException("Absolutely fucking not");
+			}
+			handleInit();
+		}
 	}
 
 	private void handleInit() {

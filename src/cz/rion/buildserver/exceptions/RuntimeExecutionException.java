@@ -5,20 +5,21 @@ import cz.rion.buildserver.wrappers.MyExec.MyExecResult;
 public class RuntimeExecutionException extends Exception {
 
 	public final String description;
-	private final Exception exception;
 	public final MyExecResult execResult;
 
 	public RuntimeExecutionException(String description) {
-		this(description, null);
+		super(description);
+		this.description = description;
+		this.execResult = null;
 	}
 
 	public RuntimeExecutionException(String description, Exception exception) {
-		this(description, null, null);
+		this(description, exception, null);
 	}
 
 	public RuntimeExecutionException(String description, Exception exception, MyExecResult execResult) {
+		super(description, exception);
 		this.description = description;
-		this.exception = exception;
 		this.execResult = execResult;
 	}
 

@@ -70,7 +70,7 @@ public class JsonTestManager {
 				return new TestResult(finalASM, true, "<span class='log_ok'>Test prošel :)</span>", results);
 			} else {
 				int perc = (passed * 100) / total;
-				return new TestResult(finalASM, false, "<span class='log_err'>Chyba: Prošlo " + perc + "% testù!</span>", results);
+				return new TestResult(finalASM, false, "<span class='log_err'>Chyba: Prošlo " + perc + " % testù!</span>", results);
 			}
 		}
 
@@ -155,8 +155,8 @@ public class JsonTestManager {
 						if (lt.startsWith("section")) {
 							codeSection = lt.contains(".text");
 						} else if (codeSection) {
-							if (lt.startsWith("%")) {
-								if (!lt.startsWith("%include")) {
+							if (lt.trim().startsWith("%")) {
+								if (!lt.trim().startsWith("%include")) {
 									return null;
 								}
 							} else {

@@ -3,15 +3,15 @@ package cz.rion.buildserver.wrappers;
 public class FileCopyException extends Exception {
 
 	public final String description;
-	private final Exception exception;
 
 	public FileCopyException(String description) {
-		this(description, null);
+		super(description);
+		this.description = description;
 	}
 
 	public FileCopyException(String description, Exception exception) {
+		super(description, exception);
 		this.description = description;
-		this.exception = exception;
 	}
 
 }

@@ -23,7 +23,7 @@ import cz.rion.buildserver.json.JsonValue.JsonString;
 import cz.rion.buildserver.test.AsmTest;
 import cz.rion.buildserver.test.TestManager;
 
-public class HTTPTestClient extends HTTPFileProviderClient {
+public class HTTPTestClient extends HTTPGraphProviderClient {
 
 	private final CompatibleSocketClient client;
 	private JsonObject returnValue = null;
@@ -214,6 +214,11 @@ public class HTTPTestClient extends HTTPFileProviderClient {
 
 								returnValue.add("code", new JsonNumber(0));
 								returnValue.add("tests", new JsonArray(d));
+							} else if (act.equals("GRAPHS")) {
+								JsonValue graphs = this.loadGraphs();
+								returnValue.add("code", new JsonNumber(0));
+								returnValue.add("data", graphs == null ? new JsonArray(new ArrayList<JsonValue>()) : graphs);
+								this.setIntention(HTTPClientIntentType.COLLECT_TESTS);
 							}
 						}
 					} else { // Not authenticated

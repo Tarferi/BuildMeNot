@@ -35,6 +35,7 @@ public class Settings {
 	private final SettingsValue RemoteUserDatabaseURL = new SettingsValue("RemoteUserDatabaseURL", ValueType.STRING, null);
 	private final SettingsValue DefaultUsername = new SettingsValue("DefaultUsername", ValueType.STRING, "Anonymous");
 	private final SettingsValue DefaultGroup = new SettingsValue("DefaultGroup", ValueType.STRING, "Default");
+	private final SettingsValue InitGroupsAndUsers = new SettingsValue("InitGroupsAndUsers", ValueType.BOOLEAN, false);
 
 	private List<SettingsValue> settings;
 
@@ -104,6 +105,10 @@ public class Settings {
 			}
 			return defaultValue;
 		}
+	}
+
+	public static void reload() {
+		instance.load();
 	}
 
 	private void load() {
@@ -246,5 +251,9 @@ public class Settings {
 
 	public static String GetDefaultGroup() {
 		return instance.DefaultGroup.asString();
+	}
+
+	public static boolean GetInitGroupsAndUsers() {
+		return instance.InitGroupsAndUsers.asBoolean();
 	}
 }

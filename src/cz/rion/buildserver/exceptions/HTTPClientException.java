@@ -3,15 +3,15 @@ package cz.rion.buildserver.exceptions;
 public class HTTPClientException extends Exception {
 
 	public final String description;
-	private final Exception exception;
 
 	public HTTPClientException(String description) {
-		this(description, null);
+		super(description);
+		this.description = description;
 	}
 
 	public HTTPClientException(String description, Exception exception) {
+		super(description, exception);
 		this.description = description;
-		this.exception = exception;
 	}
 
 }
