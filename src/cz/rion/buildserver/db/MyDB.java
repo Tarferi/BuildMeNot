@@ -9,6 +9,7 @@ import java.util.Date;
 import java.util.List;
 
 import cz.rion.buildserver.Settings;
+import cz.rion.buildserver.db.RuntimeDB.BadResults;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
@@ -52,7 +53,7 @@ public class MyDB {
 					if (job.Index == 898) {
 					} else {
 					}
-					String test_id = getTestID(index, storage.totalTests, storage.tests, job.Result);
+					String test_id = getTestID(null, index, storage.totalTests, storage.tests, job.Result);
 					storage.hasGood(job, test_id);
 				}
 			}
@@ -145,7 +146,7 @@ public class MyDB {
 
 		private final TestManager tm = new TestManager(null, "./web/tests/");
 
-		private String getTestID(int builderID, int totalTests, List<String> tests, CompilationResult d) {
+		private String getTestID(BadResults br, int builderID, int totalTests, List<String> tests, CompilationResult d) {
 			if (d.resultCode != 0 || (!d.resultText.equals("OK") && !d.resultText.contains(":)"))) {
 				if (d.code.contains("secti")) {
 					return "test07_01";
@@ -157,7 +158,7 @@ public class MyDB {
 			}
 			String deb_id = null;
 			for (String test_id : tests) {
-				JsonObject res = tm.run(builderID, test_id, d.code, null);
+				JsonObject res = tm.run(br, builderID, test_id, d.code, null);
 				if (res.getNumber("code").Value == 0) {
 					if (test_id.contains("debug")) {
 						deb_id = test_id;

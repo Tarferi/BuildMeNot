@@ -281,13 +281,13 @@ public abstract class SQLiteDB {
 		sb.append("INSERT INTO " + tableName + " (");
 		for (int i = 0; i < fields.length; i++) {
 			boolean compress = fields[i].field.field.IsBigString();
-			
+
 			if (i > 0) {
 				sb.append(", ");
 			}
 			sb.append(fields[i].field.field.name);
 			try {
-				params[i] = compress ? Compressor.compress(fields[i].value.toString()) : fields[i].value;
+				params[i] = compress ? Compressor.compress(fields[i].value == null ? "" : fields[i].value.toString()) : fields[i].value;
 			} catch (CompressionException e) {
 				e.printStackTrace();
 				throw new DatabaseException("Failed to insert into " + tableName + ": Compression failed", e);

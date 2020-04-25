@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Map;
 
 import cz.rion.buildserver.Settings;
+import cz.rion.buildserver.db.RuntimeDB.BadResultType;
+import cz.rion.buildserver.db.RuntimeDB.BadResults;
 import cz.rion.buildserver.db.StaticDB;
 import cz.rion.buildserver.exceptions.CommandLineExecutionException;
 import cz.rion.buildserver.exceptions.GoLinkExecutionException;
@@ -168,7 +170,7 @@ public class TestManager {
 		});
 	}
 
-	public JsonObject run(int builderID, String test_id, String asm, String login) {
+	public JsonObject run(BadResults badResults, int builderID, String test_id, String asm, String login) {
 		AsmTest test = null;
 		synchronized (tests) {
 			if (mtest.containsKey(test_id.toLowerCase())) {
@@ -186,7 +188,7 @@ public class TestManager {
 			rawMessage.add(new JsonString("Uvedený test nebyl nalezen"));
 			message = "<span class='log_err'>Uvedený test nebyl nalezen</span>";
 		} else {
-			String err = test.VerifyCode(asm);
+			String err = test.VerifyCode(badResults, asm);
 			if (err != null) {
 				rawMessage.add(new JsonString(err));
 				message = "<span class='log_err'>" + err + "</span>";
@@ -203,6 +205,7 @@ public class TestManager {
 						code = 1;
 						JsonObject obj = new JsonObject();
 						obj.add("description", new JsonString("NASM failed"));
+						badResults.setNext(BadResultType.Uncompillable);
 						if (e.execResult != null) {
 							obj.add("stdout", new JsonString(e.execResult.stdout));
 							obj.add("stderr", new JsonString(e.execResult.stderr));
@@ -235,7 +238,7 @@ public class TestManager {
 					}
 					if (result != null) {
 						TestInput input = new TestInput(result.exePath, result.exeName);
-						testResult = test.perform(input);
+						testResult = test.perform(badResults, input);
 						NasmWrapper.clean(result.exePath);
 					}
 					if (testResult != null) {

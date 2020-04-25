@@ -10,6 +10,7 @@ import java.util.Map;
 
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.RuntimeDB;
+import cz.rion.buildserver.db.RuntimeDB.BadResults;
 import cz.rion.buildserver.db.RuntimeDB.CompletedTest;
 import cz.rion.buildserver.db.StaticDB;
 import cz.rion.buildserver.exceptions.DatabaseException;
@@ -33,7 +34,7 @@ public class HTTPTestClient extends HTTPGraphProviderClient {
 	private String asm;
 	private final TestManager tests;
 	private List<CompletedTest> completed = new ArrayList<>();
-
+	private BadResults badResults = null;
 	private boolean wantsToRedirect = false;
 
 	public String getTestID() {
@@ -152,73 +153,106 @@ public class HTTPTestClient extends HTTPGraphProviderClient {
 
 					if (authenticated) {
 						completed = db.getCompletedTests(getPermissions().Login);
-						if (obj.containsString("asm") && obj.containsString("id")) {
+						try {
+							badResults = db.GetBadResultsForUser(getPermissions().UserID);
+						} catch (DatabaseException e) {
+							e.printStackTrace();
+							returnValue.add("code", new JsonNumber(53));
+							returnValue.add("result", new JsonString("Not logged in"));
+						}
+						if (badResults != null) {
+							if (obj.containsString("asm") && obj.containsString("id")) {
 
-							test_id = obj.getString("id").Value;
-							asm = obj.getString("asm").Value;
+								test_id = obj.getString("id").Value;
+								asm = obj.getString("asm").Value;
 
-							returnValue = tests.run(BuilderID, test_id, asm, getPermissions().Login);
-							testsPassed = returnValue.containsNumber("code") ? returnValue.getNumber("code").Value == 0 : false;
-
-						} else if (obj.containsString("action")) {
-							String act = obj.getString("action").Value;
-							if (act.equals("COLLECT")) {
-								this.setIntention(HTTPClientIntentType.COLLECT_TESTS);
-								List<AsmTest> tsts = tests.getAllTests();
-								tsts.sort(new Comparator<AsmTest>() {
-
-									@Override
-									public int compare(AsmTest o1, AsmTest o2) {
-										String id1 = o1.getID();
-										String id2 = o2.getID();
-
-										String[] p1 = id1.split("_");
-										String[] p2 = id2.split("_");
-
-										if (p1[0].equals(p2[0])) {
-											id1 = p1.length > 1 ? p1[1] : "";
-											id2 = p2.length > 1 ? p2[1] : "";
-											return id1.compareTo(id2);
-										} else {
-											return id2.compareTo(id1);
-										}
-									}
-								});
-
-								List<JsonValue> d = new ArrayList<>();
-								Map<String, CompletedTest> finishedByTestID = new HashMap<>();
+								long now = new Date().getTime();
+								long then = badResults.AllowNext.getTime();
+								long diff = then > now ? then - now : 0;
+								if (diff > 10000) { // 10 seconds allowance
+									returnValue.add("code", new JsonNumber(54));
+									returnValue.add("result", new JsonString("Hacking much?"));
+								} else {
+									returnValue = tests.run(badResults, BuilderID, test_id, asm, getPermissions().Login);
+									testsPassed = returnValue.containsNumber("code") ? returnValue.getNumber("code").Value == 0 : false;
+								}
+								
+								// See if user has finished this test before
+								boolean newlyFinished = testsPassed;
 								for (CompletedTest test : completed) {
-									finishedByTestID.put(test.TestID, test);
+									if (test.Code.equals(test_id)) {
+										newlyFinished = false;
+									}
 								}
 
-								for (AsmTest tst : tsts) {
-									if (!getPermissions().allowSee(tst.getID())) {
-										continue;
-									}
-									if (tst.isSecret() && !getPermissions().allowSeeSecretTests()) {
-										continue;
-									}
-									JsonObject tobj = new JsonObject();
-									tobj.add("title", new JsonString(tst.getTitle()));
-									tobj.add("zadani", new JsonString(tst.getDescription()));
-									tobj.add("init", new JsonString(tst.getInitialCode()));
-									tobj.add("id", new JsonString(tst.getID()));
-									tobj.add("hidden", new JsonNumber(tst.isHidden() ? 1 : 0));
-									if (finishedByTestID.containsKey(tst.getID())) {
-										CompletedTest result = finishedByTestID.get(tst.getID());
-										tobj.add("finished_date", new JsonString(result.CompletionDateStr));
-										tobj.add("finished_code", new JsonString(result.Code));
-									}
-									d.add(tobj);
+								try {
+									badResults.store(newlyFinished);
+								} catch (DatabaseException e) {
+									e.printStackTrace();
 								}
+								returnValue.add("wait", new JsonNumber(0, (badResults.AllowNext.getTime()) + ""));
 
-								returnValue.add("code", new JsonNumber(0));
-								returnValue.add("tests", new JsonArray(d));
-							} else if (act.equals("GRAPHS")) {
-								JsonValue graphs = this.loadGraphs();
-								returnValue.add("code", new JsonNumber(0));
-								returnValue.add("data", graphs == null ? new JsonArray(new ArrayList<JsonValue>()) : graphs);
-								this.setIntention(HTTPClientIntentType.COLLECT_TESTS);
+							} else if (obj.containsString("action")) {
+								String act = obj.getString("action").Value;
+								if (act.equals("COLLECT")) {
+									this.setIntention(HTTPClientIntentType.COLLECT_TESTS);
+									List<AsmTest> tsts = tests.getAllTests();
+									tsts.sort(new Comparator<AsmTest>() {
+
+										@Override
+										public int compare(AsmTest o1, AsmTest o2) {
+											String id1 = o1.getID();
+											String id2 = o2.getID();
+
+											String[] p1 = id1.split("_");
+											String[] p2 = id2.split("_");
+
+											if (p1[0].equals(p2[0])) {
+												id1 = p1.length > 1 ? p1[1] : "";
+												id2 = p2.length > 1 ? p2[1] : "";
+												return id1.compareTo(id2);
+											} else {
+												return id2.compareTo(id1);
+											}
+										}
+									});
+
+									List<JsonValue> d = new ArrayList<>();
+									Map<String, CompletedTest> finishedByTestID = new HashMap<>();
+									for (CompletedTest test : completed) {
+										finishedByTestID.put(test.TestID, test);
+									}
+
+									for (AsmTest tst : tsts) {
+										if (!getPermissions().allowSee(tst.getID())) {
+											continue;
+										}
+										if (tst.isSecret() && !getPermissions().allowSeeSecretTests()) {
+											continue;
+										}
+										JsonObject tobj = new JsonObject();
+										tobj.add("title", new JsonString(tst.getTitle()));
+										tobj.add("zadani", new JsonString(tst.getDescription()));
+										tobj.add("init", new JsonString(tst.getInitialCode()));
+										tobj.add("id", new JsonString(tst.getID()));
+										tobj.add("hidden", new JsonNumber(tst.isHidden() ? 1 : 0));
+										if (finishedByTestID.containsKey(tst.getID())) {
+											CompletedTest result = finishedByTestID.get(tst.getID());
+											tobj.add("finished_date", new JsonString(result.CompletionDateStr));
+											tobj.add("finished_code", new JsonString(result.Code));
+										}
+										d.add(tobj);
+									}
+
+									returnValue.add("code", new JsonNumber(0));
+									returnValue.add("tests", new JsonArray(d));
+									returnValue.add("wait", new JsonNumber(0, (badResults.AllowNext.getTime()) + ""));
+								} else if (act.equals("GRAPHS")) {
+									JsonValue graphs = this.loadGraphs();
+									returnValue.add("code", new JsonNumber(0));
+									returnValue.add("data", graphs == null ? new JsonArray(new ArrayList<JsonValue>()) : graphs);
+									this.setIntention(HTTPClientIntentType.COLLECT_TESTS);
+								}
 							}
 						}
 					} else { // Not authenticated

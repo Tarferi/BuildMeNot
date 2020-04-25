@@ -308,7 +308,7 @@ public class Retester {
 	}
 
 	private NewTestResult retest(PastTestResult test) {
-		JsonObject res = tests.run(test.RowID, test.TestID, test.ASM, test.Login);
+		JsonObject res = tests.run(null, test.RowID, test.TestID, test.ASM, test.Login);
 		int code = res.getNumber("code").Value;
 		String result = res.getString("result").Value;
 		int good = res.getNumber("good").Value;

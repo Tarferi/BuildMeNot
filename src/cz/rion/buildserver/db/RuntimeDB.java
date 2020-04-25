@@ -11,6 +11,7 @@ import java.util.Map.Entry;
 
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.crypto.Crypto;
+import cz.rion.buildserver.db.crypto.CryptoException;
 import cz.rion.buildserver.db.crypto.CryptoManager;
 import cz.rion.buildserver.db.layers.common.LayeredMetaDB;
 import cz.rion.buildserver.exceptions.ChangeOfSessionAddressException;
@@ -28,6 +29,7 @@ public class RuntimeDB extends LayeredMetaDB {
 	private final Object syncer_users = new Object();
 	private final Object syncer_sessions = new Object();
 	private final Object syncer_compilation_stats = new Object();
+	private final Object syncer_user_timeouts = new Object();
 
 	public RuntimeDB(String fileName, StaticDB sdb) throws DatabaseException {
 		super(fileName, "RuntimeDB");
@@ -39,8 +41,139 @@ public class RuntimeDB extends LayeredMetaDB {
 		makeTable("dbV1", KEY("ID"), TEXT("address"), NUMBER("port"), BIGTEXT("asm"), TEXT("test_id"), DATE("creation_time"), NUMBER("code"), BIGTEXT("result"), BIGTEXT("full"));
 		makeTable("dbV1Good", KEY("ID"), TEXT("address"), NUMBER("port"), BIGTEXT("asm"), TEXT("test_id"), DATE("creation_time"), NUMBER("code"), BIGTEXT("result"), BIGTEXT("full"));
 		makeTable("crypto_expire_log", KEY("ID"), TEXT("address"), BIGTEXT("crypto"), NUMBER("creation_time"), TEXT("description"));
+
+		makeTable("user_timeouts", KEY("ID"), NUMBER("user_id"), DATE("last_time"), DATE("allow_next"), NUMBER("bad_instr"), NUMBER("bad_segfaults"), NUMBER("bad_base"), NUMBER("bad_uncompilable"), NUMBER("live"));
 		makeCompilationStatsTable();
 		makeRetestsTable();
+	}
+
+	public enum BadResultType {
+		Good(0, 0),
+		SegFault(10, 0),
+		BadInstructions(10, 15),
+		BadBase(10, 5),
+		BadTests(2, 0),
+		Uncompillable(30, 30);
+
+		private final int FirstMinutes;
+		private final int EveryOtherMinutes;
+
+		private BadResultType(int first, int next) {
+			this.FirstMinutes = first;
+			this.EveryOtherMinutes = next;
+		}
+	}
+
+	public BadResults GetBadResultsForUser(int UserID) throws DatabaseException {
+		synchronized (syncer_user_timeouts) {
+			final String tableName = "user_timeouts";
+			final TableField[] fields = new TableField[] {
+					getField(tableName, "ID"),
+					getField(tableName, "allow_next")
+
+			};
+			JsonArray res = select(tableName, fields, false, new ComparisionField(getField(tableName, "user_id"), UserID), new ComparisionField(getField(tableName, "live"), 1));
+			int row_id = -1;
+			long nextDate = new Date().getTime() - (1000 * 10); // 10 seconds ago
+			if (res.Value.size() > 0) {
+				row_id = res.Value.get(0).asObject().getNumber("ID").Value;
+				nextDate = res.Value.get(0).asObject().getNumber("allow_next").asLong();
+			}
+			return new BadResults(row_id, UserID, new Date(nextDate));
+		}
+	}
+
+	public final class BadResults {
+		private BadResultType next = BadResultType.Good;
+		public final Date AllowNext;
+		private final int RowID;
+		private final int UserID;
+
+		private static final long minute = (60 * 1000);
+
+		private BadResults(int row_id, int user_id, Date allowNext) {
+			this.RowID = row_id;
+			this.UserID = user_id;
+			this.AllowNext = allowNext;
+		}
+
+		public void setNext(BadResultType type) {
+			this.next = type;
+		}
+
+		public void store(boolean newlyFinished) throws DatabaseException {
+			synchronized (syncer_user_timeouts) {
+				final String tableName = "user_timeouts";
+				final TableField[] fields = new TableField[] {
+						getField(tableName, "last_time"),
+						getField(tableName, "allow_next"),
+						getField(tableName, "bad_instr"),
+						getField(tableName, "bad_segfaults"),
+						getField(tableName, "bad_base"),
+						getField(tableName, "bad_uncompilable")
+				};
+				boolean createNew = true;
+				int segFaults = 0;
+				int bads = 0;
+				int bases = 0;
+				int uncompilables = 0;
+				long nextDate = AllowNext.getTime(); // 10 seconds ago
+				if (RowID != -1) {
+					JsonArray res = select(tableName, fields, false, new ComparisionField(getField(tableName, "ID"), RowID));
+					if (res.Value.size() > 0) {
+						createNew = false;
+						segFaults = res.Value.get(0).asObject().getNumber("bad_segfaults").Value;
+						bads = res.Value.get(0).asObject().getNumber("bad_instr").Value;
+						bases = res.Value.get(0).asObject().getNumber("bad_base").Value;
+						uncompilables = res.Value.get(0).asObject().getNumber("bad_uncompilable").Value;
+						nextDate = res.Value.get(0).asObject().getNumber("allow_next").asLong();
+					}
+				}
+				int totalTimes = 0;
+				if (next == BadResultType.BadBase) {
+					bases++;
+					totalTimes = bases;
+				} else if (next == BadResultType.BadInstructions) {
+					bads++;
+					totalTimes = bads;
+				} else if (next == BadResultType.SegFault) {
+					segFaults++;
+					totalTimes = segFaults;
+				} else if (next == BadResultType.Uncompillable) {
+					uncompilables++;
+					totalTimes = uncompilables;
+				} else if (next == BadResultType.BadTests) {
+					totalTimes = 1;
+				}
+				int totalDelay = totalTimes > 0 ? (next.FirstMinutes) + ((totalTimes - 1) * next.EveryOtherMinutes) : 0;
+				totalDelay *= minute;
+				nextDate = totalDelay > 0 ? new Date().getTime() + totalDelay : nextDate;
+
+				final ValuedField[] vfields = new ValuedField[] {
+						new ValuedField(getField(tableName, "last_time"), new Date().getTime()),
+						new ValuedField(getField(tableName, "bad_instr"), bads),
+						new ValuedField(getField(tableName, "bad_segfaults"), segFaults),
+						new ValuedField(getField(tableName, "bad_base"), bases),
+						new ValuedField(getField(tableName, "bad_uncompilable"), uncompilables),
+						new ValuedField(getField(tableName, "allow_next"), nextDate),
+						new ValuedField(getField(tableName, "live"), 1),
+						new ValuedField(getField(tableName, "user_id"), UserID)
+				};
+				this.AllowNext.setTime(nextDate);
+				if (next == BadResultType.Good && newlyFinished) {
+					this.AllowNext.setTime(new Date().getTime() - 10000);
+					if (!createNew) {
+						update(tableName, RowID, new ValuedField(getField(tableName, "live"), 0));
+					}
+				} else {
+					if (createNew) {
+						insert(tableName, vfields);
+					} else {
+						update(tableName, RowID, vfields);
+					}
+				}
+			}
+		}
 	}
 
 	private void log_expired_crypto(String address, String crypto, String description) throws DatabaseException {
@@ -334,7 +467,13 @@ public class RuntimeDB extends LayeredMetaDB {
 		if (crypto == null) {
 			throw new Exception("No crypto");
 		}
-		String dec = crypto.decrypt(Settings.getAuthKeyFilename(), authToken);
+		String dec;
+		try {
+			dec = crypto.decrypt(Settings.getAuthKeyFilename(), authToken);
+		} catch (CryptoException e) {
+			this.log_expired_crypto(address, authToken, "Parse failed - Crypto raised exception: " + e.Description);
+			throw e;
+		}
 		if (dec == null) {
 			this.log_expired_crypto(address, authToken, "Parse failed - Crypto failed to decrypt");
 			throw new Exception("Crypto failed");

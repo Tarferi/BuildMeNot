@@ -6,6 +6,8 @@ import java.util.Collection;
 import java.util.List;
 
 import cz.rion.buildserver.db.StaticDB;
+import cz.rion.buildserver.db.RuntimeDB.BadResultType;
+import cz.rion.buildserver.db.RuntimeDB.BadResults;
 import cz.rion.buildserver.db.layers.staticDB.LayeredFilesDB.DatabaseFile;
 import cz.rion.buildserver.exceptions.CommandLineExecutionException;
 import cz.rion.buildserver.exceptions.DatabaseException;
@@ -44,19 +46,30 @@ public class JsonTestManager {
 		}
 
 		@Override
-		public TestResult perform(TestInput input) {
+		public TestResult perform(BadResults badResults, TestInput input) {
 			int total = tests.size();
 			int passed = 0;
 			TestResultsExpectations[] results = new TestResultsExpectations[tests.size()];
 			int index = 0;
+			SystemFailureMessage finalOsError = new SystemFailureMessage();
 			for (TestVerificationData test : tests) {
 				try {
 					MyExecResult result = input.execute(test.stdin, test.arguments, test.timeout);
+					SystemFailureMessage osError = new SystemFailureMessage(result);
+					if (osError.Type == SystemFailureMessageType.Segfault) {
+						badResults.setNext(BadResultType.SegFault);
+					}
+					if (osError.Severity > finalOsError.Severity) {
+						finalOsError = osError;
+					}
 					TestResultsExpectations data = new TestResultsExpectations(test.code, result.returnCode, test.stdout, result.stdout, test.stderr, result.stderr, test.stdin);
 					results[index] = data;
 					if (!data.passed) {
 						passed++;
 						passed--;
+						if (test.isBase) {
+							badResults.setNext(BadResultType.BadBase);
+						}
 					} else {
 						passed++;
 					}
@@ -66,10 +79,14 @@ public class JsonTestManager {
 				}
 				index++;
 			}
+			if (!finalOsError.IsNone()) {
+				return new TestResult(finalASM, false, "<span class='log_err'>" + finalOsError.GetMessage() + "</span>", results);
+			}
 			if (passed == total) {
 				return new TestResult(finalASM, true, "<span class='log_ok'>Test prošel :)</span>", results);
 			} else {
 				int perc = (passed * 100) / total;
+				badResults.setNext(BadResultType.BadTests);
 				return new TestResult(finalASM, false, "<span class='log_err'>Chyba: Prošlo " + perc + " % testù!</span>", results);
 			}
 		}
@@ -135,7 +152,7 @@ public class JsonTestManager {
 		}
 
 		@Override
-		public String VerifyCode(String asm) {
+		public String VerifyCode(BadResults badResults, String asm) {
 			if (allowedInstructions != null) {
 				boolean codeSection = true;
 				String[] asmLine = asm.split("\n");
@@ -162,6 +179,7 @@ public class JsonTestManager {
 							} else {
 								String fail = getInvalidInstruction(lt, allowedInstructions);
 								if (fail != null) {
+									badResults.setNext(BadResultType.BadInstructions);
 									return fail;
 								}
 							}
@@ -214,22 +232,85 @@ public class JsonTestManager {
 		}
 	}
 
+	private enum SystemFailureMessageType {
+		None(0, ""),
+		Timeout(5, "Timeout reached"),
+		Segfault(10, "Segmentation fault"),
+		PermissionDenied(20, "Internal permission failure. Please report this to @Tarferi"),
+		StderrSomething(30, "");
+
+		public final int Severity;
+		private final String Message;
+
+		private SystemFailureMessageType(int severity, String message) {
+			this.Severity = severity;
+			this.Message = message;
+		}
+	}
+
+	private static final class SystemFailureMessage {
+		private final SystemFailureMessageType Type;
+		private final MyExecResult result;
+
+		public final int Severity;
+
+		private SystemFailureMessage(MyExecResult result) {
+			this.result = result;
+			this.Type = getOSError(result);
+			this.Severity = Type.Severity;
+		}
+
+		public String GetMessage() {
+			if (Type == SystemFailureMessageType.StderrSomething) {
+				return result.stderr;
+			}
+			return Type.Message;
+		}
+
+		public boolean IsNone() {
+			return Type == SystemFailureMessageType.None;
+		}
+
+		public SystemFailureMessage() {
+			this.result = null;
+			this.Type = SystemFailureMessageType.None;
+			this.Severity = Type.Severity;
+		}
+
+		private SystemFailureMessageType getOSError(MyExecResult result) {
+			String stderr = result.stderr.toLowerCase();
+			if (stderr.contains("denied") || stderr.contains("permission")) {
+				return SystemFailureMessageType.PermissionDenied;
+			} else if (stderr.contains("segmentation")) {
+				return SystemFailureMessageType.Segfault;
+			} else if (result.returnCode == 50) {
+				return SystemFailureMessageType.Timeout;
+			} else if (result.returnCode < 0 || result.returnCode > 100) {
+				return SystemFailureMessageType.Segfault;
+			}
+
+			return SystemFailureMessageType.None;
+		}
+	}
+
 	private static final class TestVerificationData {
 
 		public final String stdin;
 		public final String stdout;
 		public final int timeout;
+		public final boolean isBase;
 		public final String[] arguments;
 		private String stderr;
 		private int code;
 
-		private TestVerificationData(String stdin, String stdout, String stderr, int code, int timeout, String[] arguments) {
+		private TestVerificationData(String stdin, String stdout, String stderr, int code, int timeout, boolean base, String[] arguments) {
 			this.stdin = stdin;
 			this.stdout = stdout;
 			this.timeout = timeout;
 			this.arguments = arguments;
 			this.stderr = stderr;
 			this.code = code;
+			this.isBase = base;
 		}
 	}
 
@@ -336,7 +417,11 @@ public class JsonTestManager {
 							}
 						}
 					}
-					tvd.add(new TestVerificationData(stdin, stdout, stderr, code, timeout, arguments));
+					boolean base = false;
+					if (tsto.containsNumber("base")) {
+						base = tsto.getNumber("base").Value == 1;
+					}
+					tvd.add(new TestVerificationData(stdin, stdout, stderr, code, timeout, base, arguments));
 				} else {
 					testOk = false;
 					break;

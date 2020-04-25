@@ -95,6 +95,7 @@ public class MyExec {
 			if (p.waitFor(timeout, TimeUnit.MILLISECONDS)) {
 				returnCode = p.exitValue();
 			} else {
+				returnCode = -50;
 				p.destroyForcibly();
 				new CommandLineExecutionException("Process took longer than " + timeout + " ms to finish");
 			}
