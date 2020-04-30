@@ -160,6 +160,7 @@ public class HTTPTestClient extends HTTPGraphProviderClient {
 							returnValue.add("code", new JsonNumber(53));
 							returnValue.add("result", new JsonString("Not logged in"));
 						}
+						boolean canBypassTimeout = getPermissions().allowBypassTimeout();
 						if (badResults != null) {
 							if (obj.containsString("asm") && obj.containsString("id")) {
 
@@ -169,14 +170,14 @@ public class HTTPTestClient extends HTTPGraphProviderClient {
 								long now = new Date().getTime();
 								long then = badResults.AllowNext.getTime();
 								long diff = then > now ? then - now : 0;
-								if (diff > 10000) { // 10 seconds allowance
+								if (diff > 10000 && !canBypassTimeout) { // 10 seconds allowance
 									returnValue.add("code", new JsonNumber(54));
 									returnValue.add("result", new JsonString("Hacking much?"));
 								} else {
 									returnValue = tests.run(badResults, BuilderID, test_id, asm, getPermissions().Login);
 									testsPassed = returnValue.containsNumber("code") ? returnValue.getNumber("code").Value == 0 : false;
 								}
-								
+
 								// See if user has finished this test before
 								boolean newlyFinished = testsPassed;
 								for (CompletedTest test : completed) {
@@ -190,7 +191,11 @@ public class HTTPTestClient extends HTTPGraphProviderClient {
 								} catch (DatabaseException e) {
 									e.printStackTrace();
 								}
-								returnValue.add("wait", new JsonNumber(0, (badResults.AllowNext.getTime()) + ""));
+								if (canBypassTimeout) {
+									returnValue.add("wait", new JsonNumber(0, (new Date().getTime() - 10000) + ""));
+								} else {
+									returnValue.add("wait", new JsonNumber(0, (badResults.AllowNext.getTime()) + ""));
+								}
 
 							} else if (obj.containsString("action")) {
 								String act = obj.getString("action").Value;
@@ -246,7 +251,11 @@ public class HTTPTestClient extends HTTPGraphProviderClient {
 
 									returnValue.add("code", new JsonNumber(0));
 									returnValue.add("tests", new JsonArray(d));
-									returnValue.add("wait", new JsonNumber(0, (badResults.AllowNext.getTime()) + ""));
+									if (canBypassTimeout) {
+										returnValue.add("wait", new JsonNumber(0, (new Date().getTime() - 10000) + ""));
+									} else {
+										returnValue.add("wait", new JsonNumber(0, (badResults.AllowNext.getTime()) + ""));
+									}
 								} else if (act.equals("GRAPHS")) {
 									JsonValue graphs = this.loadGraphs();
 									returnValue.add("code", new JsonNumber(0));

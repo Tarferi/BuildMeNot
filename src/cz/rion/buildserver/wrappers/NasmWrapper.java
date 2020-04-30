@@ -20,13 +20,15 @@ public class NasmWrapper {
 		public final MyExecResult runtime;
 		public final String exePath;
 		public final String exeName;
+		public final boolean Timeout;
 
-		private RunResult(MyExecResult nasm, MyExecResult golink, MyExecResult runtime, String exePath, String exeName) {
+		private RunResult(MyExecResult nasm, MyExecResult golink, MyExecResult runtime, String exePath, String exeName, boolean Timeout) {
 			this.nasm = nasm;
 			this.golink = golink;
 			this.runtime = runtime;
 			this.exePath = exePath;
 			this.exeName = exeName;
+			this.Timeout = Timeout;
 		}
 	}
 
@@ -55,7 +57,7 @@ public class NasmWrapper {
 			for (int i = 0; i < params.length; i++) {
 				params[i] = params[i].replace("$CWD$", workingDir);
 			}
-			nasmResult = MyExec.execute(workingDir, "", Settings.getNasmPath() + "/" + Settings.getNasmExecutableName(), params, 5000);
+			nasmResult = MyExec.execute(workingDir, "", Settings.getNasmPath() + "/" + Settings.getNasmExecutableName(), params, Settings.getNasmTimeout());
 		} catch (CommandLineExecutionException e) {
 			e.printStackTrace();
 			throw new NasmExecutionException("Failed to run NASM on source file", e);
@@ -73,7 +75,7 @@ public class NasmWrapper {
 				params[i] = params[i].replace("$CWD$", workingDir);
 			}
 
-			linkResult = MyExec.execute(workingDir, "", Settings.getGoLinkPath() + "/" + Settings.getGoLinkExecutableName(), params, 5000);
+			linkResult = MyExec.execute(workingDir, "", Settings.getGoLinkPath() + "/" + Settings.getGoLinkExecutableName(), params, Settings.getLinkerTimeout());
 		} catch (CommandLineExecutionException e) {
 			e.printStackTrace();
 			throw new GoLinkExecutionException("Failed to run GoLink on object file", e);
@@ -89,9 +91,9 @@ public class NasmWrapper {
 				e.printStackTrace();
 				throw new RuntimeExecutionException("Failed to run result file", e);
 			}
-			return new RunResult(nasmResult, linkResult, runtime, workingDir, "/" + Settings.getExecutableFileName());
+			return new RunResult(nasmResult, linkResult, runtime, workingDir, "/" + Settings.getExecutableFileName(), runtime == null ? false : runtime.Timeout);
 		}
-		return new RunResult(nasmResult, linkResult, null, workingDir, "/" + Settings.getExecutableFileName());
+		return new RunResult(nasmResult, linkResult, null, workingDir, "/" + Settings.getExecutableFileName(), false);
 	}
 
 	public static void clean(String workingDir) {

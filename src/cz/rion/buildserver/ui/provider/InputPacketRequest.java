@@ -10,10 +10,14 @@ public class InputPacketRequest {
 	private final byte[] data;
 	private int position = 0;
 
+	public int getDataSize() {
+		return data.length;
+	}
+
 	public InputPacketRequest(byte[] data) {
 		this.data = data;
 	}
-	
+
 	public void read(byte[] result) throws IOException {
 		if (position + result.length > data.length) {
 			throw new IOException("End of packet");

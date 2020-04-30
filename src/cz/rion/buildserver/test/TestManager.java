@@ -169,6 +169,8 @@ public class TestManager {
 			}
 		});
 	}
+	
+	private static final Object globalSyncer = new Object();
 
 	public JsonObject run(BadResults badResults, int builderID, String test_id, String asm, String login) {
 		AsmTest test = null;
@@ -199,53 +201,55 @@ public class TestManager {
 					message = "<span class='log_err'>Nedovolené užití externích funkcí</span>";
 				} else {
 					RunResult result = null;
-					try {
-						result = NasmWrapper.run("./test_" + builderID, asm, "", 2000, false, false);
-					} catch (NasmExecutionException e) {
-						code = 1;
-						JsonObject obj = new JsonObject();
-						obj.add("description", new JsonString("NASM failed"));
-						badResults.setNext(BadResultType.Uncompillable);
-						if (e.execResult != null) {
-							obj.add("stdout", new JsonString(e.execResult.stdout));
-							obj.add("stderr", new JsonString(e.execResult.stderr));
-							obj.add("ret", new JsonNumber(e.execResult.returnCode));
+					synchronized (globalSyncer) {
+						try {
+							result = NasmWrapper.run("./test_" + builderID, asm, "", 2000, false, false);
+						} catch (NasmExecutionException e) {
+							code = 1;
+							JsonObject obj = new JsonObject();
+							obj.add("description", new JsonString("NASM failed"));
+							badResults.setNext(BadResultType.Uncompillable);
+							if (e.execResult != null) {
+								obj.add("stdout", new JsonString(e.execResult.stdout));
+								obj.add("stderr", new JsonString(e.execResult.stderr));
+								obj.add("ret", new JsonNumber(e.execResult.returnCode));
+							}
+							rawMessage.add(obj);
+							message = "<span class='log_err'>Nepodaøilo se pøeložit kód<br />" + e.getDescription().replaceAll("\n", "<br />") + "</span>";
+						} catch (GoLinkExecutionException e) {
+							code = 1;
+							JsonObject obj = new JsonObject();
+							obj.add("description", new JsonString("LINKER failed"));
+							if (e.execResult != null) {
+								obj.add("stdout", new JsonString(e.execResult.stdout));
+								obj.add("stderr", new JsonString(e.execResult.stderr));
+								obj.add("ret", new JsonNumber(e.execResult.returnCode));
+							}
+							rawMessage.add(obj);
+							message = "<span class='log_err'>Nepodaøilo se pøeložit kód kvùli interní chybì linkeru</span>";
+						} catch (RuntimeExecutionException e) { // Should never happen
+							code = 1;
+							JsonObject obj = new JsonObject();
+							obj.add("description", new JsonString("RUN failed"));
+							if (e.execResult != null) {
+								obj.add("stdout", new JsonString(e.execResult.stdout));
+								obj.add("stderr", new JsonString(e.execResult.stderr));
+								obj.add("ret", new JsonNumber(e.execResult.returnCode));
+							}
+							rawMessage.add(obj);
+							message = "<span class='log_err'>Nepodaøilo se pøeložit kód kvùli interní chybì serveru</span>";
 						}
-						rawMessage.add(obj);
-						message = "<span class='log_err'>Nepodaøilo se pøeložit kód<br />" + e.getDescription().replaceAll("\n", "<br />") + "</span>";
-					} catch (GoLinkExecutionException e) {
-						code = 1;
-						JsonObject obj = new JsonObject();
-						obj.add("description", new JsonString("LINKER failed"));
-						if (e.execResult != null) {
-							obj.add("stdout", new JsonString(e.execResult.stdout));
-							obj.add("stderr", new JsonString(e.execResult.stderr));
-							obj.add("ret", new JsonNumber(e.execResult.returnCode));
+						if (result != null) {
+							TestInput input = new TestInput(result.exePath, result.exeName);
+							testResult = test.perform(badResults, input);
+							NasmWrapper.clean(result.exePath);
 						}
-						rawMessage.add(obj);
-						message = "<span class='log_err'>Nepodaøilo se pøeložit kód</span>";
-					} catch (RuntimeExecutionException e) { // Should never happen
-						code = 1;
-						JsonObject obj = new JsonObject();
-						obj.add("description", new JsonString("RUN failed"));
-						if (e.execResult != null) {
-							obj.add("stdout", new JsonString(e.execResult.stdout));
-							obj.add("stderr", new JsonString(e.execResult.stderr));
-							obj.add("ret", new JsonNumber(e.execResult.returnCode));
+						if (testResult != null) {
+							code = testResult.passed ? 0 : 1;
+							message = testResult.data;
+							good = testResult.getGoodTests();
+							bad = testResult.getBadTests();
 						}
-						rawMessage.add(obj);
-						message = "<span class='log_err'>Nepodaøilo se pøeložit kód</span>";
-					}
-					if (result != null) {
-						TestInput input = new TestInput(result.exePath, result.exeName);
-						testResult = test.perform(badResults, input);
-						NasmWrapper.clean(result.exePath);
-					}
-					if (testResult != null) {
-						code = testResult.passed ? 0 : 1;
-						message = testResult.data;
-						good = testResult.getGoodTests();
-						bad = testResult.getBadTests();
 					}
 				}
 			}

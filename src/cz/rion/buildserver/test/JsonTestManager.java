@@ -58,6 +58,8 @@ public class JsonTestManager {
 					SystemFailureMessage osError = new SystemFailureMessage(result);
 					if (osError.Type == SystemFailureMessageType.Segfault) {
 						badResults.setNext(BadResultType.SegFault);
+					} else if (osError.Type == SystemFailureMessageType.Timeout) {
+						badResults.setNext(BadResultType.Timeout);
 					}
 					if (osError.Severity > finalOsError.Severity) {
 						finalOsError = osError;
@@ -75,7 +77,7 @@ public class JsonTestManager {
 					}
 				} catch (CommandLineExecutionException e) {
 					e.printStackTrace();
-					return new TestResult(finalASM, false, "<span class='log_err'>Nepodaøilo se spustit test</span>", results);
+					return new TestResult(finalASM, false, "<span class='log_err'>Nepodaøilo se spustit test kvùli interní chybì serveru</span>", results);
 				}
 				index++;
 			}
@@ -159,6 +161,9 @@ public class JsonTestManager {
 				for (String line : asmLine) {
 					String lt = line.trim().toLowerCase();
 					if (lt.contains(";")) {
+						if(lt.trim().equals(";")) {
+							continue;
+						}
 						lt = lt.split(";")[0].trim();
 					}
 					if (lt.contains(":")) {
@@ -234,9 +239,9 @@ public class JsonTestManager {
 
 	private enum SystemFailureMessageType {
 		None(0, ""),
-		Timeout(5, "Timeout reached"),
+		Timeout(5, "Tvému kódu vypršel pøidìlený èas na test. Optimalizuj ho a zkus to znovu..."),
 		Segfault(10, "Segmentation fault"),
-		PermissionDenied(20, "Internal permission failure. Please report this to @Tarferi"),
+		PermissionDenied(20, "Interní selhání. Prosím nahlaš to @Tarferi"),
 		StderrSomething(30, "");
 
 		public final int Severity;
@@ -283,7 +288,7 @@ public class JsonTestManager {
 				return SystemFailureMessageType.PermissionDenied;
 			} else if (stderr.contains("segmentation")) {
 				return SystemFailureMessageType.Segfault;
-			} else if (result.returnCode == 50) {
+			} else if (result.returnCode == 50 || result.Timeout) {
 				return SystemFailureMessageType.Timeout;
 			} else if (result.returnCode < 0 || result.returnCode > 100) {
 				return SystemFailureMessageType.Segfault;

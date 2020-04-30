@@ -1,8 +1,6 @@
 package cz.rion.buildserver;
 
 import java.nio.channels.SocketChannel;
-import java.util.ArrayList;
-import java.util.List;
 
 import cz.rion.buildserver.exceptions.SwitchClientException;
 import cz.rion.buildserver.http.AbstractHTTPClient.HTTPClientIntentType;
@@ -11,8 +9,15 @@ import cz.rion.buildserver.http.HTTPServer;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.ui.provider.RemoteUIProviderServer;
 import cz.rion.buildserver.ui.provider.RemoteUIProviderServer.BuilderStatus;
+import cz.rion.buildserver.wrappers.MyThread;
 
 public class BuildThread {
+
+	public interface ClientAccepter {
+		public SocketChannel accept();
+
+		public int getQueueSize();
+	}
 
 	private final int ID;
 	private final HTTPServer server;
@@ -66,19 +71,20 @@ public class BuildThread {
 
 	private final BuilderStats stats = new BuilderStats();
 
-	private final List<SocketChannel> jobs = new ArrayList<>();
 	private boolean waiting = false;
 
-	private final Thread thread = new Thread() {
+	private final MyThread thread = new MyThread() {
 		@Override
-		public void run() {
+		public void runAsync() {
 			async();
 		}
 	};
+	private ClientAccepter accepter;
 
-	public BuildThread(HTTPServer server, int myID) {
+	public BuildThread(HTTPServer server, int myID, ClientAccepter accepter) {
 		this.ID = myID;
 		this.server = server;
+		this.accepter = accepter;
 		thread.start();
 	}
 
@@ -122,18 +128,19 @@ public class BuildThread {
 		thread.setName("Worker " + ID);
 		while (true) {
 			try {
+				server.remoteUI.writeBuilderDataUpdate(ID, this);
+				waiting = true;
 				currentClient = null;
-				synchronized (jobs) {
-					waiting = false;
-					if (jobs.isEmpty()) {
-						waiting = true;
-						try {
-							jobs.wait();
-						} catch (InterruptedException e) {
+				while (currentClient == null) {
+					currentClient = accepter.accept();
+					if (currentClient == null) {
+						synchronized (thread) { // Overhead
+							thread.wait(1000);
 						}
 					}
-					currentClient = jobs.remove(0);
 				}
+				waiting = false;
+				server.remoteUI.writeBuilderDataUpdate(ID, this);
 				HTTPClient client = new HTTPClient(currentClient, ID, server.db, server.sdb, server.tests, server.remoteUI);
 				try {
 					client.run();
@@ -153,34 +160,25 @@ public class BuildThread {
 				}
 			} catch (Throwable t) { // Ultimate catcher
 				t.printStackTrace();
+			} finally {
+				waiting = true;
+				server.remoteUI.writeBuilderDataUpdate(ID, this);
 			}
 		}
 	}
 
 	public int getQueueSize() {
-		synchronized (jobs) {
-			return jobs.size() + (waiting ? 0 : 1);
-		}
+		return accepter.getQueueSize();
 	}
 
 	public BuilderStats getBuilderStats() {
-		synchronized (jobs) {
+		synchronized (stats) {
 			return stats;
 		}
 	}
 
-	public void addJob(SocketChannel client) {
-		synchronized (jobs) {
-			jobs.add(client);
-			if (waiting) {
-				waiting = false;
-				jobs.notify();
-			}
-		}
-	}
-
 	public BuilderStatus getBuilderStatus() {
-		synchronized (jobs) {
+		synchronized (stats) {
 			if (waiting) {
 				return BuilderStatus.IDLE;
 			} else {

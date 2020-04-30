@@ -36,6 +36,8 @@ public class Settings {
 	private final SettingsValue DefaultUsername = new SettingsValue("DefaultUsername", ValueType.STRING, "Anonymous");
 	private final SettingsValue DefaultGroup = new SettingsValue("DefaultGroup", ValueType.STRING, "Default");
 	private final SettingsValue InitGroupsAndUsers = new SettingsValue("InitGroupsAndUsers", ValueType.BOOLEAN, 0);
+	private final SettingsValue nasmTimeout = new SettingsValue("NasmTimeout", ValueType.INTEGER, 5000);
+	private final SettingsValue linkTimeout = new SettingsValue("LinkerTimeout", ValueType.INTEGER, 5000);
 
 	private List<SettingsValue> settings;
 
@@ -255,5 +257,13 @@ public class Settings {
 
 	public static boolean GetInitGroupsAndUsers() {
 		return instance.InitGroupsAndUsers.asBoolean();
+	}
+
+	public static int getNasmTimeout() {
+		return instance.nasmTimeout.asInt();
+	}
+
+	public static int getLinkerTimeout() {
+		return instance.linkTimeout.asInt();
 	}
 }

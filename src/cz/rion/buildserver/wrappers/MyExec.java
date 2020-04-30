@@ -38,11 +38,13 @@ public class MyExec {
 		public final int returnCode;
 		public final String stdout;
 		public final String stderr;
+		public final boolean Timeout;
 
-		private MyExecResult(int returnCode, String stdout, String stderr) {
+		private MyExecResult(int returnCode, String stdout, String stderr, boolean Timeout) {
 			this.returnCode = returnCode;
 			this.stdout = stdout;
 			this.stderr = stderr;
+			this.Timeout = Timeout;
 		}
 	}
 
@@ -89,12 +91,13 @@ public class MyExec {
 		} catch (IOException e) {
 			throw new CommandLineExecutionException("Failed to write to STDIN", e);
 		}
-
+		boolean timedOut = false;
 		int returnCode = 0;
 		try {
 			if (p.waitFor(timeout, TimeUnit.MILLISECONDS)) {
 				returnCode = p.exitValue();
 			} else {
+				timedOut = true;
 				returnCode = -50;
 				p.destroyForcibly();
 				new CommandLineExecutionException("Process took longer than " + timeout + " ms to finish");
@@ -105,6 +108,6 @@ public class MyExec {
 		}
 		String stdout = readStream(p.getInputStream());
 		String stderr = readStream(p.getErrorStream());
-		return new MyExecResult(returnCode, stdout, stderr);
+		return new MyExecResult(returnCode, stdout, stderr, timedOut);
 	}
 }

@@ -9,6 +9,7 @@ import java.util.Map;
 import cz.rion.buildserver.BuildThread;
 import cz.rion.buildserver.http.HTTPServer;
 import cz.rion.buildserver.ui.provider.RemoteUIClient;
+import cz.rion.buildserver.wrappers.MyThread;
 
 public class Dexter {
 
@@ -16,10 +17,10 @@ public class Dexter {
 
 	private static final long interval = 1000 * 60; // Every minute
 
-	private final Thread _thread = new Thread() {
+	private final MyThread _thread = new MyThread() {
 
 		@Override
-		public void run() {
+		public void runAsync() {
 			setName("Dexter");
 			async();
 		}

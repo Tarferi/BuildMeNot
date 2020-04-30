@@ -15,6 +15,7 @@ import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.test.AsmTest;
 import cz.rion.buildserver.test.TestManager;
+import cz.rion.buildserver.wrappers.MyThread;
 
 public class MyDB {
 
@@ -36,10 +37,10 @@ public class MyDB {
 				thread.start();
 			}
 
-			private final Thread thread = new Thread() {
+			private final MyThread thread = new MyThread() {
 
 				@Override
-				public void run() {
+				public void runAsync() {
 					async();
 				}
 			};

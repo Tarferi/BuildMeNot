@@ -235,8 +235,8 @@ public class UIDriver {
 					e.printStackTrace();
 				}
 			}
+
 		}
-		System.out.print("Empty input buffer");
 		return new StatusChangeEvent(Status.DISCONNECTED);
 	}
 

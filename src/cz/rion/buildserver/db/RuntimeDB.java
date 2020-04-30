@@ -48,19 +48,22 @@ public class RuntimeDB extends LayeredMetaDB {
 	}
 
 	public enum BadResultType {
-		Good(0, 0),
-		SegFault(10, 0),
-		BadInstructions(10, 15),
-		BadBase(10, 5),
-		BadTests(2, 0),
-		Uncompillable(30, 30);
+		Good(0, 0, 0),
+		BadTests(2, 0, 1),
+		BadBase(10, 5, 2),
+		Timeout(0, 0, 3),
+		SegFault(10, 0, 6),
+		BadInstructions(10, 15, 8),
+		Uncompillable(30, 30, 10);
 
+		private final int Severity;
 		private final int FirstMinutes;
 		private final int EveryOtherMinutes;
 
-		private BadResultType(int first, int next) {
+		private BadResultType(int first, int next, int severity) {
 			this.FirstMinutes = first;
 			this.EveryOtherMinutes = next;
+			this.Severity = severity;
 		}
 	}
 
@@ -98,7 +101,9 @@ public class RuntimeDB extends LayeredMetaDB {
 		}
 
 		public void setNext(BadResultType type) {
-			this.next = type;
+			if (type.Severity > next.Severity) {
+				this.next = type;
+			}
 		}
 
 		public void store(boolean newlyFinished) throws DatabaseException {

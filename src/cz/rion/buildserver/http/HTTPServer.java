@@ -6,8 +6,10 @@ import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.LinkedBlockingQueue;
 
 import cz.rion.buildserver.BuildThread;
+import cz.rion.buildserver.BuildThread.ClientAccepter;
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.cia.Dexter;
 import cz.rion.buildserver.db.RuntimeDB;
@@ -28,22 +30,26 @@ public class HTTPServer {
 	public final RuntimeDB db;
 	public final StaticDB sdb;
 
-	private BuildThread getBuilder() {
-		int min = -1;
-		BuildThread selectedBuilder = null;
-		for (BuildThread builder : builders) {
-			int bs = builder.getQueueSize();
-			if (min == -1) {
-				min = builder.getQueueSize();
-				selectedBuilder = builder;
+	private LinkedBlockingQueue<SocketChannel> clients = new LinkedBlockingQueue<>();
 
-			} else if (bs < min) {
-				min = bs;
-				selectedBuilder = builder;
+	private final ClientAccepter acc = new ClientAccepter() {
+
+		@Override
+		public SocketChannel accept() {
+			try {
+				return clients.take();
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+				return null;
 			}
 		}
-		return selectedBuilder;
-	}
+
+		@Override
+		public int getQueueSize() {
+			return clients.size();
+		}
+
+	};
 
 	public HTTPServer(int port) throws DatabaseException, IOException {
 		this.sdb = new StaticDB(Settings.getStaticDB());
@@ -52,7 +58,7 @@ public class HTTPServer {
 		this.remoteUI = new RemoteUIProviderServer(this);
 		this.port = port;
 		for (int i = 0; i < Settings.getBuildersCount(); i++) {
-			builders.add(new BuildThread(this, i));
+			builders.add(new BuildThread(this, i, acc));
 		}
 		new Dexter(this);
 	}
@@ -79,7 +85,15 @@ public class HTTPServer {
 			}
 			// HTTPClient myClient;
 			// myClient = new HTTPClient(db, sdb, tests, client, remoteUI);
-			getBuilder().addJob(client);
+			try {
+				clients.put(client);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+				try {
+					client.close();
+				} catch (IOException e1) {
+				}
+			}
 		}
 	}
 }

@@ -120,7 +120,11 @@ public class LayeredPermissionDB extends LayeredTestDB {
 		}
 
 		public boolean allowSeeSecretTests() {
-			return permissions.covers(WebPermission.SeeSecretTests);
+			return can(WebPermission.SeeSecretTests);
+		}
+
+		public boolean allowBypassTimeout() {
+			return can(WebPermission.BypassTimeout);
 		}
 
 	}

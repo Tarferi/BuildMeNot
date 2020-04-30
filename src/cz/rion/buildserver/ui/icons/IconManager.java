@@ -17,6 +17,8 @@ public class IconManager {
 	public final static ImageIcon TableIcon = IconLoader.LoadIcon("table.png");
 	public final static ImageIcon ViewIcon = IconLoader.LoadIcon("view.png");
 	public final static ImageIcon IniIcon = IconLoader.LoadIcon("ini.png");
+	public final static ImageIcon StreamIcon = IconLoader.LoadIcon("stream.png");
+	public final static ImageIcon ThreadIcon = IconLoader.LoadIcon("thread.png");
 
 	private static final Map<String, ImageIcon> icons = new HashMap<>();
 
@@ -35,6 +37,10 @@ public class IconManager {
 			return ViewIcon;
 		} else if (path.endsWith(".ini")) {
 			return IniIcon;
+		} else if (path.endsWith(".stream")) {
+			return StreamIcon;
+		} else if (path.endsWith(".thread")) {
+			return ThreadIcon;
 		} else { // Coult be a folder
 			int pos1 = path.lastIndexOf("/");
 			int pos2 = path.lastIndexOf(".");

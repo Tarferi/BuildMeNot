@@ -17,6 +17,5 @@ public abstract class AbstractHTTPClient {
 	}
 
 	protected AbstractHTTPClient() {
-
 	}
 }

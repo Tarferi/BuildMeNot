@@ -1,6 +1,7 @@
 package cz.rion.buildserver.ui.provider;
 
 import java.io.IOException;
+import java.net.SocketException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.util.ArrayList;
@@ -34,6 +35,7 @@ import cz.rion.buildserver.ui.events.FileSavedEvent;
 import cz.rion.buildserver.ui.events.PingEvent;
 import cz.rion.buildserver.ui.events.StatusMessageEvent;
 import cz.rion.buildserver.ui.events.UsersLoadedEvent;
+import cz.rion.buildserver.wrappers.MyThread;
 import cz.rion.buildserver.ui.events.StatusMessageEvent.StatusMessageType;
 
 public class RemoteUIProviderServer {
@@ -57,9 +59,9 @@ public class RemoteUIProviderServer {
 	private final StaticDB sdb;
 	private final RuntimeDB db;
 
-	private final Thread thread = new Thread() {
+	private final MyThread thread = new MyThread() {
 		@Override
-		public void run() {
+		public void runAsync() {
 			Thread.currentThread().setName("Remote UI provider");
 			async();
 		}
@@ -297,7 +299,7 @@ public class RemoteUIProviderServer {
 		if (outBuffer.get().length == 0) { // Not sending empty packet
 			return;
 		}
-		if (Thread.currentThread() != thread) { // Not a senders thread
+		if (!thread.isCurrentThread()) { // Not a senders thread
 			synchronized (outBuffersFromAnotherThreads) {
 				outBuffersFromAnotherThreads.add(outBuffer);
 				selector.wakeup();
@@ -320,8 +322,7 @@ public class RemoteUIProviderServer {
 						}
 					}
 					for (RemoteUIClient client : toClose) {
-						client.close();
-						clients.remove(client);
+						closeClient(client);
 					}
 				}
 			}
@@ -412,13 +413,14 @@ public class RemoteUIProviderServer {
 			int code = b[0];
 			MemoryBuffer toSend = new MemoryBuffer.SignleClientMemoryBuffer(128, client);
 			if (!handle(client, code, request, toSend)) {
-				synchronized (clients) {
-					client.close();
-				}
+				closeClient(client);
 			} else { // Handled, send response
 				dispatch(toSend);
 			}
+		} catch (SocketException e) {
+			closeClient(client);
 		} catch (Exception e) {
+			e.printStackTrace();
 			closeClient(client);
 		}
 	}

@@ -8,6 +8,7 @@ public abstract class MemoryBuffer {
 
 	private byte[] buf;
 	private int position = 0;
+	private int readPosition = 0;
 	private int size;
 	private RemoteUIClient client;
 
@@ -96,8 +97,27 @@ public abstract class MemoryBuffer {
 		return position;
 	}
 
+	public int getReadPosition() {
+		return readPosition;
+	}
+
+	public void setReadPosition(int position) {
+		this.readPosition = position;
+	}
+
+	public boolean read(byte[] target, int targetOffset, int length) {
+		if (length + readPosition >= position) { // End of buffer (for now)
+			return false;
+		} else {
+			System.arraycopy(buf, readPosition, target, targetOffset, length);
+			this.readPosition += length;
+			return true;
+		}
+	}
+
 	public void set(byte[] buffer, int baseSize) {
 		this.position = 0;
+		this.readPosition = 0;
 		if (buffer.length < baseSize && buffer.length > 0) { // No need for reallocation
 			this.buf = buffer;
 			this.size = buffer.length;
