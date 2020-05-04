@@ -39,19 +39,19 @@ public class MAIN {
 		}
 	}
 
-	public static void main_retests(String[] args) {
+	public static void main_rt(String[] args) {
 		try {
-			//Retester rt = new Retester();
-			//String test_id = "test09_03";
-			//rt.runTests(test_id);
-			//rt.backupData(test_id);
-			//rt.updateData(test_id);
+			// Retester rt = new Retester();
+			// String test_id = "test09_03";
+			// rt.runTests(true);
+			// rt.backupData();
+			// rt.redo();
+			// rt.updateData(test_id);
 			// rt.restoreData();
 		} catch (Throwable t) {
 			t.printStackTrace();
 		}
 	}
-
 
 	public static void main_compress(String[] args) {
 		Recompressor rec;
@@ -64,6 +64,14 @@ public class MAIN {
 		}
 	}
 
+	public static void main_plagiatus(String[] args) {
+		try {
+			new Plagiatus();
+		} catch (DatabaseException e) {
+			e.printStackTrace();
+		}
+	}
+	
 	public static void main(String[] args) throws InvocationTargetException, InterruptedException {
 		setUI();
 		if (Settings.RunOnlyUI()) {

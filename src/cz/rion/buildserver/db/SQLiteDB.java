@@ -124,7 +124,9 @@ public abstract class SQLiteDB {
 
 	public enum FieldComparator {
 		Equals("="),
-		NotEquals("!=");
+		NotEquals("!="),
+		Greater(">"),
+		Lesser("<");
 
 		private final String code;
 

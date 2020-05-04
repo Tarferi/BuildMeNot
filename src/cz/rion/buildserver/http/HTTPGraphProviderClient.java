@@ -1,6 +1,7 @@
 package cz.rion.buildserver.http;
 
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -53,7 +54,15 @@ public class HTTPGraphProviderClient extends HTTPFileProviderClient {
 		return null;
 	}
 
+	private static JsonValue __cache = null;
+	private static long cacheCreation = 0;
+
 	protected JsonValue loadGraphs() {
+		long now = new Date().getTime();
+		long diff = now - cacheCreation;
+		if (diff < 1000 * 60) {
+			return __cache;
+		}
 		// Preload database files
 		List<DatabaseFile> files = sdb.getFiles();
 		LayeredDBFileWrapperDB.loadDatabaseFiles(db, files);
@@ -148,6 +157,8 @@ public class HTTPGraphProviderClient extends HTTPFileProviderClient {
 							continue;
 						}
 					}
+					__cache = result;
+					cacheCreation = now;
 					return result;
 				}
 			}

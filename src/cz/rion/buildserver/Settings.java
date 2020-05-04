@@ -39,6 +39,8 @@ public class Settings {
 	private final SettingsValue nasmTimeout = new SettingsValue("NasmTimeout", ValueType.INTEGER, 5000);
 	private final SettingsValue linkTimeout = new SettingsValue("LinkerTimeout", ValueType.INTEGER, 5000);
 
+	private final SettingsValue fontSize = new SettingsValue("FontSize", ValueType.INTEGER, 17);
+
 	private List<SettingsValue> settings;
 
 	private Settings() {
@@ -265,5 +267,9 @@ public class Settings {
 
 	public static int getLinkerTimeout() {
 		return instance.linkTimeout.asInt();
+	}
+
+	public static int getFontSize() {
+		return instance.fontSize.asInt();
 	}
 }

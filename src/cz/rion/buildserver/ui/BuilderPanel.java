@@ -2,6 +2,7 @@ package cz.rion.buildserver.ui;
 
 import javax.swing.JPanel;
 
+import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.ui.events.BuildersLoadedEvent.BuildThreadInfo;
 import cz.rion.buildserver.ui.utils.MyLabel;
 import net.miginfocom.swing.MigLayout;
@@ -42,7 +43,7 @@ public class BuilderPanel extends JPanel {
 		setLayout(new MigLayout("", "[][][80:n,grow][][][][][80:n,grow][][][grow]", "[][][][grow]"));
 
 		MyLabel lblBuilder = new MyLabel("Builder#" + thr.ID);
-		lblBuilder.setFont(new Font("Tahoma", Font.PLAIN, 16));
+		lblBuilder.setFont(new Font("Tahoma", Font.PLAIN, Settings.getFontSize()));
 		add(lblBuilder, "cell 0 0");
 
 		MyLabel adsfasdf = new MyLabel("Status:");

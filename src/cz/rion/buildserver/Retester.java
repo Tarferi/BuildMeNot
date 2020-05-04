@@ -7,7 +7,9 @@ import java.util.List;
 import java.util.Map;
 
 import cz.rion.buildserver.db.RuntimeDB;
+import cz.rion.buildserver.db.RuntimeDB.BadResults;
 import cz.rion.buildserver.db.SQLiteDB.ComparisionField;
+import cz.rion.buildserver.db.SQLiteDB.Field;
 import cz.rion.buildserver.db.SQLiteDB.TableField;
 import cz.rion.buildserver.db.SQLiteDB.TableJoin;
 import cz.rion.buildserver.db.SQLiteDB.ValuedField;
@@ -38,14 +40,16 @@ public class Retester {
 		public final String Login;
 		public final int RowID;
 		public final String Full;
+		public final int UserID;
 
-		private PastTestResult(String ASM, String TestID, int RowID, int Code, String Result, String full, String Login) {
+		private PastTestResult(String ASM, String TestID, int RowID, int Code, String Result, String full, String Login, int UserID) {
 			super(Code, Result);
 			this.RowID = RowID;
 			this.ASM = ASM;
 			this.TestID = TestID;
 			this.Login = Login;
 			this.Full = full;
+			this.UserID = UserID;
 		}
 	}
 
@@ -108,13 +112,17 @@ public class Retester {
 		}
 	}
 
+	public void backupData() throws DatabaseException {
+		backupData(null);
+	}
+
 	public void backupData(String test_id) throws DatabaseException {
 		List<StoredNewTestResult> data = loadNew();
 		int index = 0;
 		int total = data.size();
 		final String tableName = "retests";
 		for (StoredNewTestResult test : data) {
-			if (test.Past.TestID.equals(test_id)) {
+			if (test_id == null ? true : test.Past.TestID.equals(test_id)) {
 				ValuedField[] fieldData = new ValuedField[] {
 						new ValuedField(db.getField(tableName, "original_result"), test.Past.Result),
 						new ValuedField(db.getField(tableName, "original_full"), test.Past.Full),
@@ -193,24 +201,26 @@ public class Retester {
 		}
 	}
 
-	public void runTests() throws DatabaseException {
+	public void runTests(boolean onlyBad) throws DatabaseException {
 		List<PastTestResult> data = load();
 		db.resetRetestsDB();
 		int index = 0;
 		int total = data.size();
 		final String tableName = "retests";
 		for (PastTestResult test : data) {
-			NewTestResult ntest = retest(test);
-			ValuedField[] updateData = new ValuedField[] {
-					new ValuedField(db.getField(tableName, "compilation_id"), ntest.Past.RowID),
-					new ValuedField(db.getField(tableName, "code"), ntest.Code),
-					new ValuedField(db.getField(tableName, "result"), ntest.Result),
-					new ValuedField(db.getField(tableName, "full"), ntest.Full),
-					new ValuedField(db.getField(tableName, "creation_time"), new Date().getTime()),
-					new ValuedField(db.getField(tableName, "good_tests"), ntest.Good),
-					new ValuedField(db.getField(tableName, "bad_tests"), ntest.Bad),
-					new ValuedField(db.getField(tableName, "bad_tests_details"), ntest.Details) };
-			db.insert(tableName, updateData);
+			if (!onlyBad || test.Code != 0) {
+				NewTestResult ntest = retest(test);
+				ValuedField[] updateData = new ValuedField[] {
+						new ValuedField(db.getField(tableName, "compilation_id"), ntest.Past.RowID),
+						new ValuedField(db.getField(tableName, "code"), ntest.Code),
+						new ValuedField(db.getField(tableName, "result"), ntest.Result),
+						new ValuedField(db.getField(tableName, "full"), ntest.Full),
+						new ValuedField(db.getField(tableName, "creation_time"), new Date().getTime()),
+						new ValuedField(db.getField(tableName, "good_tests"), ntest.Good),
+						new ValuedField(db.getField(tableName, "bad_tests"), ntest.Bad),
+						new ValuedField(db.getField(tableName, "bad_tests_details"), ntest.Details) };
+				db.insert(tableName, updateData);
+			}
 			System.out.println("Done " + index + "/" + total);
 			index++;
 		}
@@ -273,6 +283,7 @@ public class Retester {
 				db.getField(tableName1, "ID"),
 				db.getField(tableName1, "asm"),
 				db.getField(tableName1, "test_id"),
+				db.getField(tableName1, "user_id"),
 				db.getField(tableName1, "full"),
 				db.getField(tableName1, "code"),
 				db.getField(tableName1, "result"),
@@ -290,8 +301,9 @@ public class Retester {
 			String full = obj.getString("full").Value;
 			String login = obj.getString("login").Value;
 			int code = obj.getNumber("code").Value;
+			int user_id = obj.getNumber("user_id").Value;
 			String result = obj.getString("result").Value;
-			PastTestResult test = new PastTestResult(asm, test_id, id, code, result, full, login);
+			PastTestResult test = new PastTestResult(asm, test_id, id, code, result, full, login, user_id);
 			if (test.Login != null) {
 				if (!test.Login.isEmpty()) {
 					if (test.TestID != null) {
@@ -308,7 +320,7 @@ public class Retester {
 	}
 
 	private NewTestResult retest(PastTestResult test) {
-		JsonObject res = tests.run(null, test.RowID, test.TestID, test.ASM, test.Login);
+		JsonObject res = tests.run(db.new BadResults(-1, test.UserID, new Date()), test.RowID, test.TestID, test.ASM, test.Login);
 		int code = res.getNumber("code").Value;
 		String result = res.getString("result").Value;
 		int good = res.getNumber("good").Value;
@@ -318,6 +330,28 @@ public class Retester {
 			details = res.get("details").getJsonString();
 		}
 		return new NewTestResult(test, code, result, res.getJsonString(), details, good, bad);
+	}
+
+	public void redo() throws DatabaseException {
+		List<StoredNewTestResult> nw = loadNew();
+		final String tableName = "compilations";
+
+		final TableField f_result = db.getField(tableName, "result");
+		final TableField f_full = db.getField(tableName, "full");
+		final TableField f_bad_tests_details = db.getField(tableName, "bad_tests_details");
+		final TableField f_bad_tests = db.getField(tableName, "bad_tests");
+		final TableField f_good_tests = db.getField(tableName, "good_tests");
+		int total = nw.size();
+		int done = 0;
+
+		for (StoredNewTestResult item : nw) {
+			done++;
+			if (item.Past.Code != 0 && item.Code == 0) {
+				NewTestResult rt = retest(item.Past);
+				db.update(tableName, item.Past.RowID, new ValuedField(f_result, rt.Result), new ValuedField(f_full, rt.Full), new ValuedField(f_bad_tests_details, rt.Details), new ValuedField(f_bad_tests, rt.Bad), new ValuedField(f_good_tests, rt.Good));
+			}
+			System.out.println("Done: " + done + "/" + total);
+		}
 	}
 
 }

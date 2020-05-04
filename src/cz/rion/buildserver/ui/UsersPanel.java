@@ -2,6 +2,7 @@ package cz.rion.buildserver.ui;
 
 import javax.swing.JPanel;
 
+import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.ui.events.UsersLoadedEvent;
 import cz.rion.buildserver.ui.events.EventManager.Status;
 import cz.rion.buildserver.ui.events.UsersLoadedEvent.UserInfo;
@@ -148,7 +149,7 @@ public class UsersPanel extends JPanel implements UserListLoadedListener {
 		pnlUsers.setLayout(new BorderLayout(0, 0));
 
 		list = new JList<>();
-		list.setFont(new Font("Tahoma", Font.PLAIN, 17));
+		list.setFont(new Font("Tahoma", Font.PLAIN, Settings.getFontSize()));
 		list.setCellRenderer(new BetterListCellRenderer());
 		list.addListSelectionListener(new ListSelectionListener() {
 			public void valueChanged(ListSelectionEvent e) {

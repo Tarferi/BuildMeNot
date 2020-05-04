@@ -14,11 +14,15 @@ import cz.rion.buildserver.db.crypto.Crypto;
 import cz.rion.buildserver.db.crypto.CryptoException;
 import cz.rion.buildserver.db.crypto.CryptoManager;
 import cz.rion.buildserver.db.layers.common.LayeredMetaDB;
+import cz.rion.buildserver.db.layers.staticDB.LayeredFilesDB.DatabaseFile;
 import cz.rion.buildserver.exceptions.ChangeOfSessionAddressException;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
+import cz.rion.buildserver.json.JsonValue.JsonNumber;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
+import cz.rion.buildserver.json.JsonValue.JsonString;
+import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 
 public class RuntimeDB extends LayeredMetaDB {
 
@@ -34,6 +38,7 @@ public class RuntimeDB extends LayeredMetaDB {
 	public RuntimeDB(String fileName, StaticDB sdb) throws DatabaseException {
 		super(fileName, "RuntimeDB");
 		crypto = CryptoManager.getCrypto(sdb);
+		new StatDB(this);
 		makeTable("users", KEY("ID"), TEXT("login"));
 		makeTable("session", KEY("ID"), TEXT("address"), TEXT("hash"), NUMBER("live"), NUMBER("user_id"), DATE("last_action"), DATE("creation_time"));
 		makeTable("compilations", KEY("ID"), NUMBER("session_id"), TEXT("test_id"), NUMBER("user_id"), TEXT("address"), NUMBER("port"), BIGTEXT("asm"), DATE("creation_time"), NUMBER("code"), BIGTEXT("result"), BIGTEXT("full"), NUMBER("good_tests"), NUMBER("bad_tests"), BIGTEXT("bad_tests_details"));
@@ -94,7 +99,7 @@ public class RuntimeDB extends LayeredMetaDB {
 
 		private static final long minute = (60 * 1000);
 
-		private BadResults(int row_id, int user_id, Date allowNext) {
+		public BadResults(int row_id, int user_id, Date allowNext) {
 			this.RowID = row_id;
 			this.UserID = user_id;
 			this.AllowNext = allowNext;
@@ -306,8 +311,10 @@ public class RuntimeDB extends LayeredMetaDB {
 				}
 				total++;
 			}
-			synchronized (syncer_compilation_stats) {
-				this.insert(statsTableName, new ValuedField(getField(statsTableName, "user_id"), user_id), new ValuedField(getField(statsTableName, "good_unique_tests"), unique), new ValuedField(getField(statsTableName, "good_tests"), good), new ValuedField(getField(statsTableName, "total_tests"), total));
+			if (total > 0) {
+				synchronized (syncer_compilation_stats) {
+					this.insert(statsTableName, new ValuedField(getField(statsTableName, "user_id"), user_id), new ValuedField(getField(statsTableName, "good_unique_tests"), unique), new ValuedField(getField(statsTableName, "good_tests"), good), new ValuedField(getField(statsTableName, "total_tests"), total));
+				}
 			}
 		}
 	}
@@ -783,5 +790,76 @@ public class RuntimeDB extends LayeredMetaDB {
 			}
 		});
 		return stats;
+	}
+
+	private static final int VIRTUAL_VIEWS_BASE = 5000;
+	private static final String VIRTUAL_STAT_PATH = "stats/virtual/";
+
+	public void addSpecialFiles(List<DatabaseFile> lst, int index, String prefix, String suffix) {
+		int myBase = this.DB_FILE_FIRST_ID + VIRTUAL_VIEWS_BASE;
+		int i = 0;
+		for (VirtualStatFile sf : virtualStatFiles) {
+			sf.setPrefixAndSuffix(prefix + VIRTUAL_STAT_PATH, suffix);
+			lst.add(new DatabaseFile(i + myBase, prefix + VIRTUAL_STAT_PATH + sf.getName() + suffix));
+			i++;
+		}
+	}
+
+	private List<VirtualStatFile> virtualStatFiles = new ArrayList<>();
+
+	public void registerVirtualStatFile(VirtualStatFile f) {
+		virtualStatFiles.add(f);
+	}
+
+	public FileInfo handleSpecialView(String name, int fileID, boolean interpret) {
+		VirtualStatFile vf = null;
+		int myBase = this.DB_FILE_FIRST_ID + VIRTUAL_VIEWS_BASE;
+		int realID = -1;
+		if (name == null) {
+			fileID -= myBase;
+			if (fileID >= 0 && fileID < virtualStatFiles.size()) {
+				vf = virtualStatFiles.get(fileID);
+				realID = fileID;
+			}
+		} else {
+			int i = 0;
+			for (VirtualStatFile sf : virtualStatFiles) {
+				String fullName = sf.getPrefix() + sf.getName() + sf.getSuffix();
+				if (fullName.equals(name)) {
+					vf = sf;
+					realID = i;
+					break;
+				}
+				i++;
+			}
+		}
+		if (vf == null) {
+			return null;
+		}
+		String fullName = vf.getPrefix() + vf.getName() + vf.getSuffix();
+		if (interpret) {
+			JsonObject robj = new JsonObject();
+			robj.add("SQL", new JsonString(vf.getQueryString()));
+			robj.add("freeSQL", new JsonString(vf.getQueryString()));
+			robj.add("code", new JsonNumber(0));
+			robj.add("result", vf.getData());
+			return new FileInfo(realID + myBase, fullName, robj.getJsonString());
+		} else {
+			return new FileInfo(realID + myBase, fullName, vf.getQueryString());
+		}
+	}
+
+	public boolean ownsFile(String name) {
+		for (VirtualStatFile vf : virtualStatFiles) {
+			String fullName = vf.getPrefix() + vf.getName() + vf.getSuffix();
+			if (name.equals(fullName)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	public FileInfo getSpecialFile(int fileID, boolean interpret) {
+		return handleSpecialView(null, fileID, interpret);
 	}
 }

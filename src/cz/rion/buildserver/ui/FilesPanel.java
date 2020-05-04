@@ -2,6 +2,7 @@ package cz.rion.buildserver.ui;
 
 import javax.swing.JPanel;
 
+import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.layers.staticDB.LayeredFilesDB.DatabaseFile;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
@@ -507,7 +508,7 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 		BetterListCellRenderer renderer = new BetterListCellRenderer();
 		renderer.setIconsEnabled(true);
 		list.setCellRenderer(renderer);
-		list.setFont(new Font("Tahoma", Font.PLAIN, 17));
+		list.setFont(new Font("Tahoma", Font.PLAIN, Settings.getFontSize()));
 		list.addFileSelectedListener(new FileSelectedListener() {
 			public void FileSelected(DatabaseFile file) {
 				selectedFile(file);
@@ -565,7 +566,7 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 		pnlScroll.setLayout(new BorderLayout());
 
 		txtContents = new JTextArea();
-		txtContents.setFont(new Font("Monospaced", Font.PLAIN, 17));
+		txtContents.setFont(new Font("Monospaced", Font.PLAIN, Settings.getFontSize()));
 		scrollContents = new JScrollPane(txtContents);
 		pnlScroll.add(scrollContents);
 		scrollContents.getVerticalScrollBar().setUnitIncrement(16);
