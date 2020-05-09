@@ -106,6 +106,11 @@ public class LayeredMetaDB extends SQLiteDB {
 		return resultField;
 	}
 
+
+	public boolean tableWriteable(String tableName) {
+		return true;
+	}
+	
 	public final List<TableField> getFields(String name) {
 		JsonArray res;
 		try {

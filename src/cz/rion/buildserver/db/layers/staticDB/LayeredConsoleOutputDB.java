@@ -9,7 +9,7 @@ import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 
-public class LayeredConsoleOutputDB extends LayeredThreadDB {
+public class LayeredConsoleOutputDB extends LayeredAdminLogDB {
 
 	private static int DB_FILE_CONSOLE_OUTPUT_BASE = 0x001FFFFF;
 	private static final String STDOUTFileName = "stdout.stream";

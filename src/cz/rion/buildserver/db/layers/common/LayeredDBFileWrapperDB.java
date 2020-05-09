@@ -8,6 +8,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import cz.rion.buildserver.db.RuntimeDB;
+import cz.rion.buildserver.db.StaticDB;
 import cz.rion.buildserver.db.layers.staticDB.LayeredFilesDB;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.json.JsonValue;
@@ -143,45 +144,68 @@ public class LayeredDBFileWrapperDB extends LayeredFilesDB {
 	}
 
 	public static final boolean editRow(LayeredMetaDB db, FileInfo file, JsonObject contents) {
+		return editRow(null, null, null, db, file, contents);
+	}
+
+	public static final boolean editRow(StaticDB sdb, String login, String address, LayeredMetaDB db, FileInfo file, JsonObject contents) {
 		if (file.ID >= db.DB_FILE_FIRST_ID && file.ID < db.DB_FILE_FIRST_ID + DB_FILE_SIZE) { // Owned by the DB -> table exists in db
 			if (contents.containsNumber("ID")) {
 				String tableName = db.getTables().get(file.ID - db.DB_FILE_FIRST_ID);
-				ValuedField[] values = new ValuedField[contents.getEntries().size() - 1];
-				int ID = -1;
-				int index = 0;
-				for (Entry<String, JsonValue> entry : contents.getEntries()) {
-					String name = entry.getKey();
-					JsonValue value = entry.getValue();
-					if (name.equals("ID")) {
-						if (!value.isNumber()) { // Non numeric ID
-							return false;
-						}
-						ID = value.asNumber().Value;
-						continue;
-					}
-					if (index == values.length) { // No ID
-						return false;
-					}
-					Object val = null;
-					if (value.isNumber()) {
-						val = value.asNumber().asLong();
-					} else if (value.isString()) {
-						val = value.asString().Value;
-					} else {
-						return false;
-					}
-					try {
-						values[index] = new ValuedField(db.getField(tableName, name), val);
-					} catch (DatabaseException e) { // No such column
-						e.printStackTrace();
-						return false;
-					}
-					index++;
-				}
-				if (index != values.length) { // Multiple IDs
+				if (!db.tableWriteable(tableName)) {
 					return false;
 				}
+				ValuedField[] values = new ValuedField[contents.getEntries().size() - 1];
+				TableField[] fields = new TableField[values.length];
+				TableField idField = null;
+				int ID = -1;
+				int index = 0;
 				try {
+					for (Entry<String, JsonValue> entry : contents.getEntries()) {
+						String name = entry.getKey();
+						JsonValue value = entry.getValue();
+						if (name.equals("ID")) {
+							if (!value.isNumber()) { // Non numeric ID
+								return false;
+							}
+							ID = value.asNumber().Value;
+							idField = db.getField(tableName, name);
+							continue;
+						}
+						if (index == values.length) { // No ID
+							return false;
+						}
+						Object val = null;
+						if (value.isNumber()) {
+							val = value.asNumber().asLong();
+						} else if (value.isString()) {
+							val = value.asString().Value;
+						} else {
+							return false;
+						}
+						try {
+							fields[index] = db.getField(tableName, name);
+							values[index] = new ValuedField(fields[index], val);
+						} catch (DatabaseException e) { // No such column
+							e.printStackTrace();
+							return false;
+						}
+						index++;
+					}
+					if (index != values.length) { // Multiple IDs
+						return false;
+					}
+					// Get current data
+
+					if (sdb != null && login != null && address != null) {
+						JsonArray original = db.select(tableName, fields, true, new ComparisionField(idField, ID));
+						JsonObject obj = new JsonObject();
+						obj.add("original", original);
+						obj.add("new", contents);
+						obj.add("ID", new JsonNumber(ID));
+						obj.add("table", new JsonString(tableName));
+						sdb.adminLog(address, login, "editRow", obj.getJsonString());
+					}
+
 					db.update(tableName, ID, values);
 					return true;
 				} catch (DatabaseException e) {
@@ -225,6 +249,20 @@ public class LayeredDBFileWrapperDB extends LayeredFilesDB {
 
 		try {
 			freeSQL = Pattern.compile("\\%NOW\\%", Pattern.MULTILINE).matcher(freeSQL).replaceAll(new Date().getTime() + "");
+			String tSQL = freeSQL.toLowerCase();
+			final String[] bannedKW = new String[] {
+					"update",
+					"insert",
+					"delete",
+					"drop",
+					"alter",
+					"create"
+			};
+			for (String banned : bannedKW) {
+				if (tSQL.contains(banned)) {
+					throw new DatabaseException("Forbidden command: " + banned);
+				}
+			}
 			@SuppressWarnings("deprecation")
 			DatabaseResult res = db.select_raw(freeSQL); // TODO
 

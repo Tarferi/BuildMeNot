@@ -504,7 +504,7 @@ var AdminEditor = function(adminer) {
 			if (value.length > 0) {
 				if (type == "TEXT" || type == "BIGTEXT" || type == "DATE") {
 					comparator = function(filteredValue) {
-						return filteredValue.indexOf(value) >= 0
+						return filteredValue.toLowerCase().indexOf(value.toLowerCase()) >= 0
 					};
 				} else if (type == "INT") {
 					if (value.substr(0, 2) == ">=") {

@@ -261,6 +261,7 @@ public class HTTPAdminClient extends HTTPParserClient {
 			if (admin_data.equals("getFiles")) {
 				result.add("code", new JsonNumber(0));
 				result.add("result", new JsonString(collectFiles().getJsonString()));
+				sdb.adminLog(getAddress(), getPermissions().Login, "getFiles", admin_data);
 			} else if (admin_data.startsWith("load:")) {
 				int fileID;
 				try {
@@ -270,6 +271,7 @@ public class HTTPAdminClient extends HTTPParserClient {
 				}
 				result.add("code", new JsonNumber(0));
 				result.add("result", new JsonString(loadFile(fileID).getJsonString()));
+				sdb.adminLog(getAddress(), getPermissions().Login, "load", admin_data);
 			} else if (admin_data.startsWith("save:") || admin_data.startsWith("tableEdit")) {
 				String[] parts = admin_data.split(":", 3);
 				if (parts.length == 3) {
@@ -283,7 +285,7 @@ public class HTTPAdminClient extends HTTPParserClient {
 					boolean isSavingRawFile = admin_data.startsWith("save:");
 					boolean isEditingRow = admin_data.startsWith("tableEdit");
 
-					if (isSavingRawFile) {
+					if (isSavingRawFile) { // Log handled internally
 						if (this.saveFile(fileID, newContents)) {
 							result.add("code", new JsonNumber(0));
 							result.add("result", new JsonString("File saved"));
@@ -291,7 +293,7 @@ public class HTTPAdminClient extends HTTPParserClient {
 							result.add("code", new JsonNumber(1));
 							result.add("result", new JsonString("Failed to save file"));
 						}
-					} else if (isEditingRow) {
+					} else if (isEditingRow) { // Log handled internally
 						if (this.saveRow(fileID, newContents)) {
 							result.add("code", new JsonNumber(0));
 							result.add("result", new JsonString("Row saved"));
@@ -306,8 +308,10 @@ public class HTTPAdminClient extends HTTPParserClient {
 		return;
 	}
 
-	private boolean saveRow(int fileID, String jsn) {
+	private boolean saveRow(int fileID, String jsn) { // Logs itself
 		JsonValue val = JsonValue.parse(jsn);
+		final String login = getPermissions().Login;
+		final String address = getAddress();
 		if (val != null) {
 			if (val.isObject()) {
 				JsonObject obj = val.asObject();
@@ -315,13 +319,13 @@ public class HTTPAdminClient extends HTTPParserClient {
 				try {
 					f = this.sdb.getFile(fileID, false);
 					if (f != null) { // SDB database
-						if (LayeredDBFileWrapperDB.editRow(sdb, f, obj)) {
+						if (LayeredDBFileWrapperDB.editRow(sdb, login, address, sdb, f, obj)) {
 							return true;
 						}
 					} else { // DB database ?
 						f = LayeredDBFileWrapperDB.getFile(db, fileID, false);
 						if (f != null) {
-							if (LayeredDBFileWrapperDB.editRow(db, f, obj)) {
+							if (LayeredDBFileWrapperDB.editRow(sdb, login, address, db, f, obj)) {
 								return true;
 							}
 						}
@@ -338,8 +342,22 @@ public class HTTPAdminClient extends HTTPParserClient {
 		List<DatabaseFile> lst = sdb.getFiles();
 		for (DatabaseFile f : lst) {
 			if (f.ID == fileID) {
-				sdb.storeFile(f, f.FileName, newContents);
-				return true;
+				FileInfo fo = null;
+				try {
+					fo = sdb.getFile(fileID, true);
+				} catch (DatabaseException e) {
+					e.printStackTrace();
+					return false;
+				}
+				if (fo != null) {
+					JsonObject obj = new JsonObject();
+					obj.add("original", new JsonString(fo.Contents));
+					obj.add("new", new JsonString(newContents));
+					sdb.adminLog(getAddress(), getPermissions().Login, "saveFile", obj.getJsonString());
+
+					sdb.storeFile(f, f.FileName, newContents);
+					return true;
+				}
 			}
 		}
 		return false;
