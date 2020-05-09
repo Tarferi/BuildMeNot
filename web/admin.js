@@ -577,7 +577,7 @@ var AdminEditor = function(adminer) {
 		if (ext == "view") {
 			self.showViewTableButtons();
 		} else if (ext == "table") {
-			showTableTableButtons();
+			self.showTableTableButtons();
 		}
 	}
 
