@@ -1,0 +1,229 @@
+.adm_table_main {
+	border-collapse: collapse;
+	width: 100%;
+	position: fixed;
+	height: 100%;
+}
+
+.adm_tr_main {
+	border-bottom: 1px solid black;
+	height: 0%;
+	text-align: right;
+}
+
+.adm_td_main_header_closeButton {
+	margin-right: 5px;
+	margin-top: 5px;
+	margin-bottom: 5px;
+}
+
+.adm_tr_main_loadBtn {
+	height: 100%;
+}
+
+.adm_td_main_left {
+	width: 20%;
+	min-width: 350px;
+	max-width: 400px;
+	border-right: 1px solid black;
+	border-bottom: 1px solid black;
+	height: 20px;
+}
+
+.adm_td_main_left > Center > Button {
+	margin-top: 5px;
+	margin-bottom: 5px;
+}
+
+.adm_td_main_left_bottom {
+	height: 100%;
+	overflow: hidden;
+}
+
+.adm_td_main_left_bottom_div {
+	height: 100%;
+	overflow-y: scroll;
+}
+
+.adm_td_main_right {
+	width: 100%;
+}
+
+.adm_file_wrapper {
+	height: 40px;
+}
+
+.adm_file_wrapper:hover {
+	background: #defffe;
+	cursor: default;
+	select: none;
+	-webkit-user-select: none; /* Safari */        
+	-moz-user-select: none; /* Firefox */
+	-ms-user-select: none; /* IE10+/Edge */
+	user-select: none; /* Standard */
+}
+
+.adm_file_wrapper > Img {
+	width: 30px;
+	height: 30px;
+	margin: 5px;
+}
+
+.adm_file_wrapper > Span {
+	position: relative;
+	top: -5px;
+	font-family: Tahoma;
+	font-size: 12pt;
+	display: inline-block;
+	height: 40px;
+	vertical-align: middle;
+}
+
+.adm_right_top {
+	display: block;
+	height: 35px;
+	line-height: 35px;
+	font-family: Tahoma;
+	font-size: 13pt;
+	text-decoration: underline;
+	font-style: italic;
+	width: 100%;
+}
+
+.adm_right_mid {
+	display: block;
+	height: calc(100% - 95px);
+	border-top: 1px solid black;
+	border-bottom: 1px solid black;
+	overflow-y: scroll;
+}
+
+.adm_right_bottom {
+	display: block;
+	height: 60px;
+	line-height: 60px;
+	float: right;
+}
+
+.adm_right_bottom > Button {
+	margin-right: 10px;
+}
+
+.adm_content_table {
+	display: none;
+	width: 100%;
+	border-collapse: collapse;
+	font-family: Helvetica;
+	font-size: 13pt;
+	-webkit-user-select: none; /* Safari */        
+	-moz-user-select: none; /* Firefox */
+	-ms-user-select: none; /* IE10+/Edge */
+	user-select: none; /* Standard */
+}
+
+.adm_content_table > Tr > Th {
+	border-left: 1px solid black;
+	border-bottom: 2px solid black;
+	padding-top: 5px;
+	padding-bottom: 5px;
+}
+
+.adm_content_table > Tr > Td {
+	border-top: 1px solid black;
+	border-left: 1px solid black;
+	text-align: right;
+	font-align: right;
+	align: right;
+	padding-right: 10px;
+	padding-top: 4px;
+	padding-bottom: 4px;
+	cursor: pointer;
+}
+
+.adm_content_table > Tr:nth-child(odd) {
+	background: #f4f4f4;
+}
+
+.adm_content_table_filter {
+	outline: none;
+	width: calc(100% - 5px);
+	height: 100%;
+	background: transparent;
+	border: none;
+}
+
+.adm_content_editble {
+	display: none;
+	width: calc(100% - 10px);
+	height: calc(100% - 20px);
+	outline: none;
+	border: none;
+	resize: none;
+	float: right;
+}
+
+.adm_waiter {
+	display: none;
+	position: fixed;
+	left: 0px;
+	top: 0px;
+	background: #00000088;
+	width: 100%;
+	height: 100%;
+	text-align: center;
+}
+
+.adm_content_details {
+	display :block;
+	width: calc(100% - 10px);
+	height: calc(100% - 20px);
+}
+
+.adm_content_details > Table {
+	width: 100%;
+	border: none;
+	font-family: Arial;
+	font-size: 12pt;
+	border-collapse: collapse;
+}
+
+.adm_content_details > Table > Tr {
+	width: 100%;
+	border-top: 8px solid transparent;
+	border-right: 10px solid transparent;
+}
+
+.adm_content_details > Table > Tr > Th {
+	width: 0%;
+	text-align: right;
+	padding-top: 5px;
+	padding-left: 30px;
+	padding-right: 5px;
+	vertical-align: top;
+}
+
+.adm_content_details > Table > Tr > Td {
+	width: 100%;
+}
+
+.adm_content_details > Table > Tr > Td > Input {
+	width: 100%;
+	outline: none;
+	border: 1px solid black;
+	padding-left: 5px;
+	padding-top: 5px;
+	padding-bottom: 5px;
+	
+}
+	
+.adm_content_details > Table > Tr > Td > TextArea {
+	width: calc(100% - 2px);
+	height: 250px;
+	resize: none;
+	padding-left: 5px;
+	padding-top: 5px;
+	padding-bottom: 5px;
+	outline: none;
+	border: 1px solid black;
+}
+	
