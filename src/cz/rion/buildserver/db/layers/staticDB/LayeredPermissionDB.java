@@ -79,6 +79,10 @@ public class LayeredPermissionDB extends LayeredTestDB {
 			return can(WebPermission.SeeTest(test_id));
 		}
 
+		public boolean allowExecute(String test_id) {
+			return can(WebPermission.ExecuteTest(test_id));
+		}
+		
 		public final boolean allowFireFox() {
 			return can(WebPermission.SeeFireFox);
 		}
@@ -125,6 +129,10 @@ public class LayeredPermissionDB extends LayeredTestDB {
 
 		public boolean allowBypassTimeout() {
 			return can(WebPermission.BypassTimeout);
+		}
+
+		public boolean allowSeeWebAdmin() {
+			return can(WebPermission.SeeAdminAdmin);
 		}
 
 	}

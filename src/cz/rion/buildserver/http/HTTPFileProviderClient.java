@@ -8,14 +8,34 @@ import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 import cz.rion.buildserver.wrappers.FileReadException;
 import cz.rion.buildserver.wrappers.MyFS;
 
-public class HTTPFileProviderClient extends HTTPParserClient {
+public class HTTPFileProviderClient extends HTTPAdminClient {
 
 	private final StaticDB sdb;
 	private String endPoint;
-	
+
 	protected HTTPFileProviderClient(CompatibleSocketClient client, int BuilderID, RuntimeDB db, StaticDB sdb) {
 		super(client, BuilderID, db, sdb);
 		this.sdb = sdb;
+	}
+
+	protected String handleCSSManipulation(String css) {
+		String repl = "";
+		if (getPermissions().allowSeeWebAdmin()) {
+			repl = readFileOrDBFile("admin.css");
+		}
+		css = css.replace("$INJECT_ADMIN$", repl);
+		return css;
+	}
+
+	@Override
+	protected String handleJSManipulation(String js) {
+		js = super.handleJSManipulation(js);
+		String repl = "";
+		if (getPermissions().allowSeeWebAdmin()) {
+			repl = readFileOrDBFile("admin.js");
+		}
+		js = js.replace("$INJECT_ADMIN$", repl);
+		return js;
 	}
 
 	private String readFileOrDBFile(String endPoint) {
@@ -23,7 +43,7 @@ public class HTTPFileProviderClient extends HTTPParserClient {
 			String fileContents = MyFS.readFile("./web/" + endPoint);
 			return fileContents;
 		} catch (FileReadException e) {
-			FileInfo dbf = sdb.loadFile("web/" + endPoint);
+			FileInfo dbf = sdb.loadFile("web/" + endPoint, true);
 			if (dbf != null) {
 				return dbf.Contents;
 			}
@@ -34,7 +54,7 @@ public class HTTPFileProviderClient extends HTTPParserClient {
 	public String getDownloadedDocumentPath() {
 		return endPoint;
 	}
-	
+
 	protected HTTPResponse handle(HTTPRequest request) throws HTTPClientException {
 		if (request.path.startsWith("/") && request.method.equals("GET")) {
 			int returnCode = 200;
@@ -65,6 +85,9 @@ public class HTTPFileProviderClient extends HTTPParserClient {
 						}
 						if (allow.equals("index.js")) {
 							contents = this.handleJSManipulation(contents);
+							data = contents.getBytes(Settings.getDefaultCharset());
+						} else if (allow.equals("index.css")) {
+							contents = this.handleCSSManipulation(contents);
 							data = contents.getBytes(Settings.getDefaultCharset());
 						}
 					} else {

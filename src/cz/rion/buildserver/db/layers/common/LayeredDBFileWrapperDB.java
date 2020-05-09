@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Map.Entry;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import cz.rion.buildserver.db.RuntimeDB;
@@ -34,10 +35,10 @@ public class LayeredDBFileWrapperDB extends LayeredFilesDB {
 		return dbDirPrefix + db.metaDatabaseName + "/";
 	}
 
-	private static FileInfo loadDBFile(LayeredMetaDB db, int id, String tableName) {
+	private static FileInfo loadDBFile(LayeredMetaDB db, int id, String tableName, boolean decodeBigString) {
 		JsonArray res;
 		try {
-			res = db.readTable(tableName, false);
+			res = db.readTable(tableName, decodeBigString);
 			JsonObject result = new JsonObject();
 			if (res != null) {
 				if (res.isArray()) {
@@ -91,29 +92,29 @@ public class LayeredDBFileWrapperDB extends LayeredFilesDB {
 	}
 
 	@Override
-	public FileInfo getFile(int fileID) throws DatabaseException {
+	public FileInfo getFile(int fileID, boolean decodeBigString) throws DatabaseException {
 		if (fileID >= DB_FILE_FIRST_ID && fileID < DB_FILE_FIRST_ID + DB_FILE_SIZE) {
-			return loadDBFile(this, fileID, this.getTables().get(fileID - DB_FILE_FIRST_ID));
+			return loadDBFile(this, fileID, this.getTables().get(fileID - DB_FILE_FIRST_ID), decodeBigString);
 		} else {
-			FileInfo fo = super.getFile(fileID);
+			FileInfo fo = super.getFile(fileID, decodeBigString);
 			return fo;
 		}
 	}
 
-	public static FileInfo processPostLoadedFile(LayeredMetaDB db, FileInfo fi) {
+	public static FileInfo processPostLoadedFile(LayeredMetaDB db, FileInfo fi, boolean decodeBigString) {
 		if (fi != null) {
 			if (fi.FileName.startsWith(dbDirPrefix + db.metaDatabaseName + "/") && fi.FileName.endsWith(viewFileSuffix)) {
-				return handleView(db, fi, fi.FileName, fi.ID);
+				return handleView(db, fi, fi.FileName, fi.ID, decodeBigString);
 			}
 		}
 		return fi;
 	}
 
-	public static FileInfo getFile(LayeredMetaDB db, int fileID) throws DatabaseException {
+	public static FileInfo getFile(LayeredMetaDB db, int fileID, boolean decodeBigString) throws DatabaseException {
 		if (fileID >= db.DB_FILE_FIRST_ID && fileID < db.DB_FILE_FIRST_ID + DB_FILE_SIZE) {
 			List<String> tables = db.getTables();
 			if (fileID - db.DB_FILE_FIRST_ID < tables.size()) { // Valid
-				return loadDBFile(db, fileID, tables.get(fileID - db.DB_FILE_FIRST_ID));
+				return loadDBFile(db, fileID, tables.get(fileID - db.DB_FILE_FIRST_ID), decodeBigString);
 			} else if (db instanceof RuntimeDB) { // Something fucky
 				return ((RuntimeDB) db).getSpecialFile(fileID, false);
 			}
@@ -208,7 +209,7 @@ public class LayeredDBFileWrapperDB extends LayeredFilesDB {
 		return null;
 	}
 
-	private static FileInfo handleView(LayeredMetaDB db, FileInfo sqlFile, String name, int fileID) {
+	private static FileInfo handleView(LayeredMetaDB db, FileInfo sqlFile, String name, int fileID, boolean decodeBigString) {
 		if (db instanceof RuntimeDB && name != null) {
 			if (((RuntimeDB) db).ownsFile(name)) {
 				return handleSpecialView(db, name, fileID);
@@ -226,8 +227,24 @@ public class LayeredDBFileWrapperDB extends LayeredFilesDB {
 			freeSQL = Pattern.compile("\\%NOW\\%", Pattern.MULTILINE).matcher(freeSQL).replaceAll(new Date().getTime() + "");
 			@SuppressWarnings("deprecation")
 			DatabaseResult res = db.select_raw(freeSQL); // TODO
-			TableField[] fields = new TableField[] {};
-			result = res.getJSON(false, fields);
+
+			// Parse query
+			List<TableField> fields_lst = new ArrayList<>();
+			Matcher matcher = LayeredDBFileWrapperDB.FreeSQLSyntaxMatcher.matcher(SQL);
+			while (matcher.find()) {
+				String fn = matcher.group(1);
+				String field = matcher.group(2);
+				if (fn.equals("BIGTEXT")) {
+					fields_lst.add(new TableField(new Field(field, "", FieldType.BIGSTRING), ""));
+				}
+			}
+
+			TableField[] fields = new TableField[fields_lst.size()];
+			for (int i = 0; i < fields.length; i++) {
+				fields[i] = fields_lst.get(i);
+			}
+
+			result = res.getJSON(decodeBigString, fields);
 			if (result != null) { // The only non-error scenario
 				code = 0;
 			}
@@ -243,11 +260,11 @@ public class LayeredDBFileWrapperDB extends LayeredFilesDB {
 	}
 
 	@Override
-	public FileInfo loadFile(String name) {
+	public FileInfo loadFile(String name, boolean decodeBigString) {
 		if (name.startsWith(dbFilePrefix)) {
 			if (name.endsWith(viewFileSuffix)) { // SQL view
-				FileInfo sqlFile = super.loadFile(name);
-				return handleView(this, sqlFile, name, -1);
+				FileInfo sqlFile = super.loadFile(name, decodeBigString);
+				return handleView(this, sqlFile, name, -1, decodeBigString);
 			}
 
 			int index = super.getTables().indexOf(name);
@@ -259,9 +276,9 @@ public class LayeredDBFileWrapperDB extends LayeredFilesDB {
 				return null;
 			}
 			name = name.substring(0, name.length() - dbFileSuffix.length());
-			return loadDBFile(this, index + DB_FILE_FIRST_ID, name);
+			return loadDBFile(this, index + DB_FILE_FIRST_ID, name, decodeBigString);
 		} else {
-			return super.loadFile(name);
+			return super.loadFile(name, decodeBigString);
 		}
 	}
 }

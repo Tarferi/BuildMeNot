@@ -54,7 +54,7 @@ public class LayeredThreadDB extends LayeredUserDB {
 	}
 
 	@Override
-	public FileInfo loadFile(String name) {
+	public FileInfo loadFile(String name, boolean decodeBigString) {
 		if (name.startsWith(ThreadsDir) && name.endsWith(ThreadsExtension)) {
 			String threadName = name.substring(ThreadsDir.length());
 			threadName = threadName.substring(0, threadName.length() - ThreadsExtension.length());
@@ -72,7 +72,7 @@ public class LayeredThreadDB extends LayeredUserDB {
 			}
 			return new FileInfo(DB_THREAD_BASE, name, "Failed to load thread info: thread not found");
 		} else {
-			return super.loadFile(name);
+			return super.loadFile(name, decodeBigString);
 		}
 	}
 
@@ -94,7 +94,7 @@ public class LayeredThreadDB extends LayeredUserDB {
 	}
 
 	@Override
-	public FileInfo getFile(int fileID) throws DatabaseException {
+	public FileInfo getFile(int fileID, boolean decodeBigString) throws DatabaseException {
 		if (fileID == DB_THREAD_BASE) { // All threads
 			return new FileInfo(fileID, ThreadsDir + ThreadsAllThreads + ThreadsExtension, getAllThreadsData());
 		} else if (fileID > DB_THREAD_BASE && fileID < DB_THREAD_BASE + threads.size() + 1) {
@@ -103,7 +103,7 @@ public class LayeredThreadDB extends LayeredUserDB {
 				return new FileInfo(fileID, ThreadsDir + thread.getName() + ThreadsExtension, thread.getStackTrace());
 			}
 		} else {
-			return super.getFile(fileID);
+			return super.getFile(fileID, decodeBigString);
 		}
 	}
 

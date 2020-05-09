@@ -113,7 +113,7 @@ public class LayeredConsoleOutputDB extends LayeredThreadDB {
 	}
 
 	@Override
-	public FileInfo loadFile(String name) {
+	public FileInfo loadFile(String name, boolean decodeBigString) {
 		if (name.equals(STDOUTFileName)) {
 			synchronized (syncer) {
 				return new FileInfo(DB_FILE_CONSOLE_OUTPUT_BASE, STDOUTFileName, stdout.toString());
@@ -123,12 +123,12 @@ public class LayeredConsoleOutputDB extends LayeredThreadDB {
 				return new FileInfo(DB_FILE_CONSOLE_OUTPUT_BASE + 1, STDERRFileName, stderr.toString());
 			}
 		} else {
-			return super.loadFile(name);
+			return super.loadFile(name, decodeBigString);
 		}
 	}
 
 	@Override
-	public FileInfo getFile(int fileID) throws DatabaseException {
+	public FileInfo getFile(int fileID, boolean decodeBigString) throws DatabaseException {
 		if (fileID == DB_FILE_CONSOLE_OUTPUT_BASE) {
 			synchronized (syncer) {
 				return new FileInfo(DB_FILE_CONSOLE_OUTPUT_BASE, STDOUTFileName, stdout.toString());
@@ -138,7 +138,7 @@ public class LayeredConsoleOutputDB extends LayeredThreadDB {
 				return new FileInfo(DB_FILE_CONSOLE_OUTPUT_BASE + 1, STDERRFileName, stderr.toString());
 			}
 		} else {
-			return super.getFile(fileID);
+			return super.getFile(fileID, decodeBigString);
 		}
 	}
 

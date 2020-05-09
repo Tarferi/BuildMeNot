@@ -63,7 +63,7 @@ public class LayeredSettingsDB extends LayeredConsoleOutputDB {
 	}
 
 	@Override
-	public FileInfo loadFile(String name) {
+	public FileInfo loadFile(String name, boolean decodeBigString) {
 		if (name.equals(SettingsFileName)) {
 			try {
 				return getFile();
@@ -72,16 +72,16 @@ public class LayeredSettingsDB extends LayeredConsoleOutputDB {
 				return null;
 			}
 		} else {
-			return super.loadFile(name);
+			return super.loadFile(name, decodeBigString);
 		}
 	}
 
 	@Override
-	public FileInfo getFile(int fileID) throws DatabaseException {
+	public FileInfo getFile(int fileID, boolean decodeBigString) throws DatabaseException {
 		if (fileID == DB_FILE_SETTINGS_BASE) {
 			return getFile();
 		} else {
-			return super.getFile(fileID);
+			return super.getFile(fileID, decodeBigString);
 		}
 	}
 

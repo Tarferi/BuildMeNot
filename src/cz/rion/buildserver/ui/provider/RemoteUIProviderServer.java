@@ -146,13 +146,13 @@ public class RemoteUIProviderServer {
 			JsonObject obj = val.asObject();
 			FileInfo f;
 			try {
-				f = this.sdb.getFile(fileID);
+				f = this.sdb.getFile(fileID, false);
 				if (f != null) { // SDB database
 					if (LayeredDBFileWrapperDB.editRow(sdb, f, obj)) {
 						returnCode = 42;
 					}
 				} else { // DB database ?
-					f = LayeredDBFileWrapperDB.getFile(db, fileID);
+					f = LayeredDBFileWrapperDB.getFile(db, fileID, false);
 					if (f != null) {
 						if (LayeredDBFileWrapperDB.editRow(db, f, obj)) {
 							returnCode = 42;
@@ -193,13 +193,13 @@ public class RemoteUIProviderServer {
 		String newContents = inBuffer.readString();
 		outBuffer.writeInt(FileSavedEvent.ID);
 		try {
-			FileInfo fo = sdb.getFile(fileID);
+			FileInfo fo = sdb.getFile(fileID, false);
 			if (fo == null) {
 				outBuffer.writeInt(0);
 				return;
 			} else {
 				sdb.storeFile(fo, newFileName, newContents);
-				fo = sdb.getFile(fileID);
+				fo = sdb.getFile(fileID, false);
 				if (fo == null) { // Check the write operation
 					outBuffer.writeInt(0);
 				} else {
@@ -218,13 +218,13 @@ public class RemoteUIProviderServer {
 	private FileInfo getFile(int fileID) {
 		FileInfo fo = null;
 		try {
-			fo = sdb.getFile(fileID);
+			fo = sdb.getFile(fileID, false);
 		} catch (DatabaseException e1) {
 			e1.printStackTrace();
 		}
 		if (fo == null) {
 			try {
-				fo = LayeredDBFileWrapperDB.getFile(db, fileID);
+				fo = LayeredDBFileWrapperDB.getFile(db, fileID, false);
 			} catch (DatabaseException e) {
 				e.printStackTrace();
 			}
@@ -235,7 +235,7 @@ public class RemoteUIProviderServer {
 	private void writeFile(InputPacketRequest inBuffer, MemoryBuffer outBuffer) throws IOException {
 		int fileID = inBuffer.readInt();
 		outBuffer.writeInt(FileLoadedEvent.ID);
-		FileInfo fo = LayeredDBFileWrapperDB.processPostLoadedFile(db, LayeredDBFileWrapperDB.processPostLoadedFile(sdb, getFile(fileID)));
+		FileInfo fo = LayeredDBFileWrapperDB.processPostLoadedFile(db, LayeredDBFileWrapperDB.processPostLoadedFile(sdb, getFile(fileID), false), false);
 		if (fo == null) {
 			outBuffer.writeInt(0);
 			return;

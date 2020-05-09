@@ -161,7 +161,7 @@ public class JsonTestManager {
 				for (String line : asmLine) {
 					String lt = line.trim().toLowerCase();
 					if (lt.contains(";")) {
-						if(lt.trim().equals(";")) {
+						if (lt.trim().equals(";")) {
 							continue;
 						}
 						lt = lt.split(";")[0].trim();
@@ -372,7 +372,7 @@ public class JsonTestManager {
 			String fname = file.FileName;
 			if (fname.startsWith("tests/") && fname.endsWith(".json")) {
 				try {
-					FileInfo fileData = sdb.getFile(file.ID);
+					FileInfo fileData = sdb.getFile(file.ID, true);
 					JsonValue val = JsonValue.parse(fileData.Contents);
 					if (val != null) {
 						if (val.isObject()) {

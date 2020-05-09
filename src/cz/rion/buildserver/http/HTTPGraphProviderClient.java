@@ -28,16 +28,16 @@ public class HTTPGraphProviderClient extends HTTPFileProviderClient {
 		this.db = rdb;
 	}
 
-	private FileInfo getFile(int fileID) {
+	private FileInfo getFile(int fileID, boolean decodeBigString) {
 		FileInfo fo = null;
 		try {
-			fo = sdb.getFile(fileID);
+			fo = sdb.getFile(fileID, decodeBigString);
 		} catch (DatabaseException e1) {
 			e1.printStackTrace();
 		}
 		if (fo == null) {
 			try {
-				fo = LayeredDBFileWrapperDB.getFile(db, fileID);
+				fo = LayeredDBFileWrapperDB.getFile(db, fileID, decodeBigString);
 			} catch (DatabaseException e) {
 				e.printStackTrace();
 			}
@@ -45,10 +45,10 @@ public class HTTPGraphProviderClient extends HTTPFileProviderClient {
 		return fo;
 	}
 
-	private FileInfo loadView(Map<String, Integer> fileIds, String view) {
+	private FileInfo loadView(Map<String, Integer> fileIds, String view, boolean decodeBigString) {
 		if (fileIds.containsKey(view)) {
 			int fileID = fileIds.get(view);
-			FileInfo fo = LayeredDBFileWrapperDB.processPostLoadedFile(db, LayeredDBFileWrapperDB.processPostLoadedFile(sdb, getFile(fileID)));
+			FileInfo fo = LayeredDBFileWrapperDB.processPostLoadedFile(db, LayeredDBFileWrapperDB.processPostLoadedFile(sdb, getFile(fileID, decodeBigString), decodeBigString), decodeBigString);
 			return fo;
 		}
 		return null;
@@ -72,7 +72,7 @@ public class HTTPGraphProviderClient extends HTTPFileProviderClient {
 		}
 
 		// Load tests
-		FileInfo src = sdb.loadFile("graphs.cfg");
+		FileInfo src = sdb.loadFile("graphs.cfg", true);
 
 		if (src != null) {
 			JsonValue val = JsonValue.parse(src.Contents);
@@ -91,7 +91,7 @@ public class HTTPGraphProviderClient extends HTTPFileProviderClient {
 
 							JsonObject res = new JsonObject();
 
-							FileInfo loadedView = loadView(fileIds, view);
+							FileInfo loadedView = loadView(fileIds, view, true);
 							if (loadedView == null) {
 								continue;
 							}

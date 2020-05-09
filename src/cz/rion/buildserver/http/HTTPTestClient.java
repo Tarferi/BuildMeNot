@@ -167,36 +167,40 @@ public class HTTPTestClient extends HTTPGraphProviderClient {
 								test_id = obj.getString("id").Value;
 								asm = obj.getString("asm").Value;
 
-								long now = new Date().getTime();
-								long then = badResults.AllowNext.getTime();
-								long diff = then > now ? then - now : 0;
-								if (diff > 10000 && !canBypassTimeout) { // 10 seconds allowance
-									returnValue.add("code", new JsonNumber(54));
+								if (!getPermissions().allowExecute(test_id)) {
+									returnValue.add("code", new JsonNumber(55));
 									returnValue.add("result", new JsonString("Hacking much?"));
 								} else {
-									returnValue = tests.run(badResults, BuilderID, test_id, asm, getPermissions().Login);
-									testsPassed = returnValue.containsNumber("code") ? returnValue.getNumber("code").Value == 0 : false;
-								}
+									long now = new Date().getTime();
+									long then = badResults.AllowNext.getTime();
+									long diff = then > now ? then - now : 0;
+									if (diff > 10000 && !canBypassTimeout) { // 10 seconds allowance
+										returnValue.add("code", new JsonNumber(54));
+										returnValue.add("result", new JsonString("Hacking much?"));
+									} else {
+										returnValue = tests.run(badResults, BuilderID, test_id, asm, getPermissions().Login);
+										testsPassed = returnValue.containsNumber("code") ? returnValue.getNumber("code").Value == 0 : false;
+									}
 
-								// See if user has finished this test before
-								boolean newlyFinished = testsPassed;
-								for (CompletedTest test : completed) {
-									if (test.Code.equals(test_id)) {
-										newlyFinished = false;
+									// See if user has finished this test before
+									boolean newlyFinished = testsPassed;
+									for (CompletedTest test : completed) {
+										if (test.Code.equals(test_id)) {
+											newlyFinished = false;
+										}
+									}
+
+									try {
+										badResults.store(newlyFinished);
+									} catch (DatabaseException e) {
+										e.printStackTrace();
+									}
+									if (canBypassTimeout) {
+										returnValue.add("wait", new JsonNumber(0, (new Date().getTime() - 10000) + ""));
+									} else {
+										returnValue.add("wait", new JsonNumber(0, (badResults.AllowNext.getTime()) + ""));
 									}
 								}
-
-								try {
-									badResults.store(newlyFinished);
-								} catch (DatabaseException e) {
-									e.printStackTrace();
-								}
-								if (canBypassTimeout) {
-									returnValue.add("wait", new JsonNumber(0, (new Date().getTime() - 10000) + ""));
-								} else {
-									returnValue.add("wait", new JsonNumber(0, (badResults.AllowNext.getTime()) + ""));
-								}
-
 							} else if (obj.containsString("action")) {
 								String act = obj.getString("action").Value;
 								if (act.equals("COLLECT")) {
@@ -240,6 +244,9 @@ public class HTTPTestClient extends HTTPGraphProviderClient {
 										tobj.add("zadani", new JsonString(tst.getDescription()));
 										tobj.add("init", new JsonString(tst.getInitialCode()));
 										tobj.add("id", new JsonString(tst.getID()));
+										if (!getPermissions().allowExecute(tst.getID())) {
+											tobj.add("noexec", new JsonNumber(1));
+										}
 										tobj.add("hidden", new JsonNumber(tst.isHidden() ? 1 : 0));
 										if (finishedByTestID.containsKey(tst.getID())) {
 											CompletedTest result = finishedByTestID.get(tst.getID());
@@ -260,6 +267,9 @@ public class HTTPTestClient extends HTTPGraphProviderClient {
 									JsonValue graphs = this.loadGraphs();
 									returnValue.add("code", new JsonNumber(0));
 									returnValue.add("data", graphs == null ? new JsonArray(new ArrayList<JsonValue>()) : graphs);
+									this.setIntention(HTTPClientIntentType.COLLECT_TESTS);
+								} else if (act.equals("ADMIN") && getPermissions().allowSeeWebAdmin()) {
+									handleAdminEvent(obj, returnValue);
 									this.setIntention(HTTPClientIntentType.COLLECT_TESTS);
 								}
 							}
