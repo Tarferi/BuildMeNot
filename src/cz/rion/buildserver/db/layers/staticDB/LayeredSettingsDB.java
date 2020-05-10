@@ -9,7 +9,7 @@ import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 import cz.rion.buildserver.wrappers.FileReadException;
 import cz.rion.buildserver.wrappers.MyFS;
 
-public class LayeredSettingsDB extends LayeredConsoleOutputDB {
+public class LayeredSettingsDB extends LayeredPHPAuthDB {
 
 	private static int DB_FILE_SETTINGS_BASE = 0x000FFFFF;
 	private static final String SettingsFileName = "settings.ini";

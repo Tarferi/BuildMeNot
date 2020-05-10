@@ -40,6 +40,7 @@ public class Settings {
 	private final SettingsValue linkTimeout = new SettingsValue("LinkerTimeout", ValueType.INTEGER, 5000);
 
 	private final SettingsValue fontSize = new SettingsValue("FontSize", ValueType.INTEGER, 17);
+	private final SettingsValue remoteAuthAPIEndpoint = new SettingsValue("RemoteAuthAPIEndpoint", ValueType.STRING, "");
 
 	private List<SettingsValue> settings;
 
@@ -271,5 +272,9 @@ public class Settings {
 
 	public static int getFontSize() {
 		return instance.fontSize.asInt();
+	}
+
+	public static String getRemoteAuthAPIEndpoint() {
+		return instance.remoteAuthAPIEndpoint.asString();
 	}
 }
