@@ -36,6 +36,14 @@ var Admin = function() {
 			return "thread";
 		} else if (ext == "view") {
 			return "view";
+		} else if (ext == "html") {
+			return "html";
+		} else if (ext == "js") {
+			return "js";
+		} else if (ext == "css") {
+			return "css";
+		} else if (ext == "php") {
+			return "php";
 		} else
 			return "file";
 	}
@@ -561,7 +569,7 @@ var AdminEditor = function(adminer) {
 				return valueF == value;
 			};
 			if (value.length > 0) {
-				if (type == "TEXT" || type == "BIGTEXT" || type == "DATE") {
+				if (type == "TEXT" || type == "BIGTEXT" || type == "DATE" || type == "LOGIN") {
 					comparator = function(filteredValue) {
 						return filteredValue.toLowerCase().indexOf(value.toLowerCase()) >= 0
 					};
@@ -1081,7 +1089,7 @@ var AdminEditor = function(adminer) {
 				var colType = columns[colI].type;
 				var colIndex = columns[colI].index;
 				var cellObj = rowObj[colIndex];
-				if (cellObj && (colType == "TEXT" || colType == "BIGTEXT")) {
+				if (cellObj && (colType == "TEXT" || colType == "BIGTEXT" || colType == "LOGIN")) {
 					cellObj = cellObj.split("<").join("&lt;").split(">").join("&gt;");
 				} else if (cellObj && colType == "DATE") {
 					cellObj = self.getTimeFromTimestamp(cellObj);

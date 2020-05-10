@@ -19,6 +19,11 @@ public class IconManager {
 	public final static ImageIcon IniIcon = IconLoader.LoadIcon("ini.png");
 	public final static ImageIcon StreamIcon = IconLoader.LoadIcon("stream.png");
 	public final static ImageIcon ThreadIcon = IconLoader.LoadIcon("thread.png");
+	public final static ImageIcon PHPIcon = IconLoader.LoadIcon("php.png");
+
+	public final static ImageIcon JSIcon = IconLoader.LoadIcon("js.png");
+	public final static ImageIcon CSSIcon = IconLoader.LoadIcon("css.png");
+	public final static ImageIcon HTMLIcon = IconLoader.LoadIcon("html.png");
 
 	private static final Map<String, ImageIcon> icons = new HashMap<>();
 
@@ -40,7 +45,15 @@ public class IconManager {
 		} else if (path.endsWith(".stream")) {
 			return StreamIcon;
 		} else if (path.endsWith(".thread")) {
-			return ThreadIcon;
+			return StreamIcon;
+		} else if (path.endsWith(".php")) {
+			return PHPIcon;
+		} else if (path.endsWith(".css")) {
+			return CSSIcon;
+		} else if (path.endsWith(".js")) {
+			return JSIcon;
+		} else if (path.endsWith(".html")) {
+			return HTMLIcon;
 		} else { // Coult be a folder
 			int pos1 = path.lastIndexOf("/");
 			int pos2 = path.lastIndexOf(".");
