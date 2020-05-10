@@ -43,10 +43,6 @@ var Admin = function() {
 					"innerHTML" : "Zavřít",
 					"class" : "adm_td_main_header_closeButton",
 					"id" : "btnCloseAdmin"
-				}, {
-					"type" : "div",
-					"class" : "adm_waiter",
-					"id" : "waiter"
 				} ]
 			} ]
 		}, {
@@ -62,6 +58,12 @@ var Admin = function() {
 						"type" : "button",
 						"innerHTML" : "Reload",
 						"id" : "btnReload"
+					}, {
+						"type" : "br"
+					}, {
+						"type" : "div",
+						"class" : "pnlCurrentPath",
+						"id" : "pnlCurrentPath"
 					} ]
 				} ]
 			}, {
@@ -131,6 +133,21 @@ var Admin = function() {
 					"type" : "div",
 					"class" : "adm_td_main_left_bottom_div",
 					"id" : "filesPnl"
+				}, {
+					"type" : "div",
+					"class" : "adm_td_main_left_bottom_div_nf",
+					"contents" : [ {
+						"type" : "input",
+						"id" : "adm_td_main_left_bottom_nf_name"
+					}, {
+						"type" : "button",
+						"id" : "adm_td_main_left_bottom_nf_btn",
+						"innerHTML" : "Create"
+					}, {
+						"type" : "div",
+						"class" : "adm_waiter",
+						"id" : "waiter"
+					} ]
 				} ]
 			} ]
 		} ]
@@ -148,6 +165,10 @@ var Admin = function() {
 		self.editTable = ids["adm_content_table"];
 		self.editArea = ids["adm_content_editble"];
 
+		self.pnlCurrentPath = ids["pnlCurrentPath"];
+		self.txtNewPath = ids["adm_td_main_left_bottom_nf_name"];
+		self.btnNewPathCreate = ids["adm_td_main_left_bottom_nf_btn"];
+
 		self.btnReturn = ids["btnReturn"];
 		self.btnEditView = ids["btnEditView"];
 		self.btnClose = ids["btnClose"];
@@ -160,6 +181,9 @@ var Admin = function() {
 		document.body.appendChild(self.mainUI);
 		self.closeBtn.addEventListener("click", self.closeUI);
 		self.btnReload.addEventListener("click", self.navigator.reloadFiles);
+
+		self.btnNewPathCreate.addEventListener("click", self.createFile);
+
 		window.cols = ids["cols"]
 
 		self.originalUIVisibilities["admin_mainUI"] = self.mainUI.style.display;
@@ -174,7 +198,25 @@ var Admin = function() {
 		}
 	}
 
+	self.createFile = function() {
+		var path = self.txtNewPath.value.trim();
+		if (path.substr(0, 1) == "/") {
+			path = path.substr(1);
+		}
+		if (path == "") {
+			return;
+		}
+		self.async("create:" + path, function(data) {
+			self.navigator.reloadFiles();
+			self.txtNewPath.value = "";
+		}, function(err) {
+			alert(err);
+		})
+	}
+
 	self.navigatorUpdate = function() {
+		var newPath = "/" + self.navigator.currentWorkingDir;
+		self.pnlCurrentPath.innerHTML = newPath;
 		var newFiles = self.navigator.getFilesInCurrentDirectory();
 
 		// Clear current files
@@ -245,7 +287,7 @@ var Admin = function() {
 		self.async("load:" + fl["ID"], function(data) {
 			self.editor.editFile(data);
 		}, function(err) {
-			console.error(err);
+			alert(err);
 		})
 	}
 
@@ -443,7 +485,7 @@ var AdminNavigator = function(adminer) {
 			self.putFiles(JSON.parse(data));
 		};
 		var cbFail = function(data) {
-			console.error(data);
+			alert(data);
 		};
 		adminer.async("getFiles", cbOK, cbFail);
 	}

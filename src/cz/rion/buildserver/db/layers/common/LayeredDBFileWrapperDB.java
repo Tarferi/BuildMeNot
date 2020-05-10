@@ -203,7 +203,7 @@ public class LayeredDBFileWrapperDB extends LayeredFilesDB {
 						obj.add("new", contents);
 						obj.add("ID", new JsonNumber(ID));
 						obj.add("table", new JsonString(tableName));
-						sdb.adminLog(address, login, "editRow", obj.getJsonString());
+						sdb.adminLog(address, login, "editRow:" + file.ID + ":" + file.FileName, obj.getJsonString());
 					}
 
 					db.update(tableName, ID, values);

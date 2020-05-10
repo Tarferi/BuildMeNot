@@ -30,7 +30,7 @@
 	height: 20px;
 }
 
-.adm_td_main_left > Center > Button {
+.adm_td_main_left>Center>Button {
 	margin-top: 5px;
 	margin-bottom: 5px;
 }
@@ -41,8 +41,32 @@
 }
 
 .adm_td_main_left_bottom_div {
-	height: 100%;
+	height: calc(100% - 40px);
 	overflow-y: scroll;
+}
+
+.adm_td_main_left_bottom_div_nf {
+	display: block;
+	height: 40px;
+	border-top: 1px solid black;
+	padding: 5px;
+}
+
+.adm_td_main_left_bottom_div_nf>Input {
+	display: inline-block;
+	width: calc(100% - 90px);
+	margin-right: 5px;
+	padding-left: 5px;
+	height: 23px;
+}
+
+.adm_td_main_left_bottom_div_nf>Button {
+	position: relative;
+	top: 2px;
+	left: 2px;
+	height: 28px;
+	width: 70px;
+	display: inline-block;
 }
 
 .adm_td_main_right {
@@ -57,19 +81,19 @@
 	background: #defffe;
 	cursor: default;
 	select: none;
-	-webkit-user-select: none; /* Safari */        
+	-webkit-user-select: none; /* Safari */
 	-moz-user-select: none; /* Firefox */
 	-ms-user-select: none; /* IE10+/Edge */
 	user-select: none; /* Standard */
 }
 
-.adm_file_wrapper > Img {
+.adm_file_wrapper>Img {
 	width: 30px;
 	height: 30px;
 	margin: 5px;
 }
 
-.adm_file_wrapper > Span {
+.adm_file_wrapper>Span {
 	position: relative;
 	top: -5px;
 	font-family: Tahoma;
@@ -105,7 +129,7 @@
 	float: right;
 }
 
-.adm_right_bottom > Button {
+.adm_right_bottom>Button {
 	margin-right: 10px;
 }
 
@@ -115,20 +139,20 @@
 	border-collapse: collapse;
 	font-family: Helvetica;
 	font-size: 13pt;
-	-webkit-user-select: none; /* Safari */        
+	-webkit-user-select: none; /* Safari */
 	-moz-user-select: none; /* Firefox */
 	-ms-user-select: none; /* IE10+/Edge */
 	user-select: none; /* Standard */
 }
 
-.adm_content_table > Tr > Th {
+.adm_content_table>Tr>Th {
 	border-left: 1px solid black;
 	border-bottom: 2px solid black;
 	padding-top: 5px;
 	padding-bottom: 5px;
 }
 
-.adm_content_table > Tr > Td {
+.adm_content_table>Tr>Td {
 	border-top: 1px solid black;
 	border-left: 1px solid black;
 	text-align: right;
@@ -140,7 +164,7 @@
 	cursor: pointer;
 }
 
-.adm_content_table > Tr:nth-child(odd) {
+.adm_content_table>Tr:nth-child(odd) {
 	background: #f4f4f4;
 }
 
@@ -174,12 +198,12 @@
 }
 
 .adm_content_details {
-	display :block;
+	display: block;
 	width: calc(100% - 10px);
 	height: calc(100% - 20px);
 }
 
-.adm_content_details > Table {
+.adm_content_details>Table {
 	width: 100%;
 	border: none;
 	font-family: Arial;
@@ -187,13 +211,13 @@
 	border-collapse: collapse;
 }
 
-.adm_content_details > Table > Tr {
+.adm_content_details>Table>Tr {
 	width: 100%;
 	border-top: 8px solid transparent;
 	border-right: 10px solid transparent;
 }
 
-.adm_content_details > Table > Tr > Th {
+.adm_content_details>Table>Tr>Th {
 	width: 0%;
 	text-align: right;
 	padding-top: 5px;
@@ -202,21 +226,20 @@
 	vertical-align: top;
 }
 
-.adm_content_details > Table > Tr > Td {
+.adm_content_details>Table>Tr>Td {
 	width: 100%;
 }
 
-.adm_content_details > Table > Tr > Td > Input {
+.adm_content_details>Table>Tr>Td>Input {
 	width: 100%;
 	outline: none;
 	border: 1px solid black;
 	padding-left: 5px;
 	padding-top: 5px;
 	padding-bottom: 5px;
-	
 }
-	
-.adm_content_details > Table > Tr > Td > TextArea {
+
+.adm_content_details>Table>Tr>Td>TextArea {
 	width: calc(100% - 2px);
 	height: 250px;
 	resize: none;
@@ -226,4 +249,12 @@
 	outline: none;
 	border: 1px solid black;
 }
-	
+
+.pnlCurrentPath {
+	display: block;
+	font-family: verdana;
+	font-size: 13pt;
+	padding-bottom: 5px;
+	padding-top: 5px;
+	border-top: 1px solid black;
+}

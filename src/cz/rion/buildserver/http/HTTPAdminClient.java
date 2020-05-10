@@ -60,10 +60,13 @@ public class HTTPAdminClient extends HTTPParserClient {
 		return fo;
 	}
 
-	private JsonValue loadFile(int fileID) {
+	private JsonValue loadFile(int fileID, boolean log) {
 		FileInfo fo = LayeredDBFileWrapperDB.processPostLoadedFile(db, LayeredDBFileWrapperDB.processPostLoadedFile(sdb, getFile(fileID), true), true);
 		JsonObject obj = new JsonObject();
 		if (fo == null) {
+			if (log) {
+				sdb.adminLog(getAddress(), getPermissions().Login, "load", "load:" + fileID);
+			}
 			obj.add("fo", new JsonNumber(1));
 			return obj;
 		} else {
@@ -71,6 +74,9 @@ public class HTTPAdminClient extends HTTPParserClient {
 			obj.add("name", new JsonString(fo.FileName));
 			obj.add("ID", new JsonNumber(fo.ID));
 			obj.add("contents", new JsonString(new String(fo.Contents.getBytes(Settings.getDefaultCharset()), StandardCharsets.UTF_8)));
+			if (log) {
+				sdb.adminLog(getAddress(), getPermissions().Login, "load", "load:" + fileID + ":" + fo.FileName);
+			}
 			return obj;
 		}
 	}
@@ -87,8 +93,6 @@ public class HTTPAdminClient extends HTTPParserClient {
 			return 0;
 		}
 	}
-
-	private static final int codingTableOffset = 200;
 
 	private static final short[] js_codingOffsets = new short[] {
 			228,
@@ -270,8 +274,7 @@ public class HTTPAdminClient extends HTTPParserClient {
 					return;
 				}
 				result.add("code", new JsonNumber(0));
-				result.add("result", new JsonString(loadFile(fileID).getJsonString()));
-				sdb.adminLog(getAddress(), getPermissions().Login, "load", admin_data);
+				result.add("result", new JsonString(loadFile(fileID, true).getJsonString()));
 			} else if (admin_data.startsWith("save:") || admin_data.startsWith("tableEdit")) {
 				String[] parts = admin_data.split(":", 3);
 				if (parts.length == 3) {
@@ -301,6 +304,28 @@ public class HTTPAdminClient extends HTTPParserClient {
 							result.add("code", new JsonNumber(1));
 							result.add("result", new JsonString("Failed to save file"));
 						}
+					}
+				}
+			} else if (admin_data.startsWith("create:")) {
+				String[] parts = admin_data.split(":", 3);
+				if (parts.length == 2) {
+					String fileName = parts[1];
+					if (!fileName.isEmpty()) {
+						try {
+							sdb.createFile(fileName, "");
+							result.add("code", new JsonNumber(0));
+							result.add("result", new JsonString("File created"));
+							sdb.adminLog(getAddress(), getPermissions().Login, "create", "create:0:" + fileName);
+						} catch (DatabaseException e) {
+							e.printStackTrace();
+							result.add("code", new JsonNumber(1));
+							result.add("result", new JsonString("Failed to create new file: " + fileName));
+							sdb.adminLog(getAddress(), getPermissions().Login, "create", "create:1:" + fileName);
+						}
+					} else {
+						result.add("code", new JsonNumber(1));
+						result.add("result", new JsonString("Cannot create new file: " + fileName));
+						sdb.adminLog(getAddress(), getPermissions().Login, "create", "create:1:" + fileName);
 					}
 				}
 			}
@@ -353,10 +378,12 @@ public class HTTPAdminClient extends HTTPParserClient {
 					JsonObject obj = new JsonObject();
 					obj.add("original", new JsonString(fo.Contents));
 					obj.add("new", new JsonString(newContents));
-					sdb.adminLog(getAddress(), getPermissions().Login, "saveFile", obj.getJsonString());
+					sdb.adminLog(getAddress(), getPermissions().Login, "saveFile:" + fileID + ":" + fo.FileName, obj.getJsonString());
 
 					sdb.storeFile(f, f.FileName, newContents);
 					return true;
+				} else {
+					sdb.adminLog(getAddress(), getPermissions().Login, "saveFile:" + fileID, "saveFile:" + fileID);
 				}
 			}
 		}

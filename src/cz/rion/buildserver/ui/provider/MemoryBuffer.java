@@ -48,6 +48,9 @@ public abstract class MemoryBuffer {
 	}
 
 	public void writeString(String str) {
+		if (str == null) {
+			str = "";
+		}
 		byte[] raw = str.getBytes(Settings.getDefaultCharset());
 		writeInt(raw.length);
 		write(raw);
