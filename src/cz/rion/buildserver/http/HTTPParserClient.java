@@ -25,7 +25,7 @@ public class HTTPParserClient extends HTTPPermissionClient {
 		this.BuilderID = BuilderID;
 	}
 
-	protected boolean objectionsAgainstRedirectoin(HTTPRequest request) {
+	protected boolean objectionsAgainstRedirection(HTTPRequest request) {
 		return false;
 	}
 
@@ -88,8 +88,12 @@ public class HTTPParserClient extends HTTPPermissionClient {
 		}
 	}
 
-	protected String handleJSManipulation(String js) {
+	protected String handleJSManipulation(String host, String path, String js) {
 		return js;
+	}
+	
+	protected String handleHTMLManipulation(String host, String path, String html) {
+		return html;
 	}
 
 	protected HTTPResponse handle(HTTPRequest request) throws HTTPClientException {
@@ -159,7 +163,11 @@ public class HTTPParserClient extends HTTPPermissionClient {
 				throw new HTTPClientException("Failed to read request");
 			}
 		}
-		return new HTTPRequest(method, protocol, path, data, header, cookiesLines);
+		if (!header.containsKey("host")) {
+			throw new HTTPClientException("Invalid hostname");
+		}
+		String host = header.get("host");
+		return new HTTPRequest(method, host, protocol, path, data, header, cookiesLines);
 	}
 
 	private HTTPRequest handle() throws HTTPClientException, SwitchClientException {
@@ -209,9 +217,8 @@ public class HTTPParserClient extends HTTPPermissionClient {
 		}
 	}
 
-
 	public String getAddress() {
 		return client.getRemoteSocketAddress();
 	}
-	
+
 }

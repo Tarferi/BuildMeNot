@@ -13,6 +13,7 @@ import cz.rion.buildserver.BuildThread;
 import cz.rion.buildserver.db.RuntimeDB;
 import cz.rion.buildserver.db.RuntimeDB.RuntimeUserStats;
 import cz.rion.buildserver.db.layers.common.LayeredDBFileWrapperDB;
+import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.db.layers.staticDB.LayeredFilesDB.DatabaseFile;
 import cz.rion.buildserver.db.layers.staticDB.LayeredUserDB.LocalUser;
 import cz.rion.buildserver.db.StaticDB;
@@ -259,32 +260,35 @@ public class RemoteUIProviderServer {
 	}
 
 	private void writeUserList(InputPacketRequest inBuffer, MemoryBuffer outBuffer) {
-		List<RuntimeUserStats> stats = this.db.getUserStats();
-		Map<String, LocalUser> statics = this.sdb.LoadedUsersByLogin;
+		for (Toolchain toolchain : sdb.getAllToolchains()) {
+			List<RuntimeUserStats> stats = this.db.getUserStats(toolchain.getName());
+			Map<String, LocalUser> statics = this.sdb.LoadedUsersByLogin;
 
-		outBuffer.writeInt(UsersLoadedEvent.ID);
-		outBuffer.writeInt(stats.size());
-		for (RuntimeUserStats stat : stats) {
-			LocalUser usr = statics.get(stat.Login);
-			String fullName = "???";
-			String group = "???";
-			String permGroup = "??";
-			if (usr != null) {
-				fullName = usr.FullName;
-				group = usr.Group;
-				permGroup = usr.PrimaryPermGroup;
+			outBuffer.writeInt(UsersLoadedEvent.ID);
+			outBuffer.writeInt(stats.size());
+			for (RuntimeUserStats stat : stats) {
+				LocalUser usr = statics.get(stat.Login);
+				String fullName = "???";
+				String group = "???";
+				String permGroup = "??";
+				if (usr != null) {
+					fullName = usr.FullName;
+					group = usr.Group;
+					permGroup = usr.PrimaryPermGroup;
+				}
+				outBuffer.writeInt(stat.UserID);
+				outBuffer.writeString(stat.Login);
+				outBuffer.writeDate(stat.RegistrationDate);
+				outBuffer.writeDate(stat.LastActiveDate);
+				outBuffer.writeDate(stat.lastLoginDate);
+				outBuffer.writeInt(stat.TotalTestsSubmitted);
+				outBuffer.writeString(stat.LastTestID);
+				outBuffer.writeDate(stat.LastTestDate);
+				outBuffer.writeString(fullName);
+				outBuffer.writeString(group);
+				outBuffer.writeString(permGroup);
+				outBuffer.writeString(toolchain.getName());
 			}
-			outBuffer.writeInt(stat.UserID);
-			outBuffer.writeString(stat.Login);
-			outBuffer.writeDate(stat.RegistrationDate);
-			outBuffer.writeDate(stat.LastActiveDate);
-			outBuffer.writeDate(stat.lastLoginDate);
-			outBuffer.writeInt(stat.TotalTestsSubmitted);
-			outBuffer.writeString(stat.LastTestID);
-			outBuffer.writeDate(stat.LastTestDate);
-			outBuffer.writeString(fullName);
-			outBuffer.writeString(group);
-			outBuffer.writeString(permGroup);
 		}
 	}
 

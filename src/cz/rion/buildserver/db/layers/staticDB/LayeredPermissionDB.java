@@ -71,18 +71,18 @@ public class LayeredPermissionDB extends LayeredTestDB {
 			this.SessionID = session_id;
 		}
 
-		public final boolean allowDetails(String test_id) {
-			return can(WebPermission.SeeDetails(test_id));
+		public final boolean allowDetails(String toolchain, String test_id) {
+			return can(WebPermission.SeeDetails(toolchain, test_id));
 		}
 
-		public final boolean allowSee(String test_id) {
-			return can(WebPermission.SeeTest(test_id));
+		public final boolean allowSee(String toolchain, String test_id) {
+			return can(WebPermission.SeeTest(toolchain, test_id));
 		}
 
-		public boolean allowExecute(String test_id) {
-			return can(WebPermission.ExecuteTest(test_id));
+		public boolean allowExecute(String toolchain, String test_id) {
+			return can(WebPermission.ExecuteTest(toolchain, test_id));
 		}
-		
+
 		public final boolean allowFireFox() {
 			return can(WebPermission.SeeFireFox);
 		}

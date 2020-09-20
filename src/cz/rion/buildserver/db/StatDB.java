@@ -8,6 +8,7 @@ import java.util.List;
 import cz.rion.buildserver.db.SQLiteDB.ComparisionField;
 import cz.rion.buildserver.db.SQLiteDB.FieldComparator;
 import cz.rion.buildserver.db.SQLiteDB.TableField;
+import cz.rion.buildserver.exceptions.CompressionException;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
@@ -169,11 +170,63 @@ public class StatDB {
 
 	};
 
+	private final VirtualStatFile sf4 = new VirtualStatFile() {
+
+		@Override
+		public String getName() {
+			return "Total2020";
+		}
+
+		@SuppressWarnings("deprecation")
+		@Override
+		public JsonArray getData() {
+
+			Date first = new Date();
+			first.setMinutes(0);
+			first.setHours(0);
+			first.setSeconds(0);
+			first.setDate(1);
+			first.setMonth(0);
+			first.setYear(2020);
+
+			Date last = new Date(first.getTime());
+			last.setYear(2021);
+			
+			try {
+				JsonArray firstData = db.select_raw("SELECT creation_time FROM compilations ORDER BY id ASC LIMIT 1").getJSON(false, new TableField[0]);
+				if(!firstData.Value.isEmpty()) {
+					first = new Date(firstData.Value.get(0).asObject().getNumber("creation_time").asLong());
+				}
+				JsonArray lastData = db.select_raw("SELECT creation_time FROM compilations ORDER BY id DESC LIMIT 1").getJSON(false, new TableField[0]);
+				if(!lastData.Value.isEmpty()) {
+					last = new Date(lastData.Value.get(0).asObject().getNumber("creation_time").asLong());
+				}
+				
+			} catch (Exception e) {
+				e.printStackTrace();
+				return new JsonArray(new ArrayList<JsonValue>());
+			}
+
+			long from = first.getTime();
+			long to = last.getTime();
+
+			return getByDays(new Date(from), new Date(to), day, dateFormatByDays);
+
+		}
+
+		@Override
+		public String getQueryString() {
+			return "TEXT(Date), INT(CountTotal), INT(CountGood)";
+		}
+
+	};
+
 	public StatDB(RuntimeDB runtimeDB) {
 		this.db = runtimeDB;
 		this.db.registerVirtualStatFile(sf1);
 		this.db.registerVirtualStatFile(sf2);
 		this.db.registerVirtualStatFile(sf3);
+		this.db.registerVirtualStatFile(sf4);
 	}
 
 }

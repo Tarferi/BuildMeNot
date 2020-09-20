@@ -91,7 +91,7 @@ public class LayeredMetaDB extends SQLiteDB {
 		}
 		List<TableField> fields = getFields(tableName);
 		if (fields == null) {
-			throw new DatabaseException("No valid fieldas for " + tableName);
+			throw new DatabaseException("No valid fields for " + tableName);
 		}
 		TableField resultField = null;
 		for (TableField ff : fields) {

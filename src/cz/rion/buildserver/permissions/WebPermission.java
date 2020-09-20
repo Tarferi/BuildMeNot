@@ -8,16 +8,16 @@ public class WebPermission {
 	public static final PermissionBranch SeeSecretTests = Permission.getBranch(base + ".SECRET");
 	public static final PermissionBranch SeeAdminAdmin = Permission.getBranch("WEB.SEE_ADMIN");
 
-	public static PermissionBranch ExecuteTest(String test_id) {
-		return Permission.getBranch(base + ".EXECUTE." + test_id.replace("_", "."));
+	public static PermissionBranch ExecuteTest(String toolchain, String test_id) {
+		return Permission.getBranch(base + "." + toolchain + ".EXECUTE." + test_id.replace("_", "."));
 	}
 
-	public static PermissionBranch SeeTest(String test_id) {
-		return Permission.getBranch(base + ".SEE." + test_id.replace("_", "."));
+	public static PermissionBranch SeeTest(String toolchain, String test_id) {
+		return Permission.getBranch(base + "." + toolchain + ".SEE." + test_id.replace("_", "."));
 	}
 
-	public static PermissionBranch SeeDetails(String test_id) {
-		return Permission.getBranch(base + ".DETAILS." + test_id.replace("_", "."));
+	public static PermissionBranch SeeDetails(String toolchain, String test_id) {
+		return Permission.getBranch(base + "." + toolchain + ".DETAILS." + test_id.replace("_", "."));
 	}
 
 }

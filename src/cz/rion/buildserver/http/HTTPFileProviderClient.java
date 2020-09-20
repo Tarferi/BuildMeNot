@@ -28,8 +28,8 @@ public class HTTPFileProviderClient extends HTTPAdminClient {
 	}
 
 	@Override
-	protected String handleJSManipulation(String js) {
-		js = super.handleJSManipulation(js);
+	protected String handleJSManipulation(String host, String path, String js) {
+		js = super.handleJSManipulation(host, path, js);
 		String repl = "";
 		if (getPermissions().allowSeeWebAdmin()) {
 			repl = readFileOrDBFile("admin.js");
@@ -84,10 +84,13 @@ public class HTTPFileProviderClient extends HTTPAdminClient {
 							type = "text/css";
 						}
 						if (allow.equals("index.js")) {
-							contents = this.handleJSManipulation(contents);
+							contents = this.handleJSManipulation(request.host, endPoint, contents);
 							data = contents.getBytes(Settings.getDefaultCharset());
 						} else if (allow.equals("index.css")) {
 							contents = this.handleCSSManipulation(contents);
+							data = contents.getBytes(Settings.getDefaultCharset());
+						} else if (allow.equals("index.html")) {
+							contents = this.handleHTMLManipulation(request.host, request.path, contents);
 							data = contents.getBytes(Settings.getDefaultCharset());
 						}
 					} else {

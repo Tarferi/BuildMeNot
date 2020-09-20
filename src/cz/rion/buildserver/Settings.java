@@ -12,6 +12,8 @@ public class Settings {
 	private final SettingsValue objName = new SettingsValue("objFile", ValueType.STRING, "code.obj");
 	private final SettingsValue rtName = new SettingsValue("execFile", ValueType.STRING, "code.exe");
 	private final SettingsValue nasmExecutable = new SettingsValue("nasm", ValueType.STRING, "nasm.exe");
+	private final SettingsValue gccExecutable = new SettingsValue("GCCName", ValueType.STRING, "gcc.exe");
+	private final SettingsValue gccPath = new SettingsValue("GCCPath", ValueType.STRING, "./gcc/");
 	private final SettingsValue golinkexecutable = new SettingsValue("GoLink", ValueType.STRING, "GoLink.exe");
 	private final SettingsValue golinkparams = new SettingsValue("GoLinkParams", ValueType.STRING_ARRAY, new String[] { "/mix", "msvcrt.dll", "kernel32.dll" });
 	private final SettingsValue nasmparams = new SettingsValue("NasmParams", ValueType.STRING_ARRAY, new String[] { "-f", "win32" });
@@ -38,6 +40,8 @@ public class Settings {
 	private final SettingsValue InitGroupsAndUsers = new SettingsValue("InitGroupsAndUsers", ValueType.BOOLEAN, 0);
 	private final SettingsValue nasmTimeout = new SettingsValue("NasmTimeout", ValueType.INTEGER, 5000);
 	private final SettingsValue linkTimeout = new SettingsValue("LinkerTimeout", ValueType.INTEGER, 5000);
+
+	private final SettingsValue forceTimeoutOnErrors = new SettingsValue("ForceTimeoutOnErrors", ValueType.BOOLEAN, 1);
 
 	private final SettingsValue fontSize = new SettingsValue("FontSize", ValueType.INTEGER, 17);
 	private final SettingsValue remoteAuthAPIEndpoint = new SettingsValue("RemoteAuthAPIEndpoint", ValueType.STRING, "");
@@ -266,6 +270,14 @@ public class Settings {
 		return instance.nasmTimeout.asInt();
 	}
 
+	public static String getGCCPath() {
+		return instance.gccPath.asString();
+	}
+
+	public static String getGCCExecutable() {
+		return instance.gccExecutable.asString();
+	}
+
 	public static int getLinkerTimeout() {
 		return instance.linkTimeout.asInt();
 	}
@@ -276,5 +288,9 @@ public class Settings {
 
 	public static String getRemoteAuthAPIEndpoint() {
 		return instance.remoteAuthAPIEndpoint.asString();
+	}
+
+	public static boolean getForceTimeoutOnErrors() {
+		return instance.forceTimeoutOnErrors.asBoolean();
 	}
 }

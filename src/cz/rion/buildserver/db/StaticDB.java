@@ -8,5 +8,4 @@ public class StaticDB extends LayeredPermissionDB {
 	public StaticDB(String dbName) throws DatabaseException {
 		super(dbName);
 	}
-
 }

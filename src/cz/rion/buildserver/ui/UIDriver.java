@@ -301,7 +301,8 @@ public class UIDriver {
 			String fullName = inBuffer.readString();
 			String group = inBuffer.readString();
 			String PermissionGroup = inBuffer.readString();
-			UserInfo ui = new UserInfo(UserID, Login, fullName, group, RegistrationDate, LastActiveDate, lastLoginDate, TotalTestsSubmitted, LastTestID, LastTestDate, PermissionGroup);
+			String Toolchain = inBuffer.readString();
+			UserInfo ui = new UserInfo(UserID, Login, fullName, group, RegistrationDate, LastActiveDate, lastLoginDate, TotalTestsSubmitted, LastTestID, LastTestDate, PermissionGroup, Toolchain);
 			lst.add(ui);
 		}
 		return lst;

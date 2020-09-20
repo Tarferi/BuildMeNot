@@ -1,5 +1,6 @@
 package cz.rion.buildserver.test;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -10,9 +11,13 @@ import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.RuntimeDB.BadResultType;
 import cz.rion.buildserver.db.RuntimeDB.BadResults;
 import cz.rion.buildserver.db.StaticDB;
+import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.ExecutionResult;
+import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
+import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.ToolchainLogger;
 import cz.rion.buildserver.exceptions.CommandLineExecutionException;
 import cz.rion.buildserver.exceptions.GoLinkExecutionException;
 import cz.rion.buildserver.exceptions.NasmExecutionException;
+import cz.rion.buildserver.exceptions.NoSuchToolchainException;
 import cz.rion.buildserver.exceptions.RuntimeExecutionException;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.json.JsonValue;
@@ -23,6 +28,7 @@ import cz.rion.buildserver.wrappers.MyExec;
 import cz.rion.buildserver.wrappers.NasmWrapper;
 import cz.rion.buildserver.wrappers.MyExec.MyExecResult;
 import cz.rion.buildserver.wrappers.MyExec.TestResultsExpectations;
+import cz.rion.buildserver.wrappers.MyFS;
 import cz.rion.buildserver.wrappers.NasmWrapper.RunResult;
 
 public class TestManager {
@@ -129,8 +135,8 @@ public class TestManager {
 		}
 	}
 
-	private final List<AsmTest> tests = new ArrayList<>();
-	private Map<String, AsmTest> mtest = new HashMap<>();
+	private final Map<String, List<GenericTest>> tests = new HashMap<>();
+	private Map<String, GenericTest> mtest = new HashMap<>();
 
 	private final String testDirectory;
 	private final StaticDB sdb;
@@ -145,118 +151,121 @@ public class TestManager {
 		synchronized (tests) {
 			tests.clear();
 			mtest.clear();
-			List<AsmTest> jsonTests = JsonTestManager.load(sdb, testDirectory);
-			tests.addAll(jsonTests);
-
-			for (AsmTest t : tests) {
-				mtest.put(t.getID().toLowerCase(), t);
+			List<GenericTest> jsonTests = JsonTestManager.load(sdb, testDirectory);
+			for (GenericTest test : jsonTests) {
+				String toolchain = test.getToolchain().toLowerCase();
+				if (!tests.containsKey(toolchain)) {
+					tests.put(toolchain, new ArrayList<GenericTest>());
+				}
+				tests.get(toolchain).add(test);
+				mtest.put(test.getToolchain().toUpperCase() + "/" + test.getID().toLowerCase(), test);
 			}
 			sortTests();
 		}
 	}
 
-	public List<AsmTest> getAllTests() {
+	private static final List<GenericTest> emptyListOfTestes = new ArrayList<>();
+
+	public List<GenericTest> getAllTests(String toolchain) {
 		reloadTests();
-		return tests;
+		return tests.containsKey(toolchain.toLowerCase()) ? tests.get(toolchain.toLowerCase()) : emptyListOfTestes;
 	}
 
 	private void sortTests() {
-		tests.sort(new Comparator<AsmTest>() {
+		for (List<GenericTest> entry : tests.values()) {
+			entry.sort(new Comparator<GenericTest>() {
 
-			@Override
-			public int compare(AsmTest o1, AsmTest o2) {
-				return o1.getID().compareTo(o2.getID());
-			}
-		});
+				@Override
+				public int compare(GenericTest o1, GenericTest o2) {
+					return o1.getID().compareTo(o2.getID());
+				}
+			});
+		}
 	}
-	
+
 	private static final Object globalSyncer = new Object();
 
-	public JsonObject run(BadResults badResults, int builderID, String test_id, String asm, String login) {
-		AsmTest test = null;
+	private static class StringWrapper {
+		private String data;
+
+		public StringWrapper(String data) {
+			this.data = data;
+		}
+
+		public void set(String data) {
+			this.data = data;
+		}
+
+		public String get() {
+			return data;
+		}
+	}
+
+	public JsonObject run(final BadResults badResults, int builderID, Toolchain toolchain, String test_id, String asm, String login) {
+		GenericTest test = null;
 		synchronized (tests) {
-			if (mtest.containsKey(test_id.toLowerCase())) {
-				test = mtest.get(test_id.toLowerCase());
+			String testKey = toolchain.getName().toUpperCase() + "/" + test_id.toLowerCase();
+			if (mtest.containsKey(testKey)) {
+				test = mtest.get(testKey);
 			}
 		}
 		int code = 1;
 		int good = 0;
 		int bad = 0;
-		JsonArray rawMessage = new JsonArray(new ArrayList<JsonValue>());
-		String message = "<span class='log_err'>Neznámá chyba</span>";
+		final JsonArray rawMessage = new JsonArray(new ArrayList<JsonValue>());
+		final StringWrapper message = new StringWrapper("<span class='log_err'>Neznámá chyba</span>");
 		TestResult testResult = null;
 		if (test == null) {
 			code = 1;
 			rawMessage.add(new JsonString("Uvedený test nebyl nalezen"));
-			message = "<span class='log_err'>Uvedený test nebyl nalezen</span>";
+			message.set("<span class='log_err'>Uvedený test nebyl nalezen</span>");
 		} else {
-			String err = test.VerifyCode(badResults, asm);
-			if (err != null) {
-				rawMessage.add(new JsonString(err));
-				message = "<span class='log_err'>" + err + "</span>";
-			} else {
-				asm = test.GetFinalASM(login, asm);
-				if (asm == null) {
-					rawMessage.add(new JsonString("Nedovolené užití externích funkcí"));
-					message = "<span class='log_err'>Nedovolené užití externích funkcí</span>";
-				} else {
-					RunResult result = null;
-					synchronized (globalSyncer) {
-						try {
-							result = NasmWrapper.run("./test_" + builderID, asm, "", 2000, false, false);
-						} catch (NasmExecutionException e) {
-							code = 1;
-							JsonObject obj = new JsonObject();
-							obj.add("description", new JsonString("NASM failed"));
-							badResults.setNext(BadResultType.Uncompillable);
-							if (e.execResult != null) {
-								obj.add("stdout", new JsonString(e.execResult.stdout));
-								obj.add("stderr", new JsonString(e.execResult.stderr));
-								obj.add("ret", new JsonNumber(e.execResult.returnCode));
-							}
-							rawMessage.add(obj);
-							message = "<span class='log_err'>Nepodaøilo se pøeložit kód<br />" + e.getDescription().replaceAll("\n", "<br />") + "</span>";
-						} catch (GoLinkExecutionException e) {
-							code = 1;
-							JsonObject obj = new JsonObject();
-							obj.add("description", new JsonString("LINKER failed"));
-							if (e.execResult != null) {
-								obj.add("stdout", new JsonString(e.execResult.stdout));
-								obj.add("stderr", new JsonString(e.execResult.stderr));
-								obj.add("ret", new JsonNumber(e.execResult.returnCode));
-							}
-							rawMessage.add(obj);
-							message = "<span class='log_err'>Nepodaøilo se pøeložit kód kvùli interní chybì linkeru</span>";
-						} catch (RuntimeExecutionException e) { // Should never happen
-							code = 1;
-							JsonObject obj = new JsonObject();
-							obj.add("description", new JsonString("RUN failed"));
-							if (e.execResult != null) {
-								obj.add("stdout", new JsonString(e.execResult.stdout));
-								obj.add("stderr", new JsonString(e.execResult.stderr));
-								obj.add("ret", new JsonNumber(e.execResult.returnCode));
-							}
-							rawMessage.add(obj);
-							message = "<span class='log_err'>Nepodaøilo se pøeložit kód kvùli interní chybì serveru</span>";
-						}
-						if (result != null) {
-							TestInput input = new TestInput(result.exePath, result.exeName);
-							testResult = test.perform(badResults, input);
-							NasmWrapper.clean(result.exePath);
-						}
-						if (testResult != null) {
-							code = testResult.passed ? 0 : 1;
-							message = testResult.data;
-							good = testResult.getGoodTests();
-							bad = testResult.getBadTests();
-						}
+			Toolchain runner = null;
+			try {
+				runner = sdb.getToolchain(test.getToolchain());
+			} catch (NoSuchToolchainException err) {
+				rawMessage.add(new JsonString("Neznámý toolchain: " + toolchain));
+				message.set("<span class='log_err'>Neznámý toolchain: " + toolchain + "</span>");
+			}
+			if (runner != null) {
+				ToolchainLogger errorLogger = new ToolchainLogger() {
+
+					@Override
+					public void logError(String error) {
+						rawMessage.add(new JsonString(error));
+						message.set("<span class='log_err'>" + error + "</span>");
 					}
+
+					@Override
+					public BadResults getBadResults() {
+						return badResults;
+					}
+
+				};
+
+				String workingDirectory = new File("./tests/" + toolchain.getName() + "/" + builderID).getAbsolutePath();
+				try {
+					ExecutionResult result = runner.run(errorLogger, test, workingDirectory, asm, "", login);
+
+					if (result.wasOK()) {
+						TestInput input = new TestInput(workingDirectory, runner.getLastOutputFileName());
+						testResult = test.perform(badResults, input);
+						MyFS.deleteFileSilent(workingDirectory);
+					}
+					if (testResult != null) {
+						code = testResult.passed ? 0 : 1;
+						message.set(testResult.data);
+						good = testResult.getGoodTests();
+						bad = testResult.getBadTests();
+					}
+				} finally {
+					MyFS.deleteFileSilent(workingDirectory);
 				}
 			}
 		}
 		JsonObject obj = new JsonObject();
 		obj.add("code", new JsonNumber(code));
-		obj.add("result", new JsonString(message));
+		obj.add("result", new JsonString(message.get()));
 		obj.add("good", new JsonNumber(good));
 		obj.add("bad", new JsonNumber(bad));
 		if (testResult != null) {

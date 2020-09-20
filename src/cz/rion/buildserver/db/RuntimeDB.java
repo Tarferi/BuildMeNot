@@ -41,7 +41,7 @@ public class RuntimeDB extends LayeredMetaDB {
 		new StatDB(this);
 		makeTable("users", KEY("ID"), TEXT("login"));
 		makeTable("session", KEY("ID"), TEXT("address"), TEXT("hash"), NUMBER("live"), NUMBER("user_id"), DATE("last_action"), DATE("creation_time"));
-		makeTable("compilations", KEY("ID"), NUMBER("session_id"), TEXT("test_id"), NUMBER("user_id"), TEXT("address"), NUMBER("port"), BIGTEXT("asm"), DATE("creation_time"), NUMBER("code"), BIGTEXT("result"), BIGTEXT("full"), NUMBER("good_tests"), NUMBER("bad_tests"), BIGTEXT("bad_tests_details"));
+		makeTable("compilations", KEY("ID"), NUMBER("session_id"), TEXT("toolchain"), TEXT("test_id"), NUMBER("user_id"), TEXT("address"), NUMBER("port"), BIGTEXT("asm"), DATE("creation_time"), NUMBER("code"), BIGTEXT("result"), BIGTEXT("full"), NUMBER("good_tests"), NUMBER("bad_tests"), BIGTEXT("bad_tests_details"));
 		makeTable("pageLoads", KEY("ID"), NUMBER("session_id"), TEXT("address"), NUMBER("port"), TEXT("target"), DATE("creation_time"), NUMBER("result"));
 		makeTable("dbV1", KEY("ID"), TEXT("address"), NUMBER("port"), BIGTEXT("asm"), TEXT("test_id"), DATE("creation_time"), NUMBER("code"), BIGTEXT("result"), BIGTEXT("full"));
 		makeTable("dbV1Good", KEY("ID"), TEXT("address"), NUMBER("port"), BIGTEXT("asm"), TEXT("test_id"), DATE("creation_time"), NUMBER("code"), BIGTEXT("result"), BIGTEXT("full"));
@@ -192,7 +192,7 @@ public class RuntimeDB extends LayeredMetaDB {
 	}
 
 	private void makeCompilationStatsTable() throws DatabaseException {
-		makeTable("compilation_stats", KEY("ID"), NUMBER("user_id"), NUMBER("good_tests"), NUMBER("good_unique_tests"), NUMBER("total_tests"));
+		makeTable("compilation_stats", KEY("ID"), NUMBER("user_id"), TEXT("toolchain"), NUMBER("good_tests"), NUMBER("good_unique_tests"), NUMBER("total_tests"));
 	}
 
 	private String reverse(String str) {
@@ -209,19 +209,21 @@ public class RuntimeDB extends LayeredMetaDB {
 
 	public class CompletedTest {
 		public final int EntryID;
+		public final String Toolchain;
 		public final String TestID;
 		public final String Code;
 		public final String CompletionDateStr;
 
-		private CompletedTest(int entry_id, String test_id, String asm, long completion_date) {
+		private CompletedTest(int entry_id, String toolchain, String test_id, String asm, long completion_date) {
 			this.EntryID = entry_id;
+			this.Toolchain = toolchain;
 			this.TestID = test_id;
 			this.Code = asm;
 			this.CompletionDateStr = dateFormat.format(new Date(completion_date));
 		}
 	}
 
-	public List<CompletedTest> getCompletedTests(String login) {
+	public List<CompletedTest> getCompletedTests(String login, String toolchain) {
 		List<CompletedTest> result = new ArrayList<>();
 
 		try {
@@ -230,6 +232,7 @@ public class RuntimeDB extends LayeredMetaDB {
 			TableField[] selectFields = new TableField[] {
 					getField(tableName1, "login"),
 					getField(tableName2, "ID"),
+					getField(tableName2, "toolchain"),
 					getField(tableName2, "test_id"),
 					getField(tableName2, "creation_time"),
 					getField(tableName2, "asm"),
@@ -238,6 +241,7 @@ public class RuntimeDB extends LayeredMetaDB {
 			ComparisionField[] comparators = new ComparisionField[] {
 					new ComparisionField(getField(tableName2, "code"), 0),
 					new ComparisionField(getField(tableName2, "test_id"), "", FieldComparator.NotEquals),
+					new ComparisionField(getField(tableName2, "toolchain"), toolchain),
 					new ComparisionField(getField(tableName1, "login"), login)
 			};
 			TableJoin[] joins = new TableJoin[] {
@@ -247,12 +251,13 @@ public class RuntimeDB extends LayeredMetaDB {
 			for (JsonValue val : jsn.Value) {
 				if (val.isObject()) {
 					JsonObject obj = val.asObject();
-					if (obj.containsNumber("ID") && obj.containsString("login") && obj.containsString("test_id") && obj.containsString("asm") && obj.containsNumber("code")) {
+					if (obj.containsNumber("ID") && obj.containsString("login") && obj.containsString("test_id") && obj.containsString("asm") && obj.containsString("toolchain") && obj.containsNumber("code")) {
 						int entry_id = obj.getNumber("ID").Value;
 						String test_id = obj.getString("test_id").Value;
 						String asm = obj.getString("asm").Value;
+						String toolchainS = obj.getString("toolchain").Value;
 						long completion_date = obj.getNumber("creation_time").asLong();
-						result.add(new CompletedTest(entry_id, test_id, asm, completion_date));
+						result.add(new CompletedTest(entry_id, toolchainS, test_id, asm, completion_date));
 					}
 				}
 			}
@@ -290,7 +295,7 @@ public class RuntimeDB extends LayeredMetaDB {
 		}
 	}
 
-	private void createCompilationStats(int user_id) throws DatabaseException {
+	private void createCompilationStats(int user_id, String toolchain) throws DatabaseException {
 		synchronized (syncer_compilations) {
 			final String compilationsTableName = "compilations";
 			final String statsTableName = "compilation_stats";
@@ -298,7 +303,7 @@ public class RuntimeDB extends LayeredMetaDB {
 			int unique = 0;
 			int good = 0;
 			List<String> known = new ArrayList<>();
-			JsonArray res = this.select(compilationsTableName, new TableField[] { getField(compilationsTableName, "user_id"), getField(compilationsTableName, "test_id"), getField(compilationsTableName, "code") }, false, new ComparisionField(getField(compilationsTableName, "user_id"), user_id));
+			JsonArray res = this.select(compilationsTableName, new TableField[] { getField(compilationsTableName, "user_id"), getField(compilationsTableName, "test_id"), getField(compilationsTableName, "code") }, false, new ComparisionField(getField(compilationsTableName, "user_id"), user_id), new ComparisionField(getField(compilationsTableName, "toolchain"), toolchain));
 			for (JsonValue val : res.Value) {
 				int code = val.asObject().getNumber("code").Value;
 				String test_id = val.asObject().getString("test_id").Value;
@@ -313,21 +318,21 @@ public class RuntimeDB extends LayeredMetaDB {
 			}
 			if (total > 0) {
 				synchronized (syncer_compilation_stats) {
-					this.insert(statsTableName, new ValuedField(getField(statsTableName, "user_id"), user_id), new ValuedField(getField(statsTableName, "good_unique_tests"), unique), new ValuedField(getField(statsTableName, "good_tests"), good), new ValuedField(getField(statsTableName, "total_tests"), total));
+					this.insert(statsTableName, new ValuedField(getField(statsTableName, "user_id"), user_id), new ValuedField(getField(statsTableName, "good_unique_tests"), unique), new ValuedField(getField(statsTableName, "good_tests"), good), new ValuedField(getField(statsTableName, "total_tests"), total), new ValuedField(getField(statsTableName, "toolchain"), toolchain));
 				}
 			}
 		}
 	}
 
-	private void storeCompilationStats(int user_id, int code, String test_id, List<CompletedTest> knownCompleted) {
+	private void storeCompilationStats(int user_id, String toolchain, int code, String test_id, List<CompletedTest> knownCompleted) {
 		synchronized (syncer_compilation_stats) {
 			final String tableName = "compilation_stats";
 			try {
-				JsonArray res = this.select(tableName, new TableField[] { getField(tableName, "ID"), getField(tableName, "good_tests"), getField(tableName, "total_tests"), getField(tableName, "good_unique_tests") }, false, new ComparisionField(getField(tableName, "user_id"), user_id));
+				JsonArray res = this.select(tableName, new TableField[] { getField(tableName, "ID"), getField(tableName, "good_tests"), getField(tableName, "total_tests"), getField(tableName, "good_unique_tests") }, false, new ComparisionField(getField(tableName, "user_id"), user_id), new ComparisionField(getField(tableName, "toolchain"), toolchain));
 				if (res.Value.isEmpty()) { // No stats for this user -> create stats from sratch
-					createCompilationStats(user_id);
+					createCompilationStats(user_id, toolchain);
 					// Reselect and update
-					res = this.select(tableName, new TableField[] { getField(tableName, "ID"), getField(tableName, "good_tests"), getField(tableName, "total_tests"), getField(tableName, "good_unique_tests") }, false, new ComparisionField(getField(tableName, "user_id"), user_id));
+					res = this.select(tableName, new TableField[] { getField(tableName, "ID"), getField(tableName, "good_tests"), getField(tableName, "total_tests"), getField(tableName, "good_unique_tests") }, false, new ComparisionField(getField(tableName, "user_id"), user_id), new ComparisionField(getField(tableName, "toolchain"), toolchain));
 				}
 				if (res.Value.isEmpty()) { // Failed and shouldn't have
 					throw new DatabaseException("Failed to create user stats for user " + user_id);
@@ -359,18 +364,18 @@ public class RuntimeDB extends LayeredMetaDB {
 		}
 	}
 
-	public void updateStatsForAllUsers() throws DatabaseException {
+	public void updateStatsForAllUsers(String toolchain) throws DatabaseException {
 		synchronized (syncer_users) {
 			synchronized (syncer_compilation_stats) {
 				final String tableName = "users";
 				this.dropTable("compilation_stats");
 				makeCompilationStatsTable();
-				JsonArray res = this.select(tableName, new TableField[] { getField(tableName, "ID") }, false);
+				JsonArray res = this.select(tableName, new TableField[] { getField(tableName, "ID") }, false, new ComparisionField(getField(tableName, "toolchain"), toolchain));
 				int index = 0;
 				int total = res.Value.size();
 				for (JsonValue val : res.Value) {
 					int id = val.asObject().getNumber("ID").Value;
-					createCompilationStats(id);
+					createCompilationStats(id, toolchain);
 					index++;
 					System.out.println("Creating compilations... " + index + "/" + total);
 				}
@@ -378,9 +383,9 @@ public class RuntimeDB extends LayeredMetaDB {
 		}
 	}
 
-	public void storeCompilation(List<CompletedTest> knownCompleted, String remoteAddress, Date time, String asm, int session_id, String test_id, int resultCode, String result, String full, int user_id, String details, int good_test, int bad_tests) throws DatabaseException {
+	public void storeCompilation(List<CompletedTest> knownCompleted, String remoteAddress, Date time, String asm, int session_id, String test_id, int resultCode, String result, String full, int user_id, String toolchain, String details, int good_test, int bad_tests) throws DatabaseException {
 		synchronized (syncer_compilations) {
-			storeCompilationStats(user_id, resultCode, test_id, knownCompleted);
+			storeCompilationStats(user_id, toolchain, resultCode, test_id, knownCompleted);
 			String[] addrParts = reverse(remoteAddress).split(":", 2);
 			String address = remoteAddress;
 			int port = 0;
@@ -395,6 +400,7 @@ public class RuntimeDB extends LayeredMetaDB {
 					new ValuedField(this.getField(tableName, "address"), address),
 					new ValuedField(this.getField(tableName, "port"), port),
 					new ValuedField(this.getField(tableName, "asm"), asm),
+					new ValuedField(this.getField(tableName, "toolchain"), toolchain),
 					new ValuedField(this.getField(tableName, "test_id"), test_id),
 					new ValuedField(this.getField(tableName, "user_id"), user_id),
 					new ValuedField(this.getField(tableName, "session_id"), session_id),
@@ -406,11 +412,6 @@ public class RuntimeDB extends LayeredMetaDB {
 					new ValuedField(this.getField(tableName, "bad_tests"), bad_tests),
 					new ValuedField(this.getField(tableName, "good_tests"), good_test) };
 			insert(tableName, updateData);
-			// executeExc("INSERT INTO compilations (address, port, asm, test_id, user_id,
-			// session_id, creation_time, code, result, full, bad_tests_details, bad_tests,
-			// good_tests) VALUES ('?', ?, '?', '?', ?, ?, ?, ?, '?', '?', '?', ?, ?);",
-			// address, port, asm, test_id, user_id, session_id, time.getTime(), resultCode,
-			// result, full, details, bad_tests, good_test);
 		}
 
 	}
@@ -689,7 +690,7 @@ public class RuntimeDB extends LayeredMetaDB {
 		return new Date(l);
 	}
 
-	public List<RuntimeUserStats> getUserStats() {
+	public List<RuntimeUserStats> getUserStats(String toolchain) {
 		List<RuntimeUserStats> stats = new ArrayList<>();
 		final String usersTableName = "users";
 		final String sessionsTableName = "session";
@@ -713,7 +714,7 @@ public class RuntimeDB extends LayeredMetaDB {
 		}
 		synchronized (syncer_compilations) {
 			try {
-				compilations = this.select(compilationsTableName, new TableField[] { getField(compilationsTableName, "test_id"), getField(compilationsTableName, "user_id"), getField(compilationsTableName, "creation_time") }, false);
+				compilations = this.select(compilationsTableName, new TableField[] { getField(compilationsTableName, "test_id"), getField(compilationsTableName, "user_id"), getField(compilationsTableName, "creation_time") }, false, new ComparisionField(getField(compilationsTableName, "toolchain"), toolchain));
 			} catch (DatabaseException e1) {
 				e1.printStackTrace();
 			}

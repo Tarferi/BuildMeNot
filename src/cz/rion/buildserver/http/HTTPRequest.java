@@ -8,11 +8,12 @@ public final class HTTPRequest {
 	public final String protocol;
 	public final String path;
 	public final byte[] data;
+	public final String host;
 	public final String authData;
 	public final Map<String, String> headers;
 	public final List<String> cookiesLines;
 
-	public HTTPRequest(String method, String protocol, String path, byte[] data, Map<String, String> headers, List<String> cookiesLines) {
+	public HTTPRequest(String method, String host, String protocol, String path, byte[] data, Map<String, String> headers, List<String> cookiesLines) {
 		String authData = null;
 		if (path.contains("/auth/")) {
 			String[] np = path.split("/auth/", 2);
@@ -24,11 +25,11 @@ public final class HTTPRequest {
 				authData = np[0];
 			}
 		}
-
 		this.method = method;
 		this.protocol = protocol;
 		this.path = path;
 		this.data = data;
+		this.host = host;
 		this.headers = headers;
 		this.authData = authData;
 		this.cookiesLines = cookiesLines;

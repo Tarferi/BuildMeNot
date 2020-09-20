@@ -24,13 +24,14 @@ public class UsersLoadedEvent extends Event {
 		public final int TotalTestsSubmitted;
 		public final String LastTestID;
 		public final Date LastTestDate;
+		public final String ToolChain;
 
 		@Override
 		public String toString() {
-			return Login + " (" + FullName + ")";
+			return "[" + ToolChain + "]" + Login + " (" + FullName + ")";
 		}
 
-		public UserInfo(int id, String login, String fullName, String group, Date RegistrationDate, Date LastActiveDate, Date LastLoginDate, int TotalTestsSubmitted, String LastTestID, Date LastTestDate, String PermissionGroup) {
+		public UserInfo(int id, String login, String fullName, String group, Date RegistrationDate, Date LastActiveDate, Date LastLoginDate, int TotalTestsSubmitted, String LastTestID, Date LastTestDate, String PermissionGroup, String Toolchain) {
 			this.ID = id;
 			this.Login = login;
 			this.FullName = fullName;
@@ -42,6 +43,7 @@ public class UsersLoadedEvent extends Event {
 			this.LastTestID = LastTestID;
 			this.LastTestDate = LastTestDate;
 			this.PermissionGroup = PermissionGroup;
+			this.ToolChain = Toolchain;
 		}
 	}
 

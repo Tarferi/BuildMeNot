@@ -76,6 +76,11 @@ public class MyFS {
 		File f = new File(fileName);
 		if (f.exists()) {
 			try {
+				if (f.isDirectory()) {
+					for (File ff : f.listFiles()) {
+						deleteFileSilent(ff.getAbsolutePath());
+					}
+				}
 				f.delete();
 			} catch (Exception | Error e) {
 			}

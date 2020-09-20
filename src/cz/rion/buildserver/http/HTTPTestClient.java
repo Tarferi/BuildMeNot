@@ -13,15 +13,17 @@ import cz.rion.buildserver.db.RuntimeDB;
 import cz.rion.buildserver.db.RuntimeDB.BadResults;
 import cz.rion.buildserver.db.RuntimeDB.CompletedTest;
 import cz.rion.buildserver.db.StaticDB;
+import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.exceptions.HTTPClientException;
+import cz.rion.buildserver.exceptions.NoSuchToolchainException;
 import cz.rion.buildserver.exceptions.SwitchClientException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonNumber;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.json.JsonValue.JsonString;
-import cz.rion.buildserver.test.AsmTest;
+import cz.rion.buildserver.test.GenericTest;
 import cz.rion.buildserver.test.TestManager;
 
 public class HTTPTestClient extends HTTPGraphProviderClient {
@@ -29,8 +31,10 @@ public class HTTPTestClient extends HTTPGraphProviderClient {
 	private final CompatibleSocketClient client;
 	private JsonObject returnValue = null;
 	private boolean testsPassed = false;
-	private RuntimeDB db;
+	private final RuntimeDB db;
+	private final StaticDB sdb;
 	private String test_id;
+	private Toolchain toolchain;
 	private String asm;
 	private final TestManager tests;
 	private List<CompletedTest> completed = new ArrayList<>();
@@ -46,8 +50,8 @@ public class HTTPTestClient extends HTTPGraphProviderClient {
 	}
 
 	@Override
-	public boolean objectionsAgainstRedirectoin(HTTPRequest request) {
-		boolean others = super.objectionsAgainstRedirectoin(request);
+	public boolean objectionsAgainstRedirection(HTTPRequest request) {
+		boolean others = super.objectionsAgainstRedirection(request);
 		if (!others) { // Others don't want redirection, we
 			if (request.path.startsWith("/test?cache=") && request.method.equals("POST") && request.data.length > 0) {
 				wantsToRedirect = true;
@@ -71,6 +75,22 @@ public class HTTPTestClient extends HTTPGraphProviderClient {
 		} else {
 			throw new HTTPClientException("Invalid data item: " + c);
 		}
+	}
+
+	@Override
+	protected String handleJSManipulation(String host, String path, String js) {
+		js = super.handleJSManipulation(host, path, js);
+		String toolchain = this.toolchain == null ? "alert(\"Nepodarilo se nacist toolchain\");" : this.toolchain.getName();
+		js = js.replace("$TOOLCHAIN$", toolchain);
+		return js;
+	}
+
+	@Override
+	protected String handleHTMLManipulation(String host, String path, String html) {
+		html = super.handleHTMLManipulation(host, path, html);
+		String toolchain = this.toolchain == null ? "alert(\"Nepodarilo se nacist toolchain\");" : this.toolchain.getName();
+		html = html.replace("$TOOLCHAIN$", toolchain);
+		return html;
 	}
 
 	private static String decode(byte[] data) throws HTTPClientException {
@@ -114,10 +134,18 @@ public class HTTPTestClient extends HTTPGraphProviderClient {
 		this.client = client;
 		this.tests = tests;
 		this.db = rdb;
+		this.sdb = sdb;
 	}
 
 	@Override
 	protected HTTPResponse handle(HTTPRequest request) throws HTTPClientException {
+		String toolchain = sdb.getToolchainMapping(request.host);
+		try {
+			this.toolchain = sdb.getToolchain(toolchain == null ? "" : toolchain);
+		} catch (NoSuchToolchainException e) {
+			return new HTTPResponse(request.protocol, 200, "OK", ("Invalid toolchain: " + toolchain).getBytes(), "text/html; charset=UTF-8", request.cookiesLines);
+		}
+
 		if (request.path.startsWith("/test?cache=") && request.method.equals("POST") && request.data.length > 0) {
 			byte[] data = handleTest(request.data, wantsToRedirect, request.authData);
 			return new HTTPResponse(request.protocol, 200, "OK", data, "multipart/form-data;", request.cookiesLines);
@@ -152,7 +180,7 @@ public class HTTPTestClient extends HTTPGraphProviderClient {
 					}
 
 					if (authenticated) {
-						completed = db.getCompletedTests(getPermissions().Login);
+						completed = db.getCompletedTests(getPermissions().Login, toolchain.getName());
 						try {
 							badResults = db.GetBadResultsForUser(getPermissions().UserID);
 						} catch (DatabaseException e) {
@@ -160,14 +188,14 @@ public class HTTPTestClient extends HTTPGraphProviderClient {
 							returnValue.add("code", new JsonNumber(53));
 							returnValue.add("result", new JsonString("Not logged in"));
 						}
-						boolean canBypassTimeout = getPermissions().allowBypassTimeout();
+						boolean canBypassTimeout = getPermissions().allowBypassTimeout() || !Settings.getForceTimeoutOnErrors();
 						if (badResults != null) {
 							if (obj.containsString("asm") && obj.containsString("id")) {
 
 								test_id = obj.getString("id").Value;
 								asm = obj.getString("asm").Value;
 
-								if (!getPermissions().allowExecute(test_id)) {
+								if (!getPermissions().allowExecute(toolchain.getName(), test_id)) {
 									returnValue.add("code", new JsonNumber(55));
 									returnValue.add("result", new JsonString("Hacking much?"));
 								} else {
@@ -178,7 +206,7 @@ public class HTTPTestClient extends HTTPGraphProviderClient {
 										returnValue.add("code", new JsonNumber(54));
 										returnValue.add("result", new JsonString("Hacking much?"));
 									} else {
-										returnValue = tests.run(badResults, BuilderID, test_id, asm, getPermissions().Login);
+										returnValue = tests.run(badResults, BuilderID, toolchain, test_id, asm, getPermissions().Login);
 										testsPassed = returnValue.containsNumber("code") ? returnValue.getNumber("code").Value == 0 : false;
 									}
 
@@ -190,14 +218,16 @@ public class HTTPTestClient extends HTTPGraphProviderClient {
 										}
 									}
 
-									try {
-										badResults.store(newlyFinished);
-									} catch (DatabaseException e) {
-										e.printStackTrace();
+									if (Settings.getForceTimeoutOnErrors()) {
+										try {
+											badResults.store(newlyFinished);
+										} catch (DatabaseException e) {
+											e.printStackTrace();
+										}
 									}
 									if (canBypassTimeout) {
 										returnValue.add("wait", new JsonNumber(0, (new Date().getTime() - 10000) + ""));
-									} else {
+									} else if (Settings.getForceTimeoutOnErrors()) {
 										returnValue.add("wait", new JsonNumber(0, (badResults.AllowNext.getTime()) + ""));
 									}
 								}
@@ -205,11 +235,11 @@ public class HTTPTestClient extends HTTPGraphProviderClient {
 								String act = obj.getString("action").Value;
 								if (act.equals("COLLECT")) {
 									this.setIntention(HTTPClientIntentType.COLLECT_TESTS);
-									List<AsmTest> tsts = tests.getAllTests();
-									tsts.sort(new Comparator<AsmTest>() {
+									List<GenericTest> tsts = tests.getAllTests(toolchain.getName());
+									tsts.sort(new Comparator<GenericTest>() {
 
 										@Override
-										public int compare(AsmTest o1, AsmTest o2) {
+										public int compare(GenericTest o1, GenericTest o2) {
 											String id1 = o1.getID();
 											String id2 = o2.getID();
 
@@ -232,8 +262,8 @@ public class HTTPTestClient extends HTTPGraphProviderClient {
 										finishedByTestID.put(test.TestID, test);
 									}
 
-									for (AsmTest tst : tsts) {
-										if (!getPermissions().allowSee(tst.getID())) {
+									for (GenericTest tst : tsts) {
+										if (!getPermissions().allowSee(toolchain.getName(), tst.getID())) {
 											continue;
 										}
 										if (tst.isSecret() && !getPermissions().allowSeeSecretTests()) {
@@ -242,9 +272,9 @@ public class HTTPTestClient extends HTTPGraphProviderClient {
 										JsonObject tobj = new JsonObject();
 										tobj.add("title", new JsonString(tst.getTitle()));
 										tobj.add("zadani", new JsonString(tst.getDescription()));
-										tobj.add("init", new JsonString(tst.getInitialCode()));
+										tobj.add("init", new JsonString(tst.getSubmittedCode()));
 										tobj.add("id", new JsonString(tst.getID()));
-										if (!getPermissions().allowExecute(tst.getID())) {
+										if (!getPermissions().allowExecute(toolchain.getName(), tst.getID())) {
 											tobj.add("noexec", new JsonNumber(1));
 										}
 										tobj.add("hidden", new JsonNumber(tst.isHidden() ? 1 : 0));
@@ -283,7 +313,7 @@ public class HTTPTestClient extends HTTPGraphProviderClient {
 			}
 		}
 		String resultJson;
-		if (returnValue.containsObject("details") && !this.getPermissions().allowDetails(test_id)) {
+		if (returnValue.containsObject("details") && !this.getPermissions().allowDetails(toolchain.getName(), test_id)) {
 			JsonValue details = returnValue.get("details");
 			returnValue.remove("details");
 			resultJson = returnValue.getJsonString(); // So that the "details" are not sent
@@ -319,7 +349,7 @@ public class HTTPTestClient extends HTTPGraphProviderClient {
 			String details = returnValue.asObject().contains("details") ? returnValue.asObject().get("details").getJsonString() : "[]";
 			int good_tests = returnValue.asObject().containsNumber("good") ? returnValue.asObject().getNumber("good").Value : 0;
 			int bad_tests = returnValue.asObject().containsNumber("bad") ? returnValue.asObject().getNumber("bad").Value : 0;
-			db.storeCompilation(completed, client.getRemoteSocketAddress().toString(), new Date(), asm, getPermissions().getSessionID(), test_id, code, result, getReducedResult(), getPermissions().UserID, details, good_tests, bad_tests);
+			db.storeCompilation(completed, client.getRemoteSocketAddress().toString(), new Date(), asm, getPermissions().getSessionID(), test_id, code, result, getReducedResult(), getPermissions().UserID, toolchain.getName(), details, good_tests, bad_tests);
 		}
 	}
 }

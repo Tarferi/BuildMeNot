@@ -4,6 +4,8 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import cz.rion.buildserver.db.StaticDB;
 import cz.rion.buildserver.db.RuntimeDB.BadResultType;
@@ -17,6 +19,7 @@ import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.test.TestManager.TestInput;
 import cz.rion.buildserver.test.TestManager.TestResult;
 import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
+import cz.rion.buildserver.utils.Pair;
 import cz.rion.buildserver.wrappers.FileReadException;
 import cz.rion.buildserver.wrappers.MyExec.MyExecResult;
 import cz.rion.buildserver.wrappers.MyExec.TestResultsExpectations;
@@ -24,7 +27,7 @@ import cz.rion.buildserver.wrappers.MyFS;
 
 public class JsonTestManager {
 
-	private static final class JsonTest implements AsmTest {
+	public static final class JsonTest implements GenericTest {
 
 		private final String id;
 		private final String initialASM;
@@ -39,13 +42,13 @@ public class JsonTestManager {
 		private final String[] allowedInstructions;
 		public final boolean replace;
 		private final ReplacementEntry[] replacement;
+		private final String toolchain;
 
 		@Override
 		public String getID() {
 			return id;
 		}
 
-		@Override
 		public TestResult perform(BadResults badResults, TestInput input) {
 			int total = tests.size();
 			int passed = 0;
@@ -93,7 +96,7 @@ public class JsonTestManager {
 			}
 		}
 
-		private JsonTest(String id, String title, String description, List<TestVerificationData> tests, String initialASM, String append, String prepend, boolean isHidden, boolean isSecret, String[] allowedInstructions, boolean replace, ReplacementEntry[] replacement) {
+		private JsonTest(String id, String toolchain, String title, String description, List<TestVerificationData> tests, String initialASM, String append, String prepend, boolean isHidden, boolean isSecret, String[] allowedInstructions, boolean replace, ReplacementEntry[] replacement) {
 			this.id = id;
 			this.title = title;
 			this.description = description;
@@ -107,6 +110,7 @@ public class JsonTestManager {
 			this.allowedInstructions = allowedInstructions;
 			this.replace = replace;
 			this.replacement = replacement;
+			this.toolchain = toolchain;
 		}
 
 		@Override
@@ -115,7 +119,7 @@ public class JsonTestManager {
 		}
 
 		@Override
-		public String getInitialCode() {
+		public String getSubmittedCode() {
 			return initialASM;
 		}
 
@@ -153,7 +157,6 @@ public class JsonTestManager {
 			return null;
 		}
 
-		@Override
 		public String VerifyCode(BadResults badResults, String asm) {
 			if (allowedInstructions != null) {
 				boolean codeSection = true;
@@ -211,13 +214,13 @@ public class JsonTestManager {
 			return secret;
 		}
 
-		@Override
 		public String[] getAllowedInstructions() {
 			return allowedInstructions;
 		}
 
-		@Override
-		public String GetFinalASM(String login, String asm) {
+		private static final Pattern pattern = Pattern.compile("\\%include +\"([^\\\"]+)\"", Pattern.MULTILINE);
+
+		public String GetFinalCode(String login, String asm) {
 			if (replace) {
 				asm = asm.replaceAll("\\$LOGIN\\$", login);
 			}
@@ -232,8 +235,20 @@ public class JsonTestManager {
 				return null;
 			}
 			asm = prepend + "\r\n" + asm + "\r\n" + append;
+
+			final Matcher matcher = pattern.matcher(asm);
+
+			// The substituted value will be contained in the result variable
+			String path = new File("./nasm/").getAbsolutePath().replaceAll("\\\\", "\\\\\\\\")+"\\\\";
+			asm = matcher.replaceAll("%include \"" + path + "$1\"");
+
 			this.finalASM = asm;
 			return asm;
+		}
+
+		@Override
+		public String getToolchain() {
+			return toolchain;
 		}
 	}
 
@@ -339,7 +354,7 @@ public class JsonTestManager {
 		}
 	}
 
-	private static void fillFSTests(List<JsonObject> data, String directory) {
+	private static void fillFSTests(List<Pair<String, JsonObject>> data, String directory) {
 		Collection<File> all = new ArrayList<File>();
 		try {
 			collectDir(new File(directory), all);
@@ -356,14 +371,14 @@ public class JsonTestManager {
 				JsonValue val = JsonValue.parse(test);
 				if (val != null) {
 					if (val.isObject()) {
-						data.add(val.asObject());
+						data.add(new Pair<>(f.getAbsolutePath(), val.asObject()));
 					}
 				}
 			}
 		}
 	}
 
-	private static void fillDBTests(StaticDB sdb, List<JsonObject> data) {
+	private static void fillDBTests(StaticDB sdb, List<Pair<String, JsonObject>> data) {
 		if (sdb == null) {
 			return;
 		}
@@ -376,7 +391,7 @@ public class JsonTestManager {
 					JsonValue val = JsonValue.parse(fileData.Contents);
 					if (val != null) {
 						if (val.isObject()) {
-							data.add(val.asObject());
+							data.add(new Pair<>(fileData.FileName, val.asObject()));
 						}
 					}
 				} catch (DatabaseException e) {
@@ -386,7 +401,11 @@ public class JsonTestManager {
 		}
 	}
 
-	private static AsmTest ConvertJsonToTest(JsonObject obj) {
+	private static GenericTest ConvertJsonToTest(String path, JsonObject obj) {
+		// Get category name. Find last "tests/" from the end
+		String[] tmp = path.split("tests\\/");
+		String category = tmp[tmp.length - 1].split("\\/")[0];
+
 		if (obj.containsArray("tests") && obj.containsString("id") && obj.containsString("description") && obj.containsString("title")) {
 			List<JsonValue> tests = obj.getArray("tests").Value;
 
@@ -466,24 +485,25 @@ public class JsonTestManager {
 			String title = obj.getString("title").Value;
 			String prepend = obj.containsString("prepend") ? obj.getString("prepend").Value : "";
 			String append = obj.containsString("append") ? obj.getString("append").Value : "";
+			String toolchain = obj.containsString("toolchain") ? obj.getString("toolchain").Value : category;
 
 			String initialASM = obj.containsString("init") ? obj.getString("init").Value : "";
 			boolean hidden = obj.containsNumber("hidden") ? obj.getNumber("hidden").Value == 1 : false;
 			boolean secret = obj.containsNumber("secret") ? obj.getNumber("secret").Value == 1 : false;
 			boolean replace = obj.containsNumber("replace") ? obj.getNumber("replace").Value == 1 : false;
 
-			return new JsonTest(id, title, description, tvd, initialASM, append, prepend, hidden, secret, allowedInstructions, replace, replacement);
+			return new JsonTest(id, toolchain, title, description, tvd, initialASM, append, prepend, hidden, secret, allowedInstructions, replace, replacement);
 		}
 		return null;
 	}
 
-	public static List<AsmTest> load(StaticDB sdb, String testDirectory) {
-		List<AsmTest> lst = new ArrayList<>();
-		List<JsonObject> tests = new ArrayList<>();
+	public static List<GenericTest> load(StaticDB sdb, String testDirectory) {
+		List<GenericTest> lst = new ArrayList<>();
+		List<Pair<String, JsonObject>> tests = new ArrayList<>();
 		fillFSTests(tests, testDirectory);
 		fillDBTests(sdb, tests);
-		for (JsonObject obj : tests) {
-			AsmTest test = ConvertJsonToTest(obj);
+		for (Pair<String, JsonObject> obj : tests) {
+			GenericTest test = ConvertJsonToTest(obj.Key, obj.Value);
 			if (test != null) {
 				lst.add(test);
 			}

@@ -12,6 +12,7 @@ var tester = function() {
 	}
 	
 	self.IDENTITY_TOKEN = $IDENTITY_TOKEN$;
+	self.TOOLCHAIN = "$TOOLCHAIN$";
 	
 	
 	self.toHex = function(c) {
@@ -275,7 +276,7 @@ var tester = function() {
 			                     {
 			                        "type":"div",
 			                        "class":"w131",
-			                        "innerHTML":"Řešení"
+			                        "innerHTML": "&#344;ešení"
 			                     },
 			                     {
 			                        "type":"div",
@@ -359,7 +360,7 @@ var tester = function() {
 		
 		var setup = function() {
 			// Mame vytvorenu strukturu a ulozeny jednotlive komponenty, nasadime callbacky
-			self.b1.addEventListener("click", function() {runTest(self);});
+			self.b1.addEventListener("click", function() {tester.runTest(self);});
 			
 			var cancF = function(event){
 				if(event.keyCode===9){
@@ -463,7 +464,7 @@ var tester = function() {
 			
 			// Reseni
 			var sl = getNewElement1(el, "div", "txtDescr");
-			getNewElement2(sl, "div", ["txtDescrName", "txtDescrNameSolution"], "Řešení");
+			getNewElement2(sl, "div", ["txtDescrName", "txtDescrNameSolution"], "�?ešení");
 			self.rs = getNewElement2(sl, "span", "txtDescrSolutionLog", "Zde se objevi detaily testů tvého řešení")
 			setup();
 			return el;
@@ -491,7 +492,7 @@ var tester = function() {
 				if(e.target.status == 200) {
 					callbackOK(http.responseText);
 				} else {
-					callbackFail(getErrorSolution(0))
+					callbackFail(self.getErrorSolution(0))
 				}
 			}
 		};
@@ -534,14 +535,14 @@ var tester = function() {
 		} else if(code == 1){
 			return self.dec("<span class=\"log_err\">Nepodařilo se dekódovat odpověď sestavovacího serveru</span>");
 		}else if(code == 53){
-			return self.dec("<span class=\"log_err\">Byl jsi odhlášen. Pro přihlášení si obnov stránku (nezapomeň si někam bokem uložit kód, který se právě snažíš přeloži)</span>");
+			return self.dec("<span class=\"log_err\">Byl jsi odhlášen. Pro přihlášení si obnov stránku (nezapome�? si někam bokem uložit kód, který se právě snažíš přeloži)</span>");
 		} else {
 			return self.dec("<span class=\"log_err\">Neznámá chyba</span>");
 		}
 	}
 	
 	self.setAllTestsEnabled = function(enabled) {
-		for (var i = 0; i < allTests.length; i++) {
+		for (var i = 0; i < self.allTests.length; i++) {
 			self.allTests[i].setComponentsEnabled(enabled);
 		}
 	}
@@ -621,14 +622,14 @@ var tester = function() {
 	self.materialize = function(data, waiter) {
 		window.waiter=waiter;
 		id_indiv.innerHTML = "";
-		allTests = [];
+		self.allTests = [];
 		for(var i = 0; i <data.length; i++) {
 			data[i].title = self.dec(data[i].title);
 			data[i].id = self.dec(data[i].id);
 			data[i].zadani = self.dec(data[i].zadani);
 			data[i].init = self.dec(data[i].init);
 			var dataI = new self.testI(data[i], self);
-			allTests[allTests.length] = dataI;
+			self.allTests[self.allTests.length] = dataI;
 			id_indiv.appendChild(self.use_old_ui ? dataI.getElementOld() : dataI.getElement());
 			if(data[i].finished_date){
 				dataI.setFinished(true);

@@ -7,14 +7,13 @@ import java.util.List;
 import java.util.Map;
 
 import cz.rion.buildserver.db.RuntimeDB;
-import cz.rion.buildserver.db.RuntimeDB.BadResults;
 import cz.rion.buildserver.db.SQLiteDB.ComparisionField;
-import cz.rion.buildserver.db.SQLiteDB.Field;
 import cz.rion.buildserver.db.SQLiteDB.TableField;
 import cz.rion.buildserver.db.SQLiteDB.TableJoin;
 import cz.rion.buildserver.db.SQLiteDB.ValuedField;
 import cz.rion.buildserver.db.StaticDB;
 import cz.rion.buildserver.exceptions.DatabaseException;
+import cz.rion.buildserver.exceptions.NoSuchToolchainException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
@@ -37,15 +36,17 @@ public class Retester {
 	private static final class PastTestResult extends TestResult {
 		public final String ASM;
 		public final String TestID;
+		public final String ToolChain;
 		public final String Login;
 		public final int RowID;
 		public final String Full;
 		public final int UserID;
 
-		private PastTestResult(String ASM, String TestID, int RowID, int Code, String Result, String full, String Login, int UserID) {
+		private PastTestResult(String ASM, String TestID, String toolChain, int RowID, int Code, String Result, String full, String Login, int UserID) {
 			super(Code, Result);
 			this.RowID = RowID;
 			this.ASM = ASM;
+			this.ToolChain = toolChain;
 			this.TestID = TestID;
 			this.Login = Login;
 			this.Full = full;
@@ -85,10 +86,11 @@ public class Retester {
 		}
 	}
 
-	private RuntimeDB db;
+	private final RuntimeDB db;
+	private final StaticDB sdb;
 
 	public Retester() throws DatabaseException {
-		StaticDB sdb = new StaticDB("static.sqlite");
+		this.sdb = new StaticDB("static.sqlite");
 		this.db = new RuntimeDB("data.sqlite", sdb);
 		tests = new TestManager(sdb, "./web/tests");
 	}
@@ -164,7 +166,7 @@ public class Retester {
 		return -1;
 	}
 
-	public void runTests(String test_id) throws DatabaseException {
+	public void runTests(String test_id) throws DatabaseException, NoSuchToolchainException {
 		List<PastTestResult> data = load();
 		int index = 0;
 		int total = data.size();
@@ -201,7 +203,7 @@ public class Retester {
 		}
 	}
 
-	public void runTests(boolean onlyBad) throws DatabaseException {
+	public void runTests(boolean onlyBad) throws DatabaseException, NoSuchToolchainException {
 		List<PastTestResult> data = load();
 		db.resetRetestsDB();
 		int index = 0;
@@ -282,6 +284,7 @@ public class Retester {
 		TableField[] selectFields = new TableField[] {
 				db.getField(tableName1, "ID"),
 				db.getField(tableName1, "asm"),
+				db.getField(tableName1, "toolchain"),
 				db.getField(tableName1, "test_id"),
 				db.getField(tableName1, "user_id"),
 				db.getField(tableName1, "full"),
@@ -297,13 +300,14 @@ public class Retester {
 			JsonObject obj = val.asObject();
 			int id = obj.getNumber("ID").Value;
 			String asm = obj.getString("asm").Value;
+			String toolchain = obj.getString("toolchain").Value;
 			String test_id = obj.getString("test_id").Value;
 			String full = obj.getString("full").Value;
 			String login = obj.getString("login").Value;
 			int code = obj.getNumber("code").Value;
 			int user_id = obj.getNumber("user_id").Value;
 			String result = obj.getString("result").Value;
-			PastTestResult test = new PastTestResult(asm, test_id, id, code, result, full, login, user_id);
+			PastTestResult test = new PastTestResult(asm, toolchain, test_id, id, code, result, full, login, user_id);
 			if (test.Login != null) {
 				if (!test.Login.isEmpty()) {
 					if (test.TestID != null) {
@@ -319,8 +323,8 @@ public class Retester {
 		return lst;
 	}
 
-	private NewTestResult retest(PastTestResult test) {
-		JsonObject res = tests.run(db.new BadResults(-1, test.UserID, new Date()), test.RowID, test.TestID, test.ASM, test.Login);
+	private NewTestResult retest(PastTestResult test) throws NoSuchToolchainException {
+		JsonObject res = tests.run(db.new BadResults(-1, test.UserID, new Date()), test.RowID, sdb.getToolchain(test.ToolChain), test.TestID, test.ASM, test.Login);
 		int code = res.getNumber("code").Value;
 		String result = res.getString("result").Value;
 		int good = res.getNumber("good").Value;
@@ -332,7 +336,7 @@ public class Retester {
 		return new NewTestResult(test, code, result, res.getJsonString(), details, good, bad);
 	}
 
-	public void redo() throws DatabaseException {
+	public void redo() throws DatabaseException, NoSuchToolchainException {
 		List<StoredNewTestResult> nw = loadNew();
 		final String tableName = "compilations";
 

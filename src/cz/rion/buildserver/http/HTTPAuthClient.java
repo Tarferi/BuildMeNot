@@ -41,8 +41,8 @@ public class HTTPAuthClient extends HTTPTestClient {
 	}
 
 	@Override
-	protected String handleJSManipulation(String js) {
-		js = super.handleJSManipulation(js);
+	protected String handleJSManipulation(String host, String path, String js) {
+		js = super.handleJSManipulation(host, path, js);
 		js = js.replace("$IDENTITY_TOKEN$", getPermissions().getIdentity().getJsonString());
 		return js;
 	}
@@ -183,7 +183,7 @@ public class HTTPAuthClient extends HTTPTestClient {
 			return new HTTPResponse(request.protocol, returnCode, returnCodeDescription, data, type, request.cookiesLines);
 		}
 
-		if (authRedirect != null && !objectionsAgainstRedirectoin(request)) {
+		if (authRedirect != null && !objectionsAgainstRedirection(request)) {
 			return authRedirect;
 		}
 

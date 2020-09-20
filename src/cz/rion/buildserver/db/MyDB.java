@@ -10,11 +10,13 @@ import java.util.List;
 
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.RuntimeDB.BadResults;
+import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
-import cz.rion.buildserver.test.AsmTest;
+import cz.rion.buildserver.test.GenericTest;
 import cz.rion.buildserver.test.TestManager;
+import cz.rion.buildserver.utils.Pair;
 import cz.rion.buildserver.wrappers.MyThread;
 
 public class MyDB {
@@ -71,10 +73,10 @@ public class MyDB {
 			private int next = 0;
 			private final int last;
 			private final int totalTests;
-			private final List<String> tests;
+			private final List<Pair<Toolchain, String>> tests;
 			private final RuntimeDB db2;
 
-			private SyncStorage(List<CompilationResult> res, int totalTests, List<String> tests, RuntimeDB db2) {
+			private SyncStorage(List<CompilationResult> res, int totalTests, List<Pair<Toolchain, String>> tests, RuntimeDB db2) {
 				this.result = res;
 				this.totalTests = totalTests;
 				this.tests = tests;
@@ -125,9 +127,9 @@ public class MyDB {
 			MyDB db = new MyDB("dbV1.sqlite");
 			RuntimeDB db2 = new RuntimeDB("data.sqlite", null);
 			List<CompilationResult> data = db.getResults();
-			List<String> tests = new ArrayList<>();
-			for (AsmTest test : tm.getAllTests()) {
-				tests.add(test.getID());
+			List<Pair<Toolchain, String>> tests = new ArrayList<>();
+			for (GenericTest test : tm.getAllTests("ISU")) {
+				tests.add(new Pair<>((Toolchain) null, test.getID()));
 			}
 
 			if (data != null) {
@@ -147,7 +149,7 @@ public class MyDB {
 
 		private final TestManager tm = new TestManager(null, "./web/tests/");
 
-		private String getTestID(BadResults br, int builderID, int totalTests, List<String> tests, CompilationResult d) {
+		private String getTestID(BadResults br, int builderID, int totalTests, List<Pair<Toolchain, String>> tests, CompilationResult d) {
 			if (d.resultCode != 0 || (!d.resultText.equals("OK") && !d.resultText.contains(":)"))) {
 				if (d.code.contains("secti")) {
 					return "test07_01";
@@ -158,8 +160,10 @@ public class MyDB {
 				}
 			}
 			String deb_id = null;
-			for (String test_id : tests) {
-				JsonObject res = tm.run(br, builderID, test_id, d.code, null);
+			for (Pair<Toolchain, String> test_data : tests) {
+				String test_id = test_data.Value;
+				Toolchain toolchain = test_data.Key;
+				JsonObject res = tm.run(br, builderID, toolchain, test_id, d.code, null);
 				if (res.getNumber("code").Value == 0) {
 					if (test_id.contains("debug")) {
 						deb_id = test_id;

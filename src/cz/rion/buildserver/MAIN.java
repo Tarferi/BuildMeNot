@@ -10,6 +10,7 @@ import javax.swing.WindowConstants;
 
 import cz.rion.buildserver.db.RuntimeDB;
 import cz.rion.buildserver.db.StaticDB;
+import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.exceptions.CompressionException;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.exceptions.HTTPServerException;
@@ -33,7 +34,9 @@ public class MAIN {
 		try {
 			StaticDB sdb = new StaticDB("static.sqlite");
 			RuntimeDB db = new RuntimeDB("data.sqlite", sdb);
-			db.updateStatsForAllUsers();
+			for (Toolchain toolchain : sdb.getAllToolchains()) {
+				db.updateStatsForAllUsers(toolchain.getName());
+			}
 		} catch (DatabaseException e) {
 			e.printStackTrace();
 		}
@@ -71,7 +74,7 @@ public class MAIN {
 			e.printStackTrace();
 		}
 	}
-	
+
 	public static void main(String[] args) throws InvocationTargetException, InterruptedException {
 		setUI();
 		if (Settings.RunOnlyUI()) {

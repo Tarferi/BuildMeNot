@@ -4,12 +4,10 @@ import cz.rion.buildserver.db.RuntimeDB.BadResults;
 import cz.rion.buildserver.test.TestManager.TestInput;
 import cz.rion.buildserver.test.TestManager.TestResult;
 
-public interface AsmTest {
+public interface GenericTest {
 
-	public String VerifyCode(BadResults badResults, String asm);
-
-	public String GetFinalASM(String login, String asm);
-
+	public String getToolchain();
+	
 	public String getID();
 
 	public String getDescription();
@@ -18,12 +16,19 @@ public interface AsmTest {
 
 	public boolean isHidden();
 
-	public TestResult perform(BadResults badResults, TestInput input);
-
-	public String getInitialCode();
-
 	public boolean isSecret();
+	
+	public String getSubmittedCode();
+	
+	public TestResult perform(BadResults badResults, TestInput input);
+	
+	/*
+	
+	public String VerifyCode(BadResults badResults, String asm);
+	
+	public String GetFinalCode(String login, String asm);
 
 	public String[] getAllowedInstructions();
+	*/
 
 }
