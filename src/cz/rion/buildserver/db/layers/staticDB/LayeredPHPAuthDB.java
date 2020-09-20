@@ -5,7 +5,6 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
 import java.net.URI;
-import java.util.List;
 
 import javax.net.ssl.SSLSocketFactory;
 
@@ -18,36 +17,45 @@ import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 
 public class LayeredPHPAuthDB extends LayeredConsoleOutputDB {
 
-	private static int DB_FILE_REMOTE_AUTH_BASE = 0x005FFFFF;
 	private static final String AuthFileName = "auth/index.php";
-	private static final Object syncer = new Object();
 
 	public LayeredPHPAuthDB(String dbName) throws DatabaseException {
 		super(dbName);
-	}
+		this.registerVirtualFile(new VirtualFile() {
 
-	@Override
-	public List<DatabaseFile> getFiles() {
-		List<DatabaseFile> lst = super.getFiles();
-		lst.add(new DatabaseFile(DB_FILE_REMOTE_AUTH_BASE, AuthFileName));
-		return lst;
-	}
+			@Override
+			public String read() throws DatabaseException {
+				JsonObject obj = new JsonObject();
+				obj.add("key", new JsonString(getKeyHash()));
+				obj.add("action", new JsonString("GET"));
+				String request = obj.getJsonString();
+				String str = TinyHTTPSClient.send("raw=" + encode(request));
+				if (str != null) {
+					if (str.startsWith("OK")) {
+						return str.substring(2);
+					}
+				}
+				return "Failed to read remote file";
+			}
 
-	@Override
-	public FileInfo createFile(String name, String contents) throws DatabaseException {
-		if (name.equals(AuthFileName)) {
-			throw new DatabaseException("Cannnot create " + name + ": reserved file name");
-		}
-		return super.createFile(name, contents);
-	}
+			@Override
+			public void write(String data) throws DatabaseException {
+				JsonObject obj = new JsonObject();
+				obj.add("key", new JsonString(getKeyHash()));
+				obj.add("action", new JsonString("PUT"));
+				obj.add("data", new JsonString(data));
+				String request = obj.getJsonString();
+				if (!TinyHTTPSClient.send("raw=" + encode(request)).equals("OK")) {
+					throw new DatabaseException("Failed to save remote auth file");
+				}
+			}
 
-	private boolean write(String contents) {
-		JsonObject obj = new JsonObject();
-		obj.add("key", new JsonString(getKeyHash()));
-		obj.add("action", new JsonString("PUT"));
-		obj.add("data", new JsonString(contents));
-		String request = obj.getJsonString();
-		return TinyHTTPSClient.send("raw=" + encode(request)).equals("OK");
+			@Override
+			public String getName() {
+				return AuthFileName;
+			}
+
+		});
 	}
 
 	private String getKeyHash() {
@@ -89,61 +97,6 @@ public class LayeredPHPAuthDB extends LayeredConsoleOutputDB {
 			result[(i * 2) + 1] = (byte) c2;
 		}
 		return new String(result, Settings.getDefaultCharset());
-	}
-
-	private String read() {
-		JsonObject obj = new JsonObject();
-		obj.add("key", new JsonString(getKeyHash()));
-		obj.add("action", new JsonString("GET"));
-		String request = obj.getJsonString();
-		String str = TinyHTTPSClient.send("raw=" + encode(request));
-		if (str != null) {
-			if (str.startsWith("OK")) {
-				return str.substring(2);
-			}
-		}
-		return "Failed to read remote file";
-	}
-
-	@Override
-	public void storeFile(DatabaseFile file, String newFileName, String newContents) {
-		if (file.ID == DB_FILE_REMOTE_AUTH_BASE) {
-			synchronized (syncer) {
-				write(newContents);
-			}
-		} else {
-			super.storeFile(file, newFileName, newContents);
-		}
-	}
-
-	private FileInfo getFile() throws DatabaseException {
-		synchronized (syncer) {
-			String fc = read();
-			return new FileInfo(DB_FILE_REMOTE_AUTH_BASE, AuthFileName, fc);
-		}
-	}
-
-	@Override
-	public FileInfo loadFile(String name, boolean decodeBigString) {
-		if (name.equals(AuthFileName)) {
-			try {
-				return getFile();
-			} catch (DatabaseException e) {
-				e.printStackTrace();
-				return null;
-			}
-		} else {
-			return super.loadFile(name, decodeBigString);
-		}
-	}
-
-	@Override
-	public FileInfo getFile(int fileID, boolean decodeBigString) throws DatabaseException {
-		if (fileID == DB_FILE_REMOTE_AUTH_BASE) {
-			return getFile();
-		} else {
-			return super.getFile(fileID, decodeBigString);
-		}
 	}
 
 	private static class TinyHTTPSClient {

@@ -250,8 +250,6 @@ public class LayeredPermissionDB extends LayeredTestDB {
 			JsonArray res = this.select(tableName, new TableField[] { getField(tableName, "ID") }, false, new ComparisionField(getField(tableName, "name"), name));
 			if (res.asArray().Value.isEmpty()) {
 				this.insert(tableName, new ValuedField(this.getField(tableName, "parent_group_id"), 0), new ValuedField(this.getField(tableName, "name"), name), new ValuedField(this.getField(tableName, "permissions"), "[]"));
-				// this.execute("INSERT INTO groups (parent_group_id, name, permissions) VALUES
-				// (?, '?', '?')", 0, name, "[]");
 				res = this.select(tableName, new TableField[] { getField(tableName, "ID") }, false, new ComparisionField(getField(tableName, "name"), name));
 				if (res.asArray().Value.isEmpty()) {
 					throw new Exception("Failed to create new group");
@@ -273,9 +271,6 @@ public class LayeredPermissionDB extends LayeredTestDB {
 					final String tableName2 = "user_group";
 
 					res = this.select(usersTableName, new TableField[] { getField(usersTableName, "login") }, new ComparisionField[] { new ComparisionField(getField(tableName2, "group_id"), groupID) }, new TableJoin[] { new TableJoin(getField(tableName2, "user_id"), getField(usersTableName, "ID")) }, false);
-					// res = select("SELECT users.login FROM users, users_group WHERE
-					// users_group.group_id = ? and users_group.user_id = users.ID",
-					// groupID).getJSON();
 					if (res != null) {
 						if (res.isArray()) {
 							for (JsonValue val : res.asArray().Value) {
@@ -288,8 +283,6 @@ public class LayeredPermissionDB extends LayeredTestDB {
 						if (!presenceInGroup.containsKey(member) && usersByID.containsKey(member)) {
 							int userID = usersByID.get(member);
 							this.insert(tableName2, new ValuedField(this.getField(tableName2, "user_id"), userID), new ValuedField(this.getField(tableName2, "group_id"), groupID), new ValuedField(this.getField(tableName2, "primary_group"), 1));
-							// this.execute("INSERT INTO users_group (user_id, group_id, primary_group)
-							// VALUES (?, ?, ?)", userID, groupID, 1);
 						}
 					}
 				}
@@ -348,12 +341,8 @@ public class LayeredPermissionDB extends LayeredTestDB {
 
 		JsonArray res = this.select(tableName, new TableField[] { getField(tableName, "ID") }, false, new ComparisionField(getField(tableName, "name"), defaultGroupName));
 
-		// JsonArray res = this.select("SELECT ID FROM groups WHERE name = '?'",
-		// defaultGroupName).getJSON();
 		if (res.Value.isEmpty()) {
 			this.insert(tableName, new ValuedField(this.getField(tableName, "name"), defaultGroupName), new ValuedField(this.getField(tableName, "permissions"), "[]"));
-			// execute("INSERT INTO groups (name, permissions) VALUES ('?', '?')",
-			// defaultGroupName, "[]");
 			res = this.select(tableName, new TableField[] { getField(tableName, "ID") }, false, new ComparisionField(getField(tableName, "name"), defaultGroupName));
 		}
 		if (!res.Value.isEmpty()) {
@@ -375,8 +364,6 @@ public class LayeredPermissionDB extends LayeredTestDB {
 		try {
 			final String tableName = "users";
 			this.insert(tableName, new ValuedField(this.getField(tableName, "name"), name), new ValuedField(this.getField(tableName, "usergroup"), group), new ValuedField(this.getField(tableName, "login"), login), new ValuedField(this.getField(tableName, "permissions"), "[]"));
-			// this.execute("INSERT INTO users (name, usergroup, login, permissions) VALUES
-			// ('?', '?', '?', '?')", name, group, login, "[]");
 		} catch (DatabaseException e) {
 			e.printStackTrace();
 		}
