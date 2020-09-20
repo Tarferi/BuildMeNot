@@ -262,7 +262,7 @@ public class RemoteUIProviderServer {
 	private void writeUserList(InputPacketRequest inBuffer, MemoryBuffer outBuffer) {
 		for (Toolchain toolchain : sdb.getAllToolchains()) {
 			List<RuntimeUserStats> stats = this.db.getUserStats(toolchain.getName());
-			Map<String, LocalUser> statics = this.sdb.LoadedUsersByLogin;
+			Map<String, LocalUser> statics = this.sdb.getLoadedUsersByLogin(toolchain);
 
 			outBuffer.writeInt(UsersLoadedEvent.ID);
 			outBuffer.writeInt(stats.size());

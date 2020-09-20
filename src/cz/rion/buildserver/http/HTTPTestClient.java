@@ -52,7 +52,15 @@ public class HTTPTestClient extends HTTPGraphProviderClient {
 	}
 
 	@Override
-	public Toolchain getToolchain() {
+	public Toolchain getToolchain(HTTPRequest request) {
+		if(toolchain==null) {
+			String toolchain = sdb.getToolchainMapping(request.host);
+			try {
+				this.toolchain = sdb.getToolchain(toolchain == null ? "" : toolchain);
+			} catch (NoSuchToolchainException e) {
+				e.printStackTrace();
+			}
+		}
 		return toolchain;
 	}
 
@@ -335,7 +343,7 @@ public class HTTPTestClient extends HTTPGraphProviderClient {
 					} else { // Not authenticated
 						returnValue.add("code", new JsonNumber(53));
 						returnValue.add("result", new JsonString("Not logged in"));
-						returnValue.add("authUrl", new JsonString(Settings.getAuthURL()));
+						returnValue.add("authUrl", new JsonString(Settings.getAuthURL(toolchain.getName())));
 					}
 				}
 			}

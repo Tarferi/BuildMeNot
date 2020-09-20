@@ -5,25 +5,59 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.layers.common.LayeredDBFileWrapperDB;
+import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
-import cz.rion.buildserver.wrappers.FileReadException;
-import cz.rion.buildserver.wrappers.MyFS;
 
 public abstract class LayeredUserDB extends LayeredDBFileWrapperDB {
 
-	public final List<LocalUser> LoadedUsers = new ArrayList<>();
-	public final Map<String, LocalUser> LoadedUsersByLogin = new HashMap<>();
+	private static class PermissionContext {
+		public final List<LocalUser> LoadedUsers = new ArrayList<>();
+		public final Map<String, LocalUser> LoadedUsersByLogin = new HashMap<>();
+
+		public final String toolchain;
+		private final LayeredUserDB sdb;
+
+		private PermissionContext(String toolchain, LayeredUserDB sdb) {
+			this.toolchain = toolchain;
+			this.sdb = sdb;
+			reload();
+		}
+
+		public void reload() {
+			this.sdb.loadLocalUsers(toolchain, LoadedUsers, LoadedUsersByLogin);
+		}
+	}
+
+	public Map<String, LocalUser> getLoadedUsersByLogin(Toolchain toolchain) {
+		if (!mappings.containsKey(toolchain.getName())) {
+			mappings.put(toolchain.getName(), new PermissionContext(toolchain.getName(), this));
+		}
+		PermissionContext context = mappings.get(toolchain.getName());
+		return context.LoadedUsersByLogin;
+	}
+
+	public LocalUser getUser(String toolchain, String login) {
+		if (!mappings.containsKey(toolchain)) {
+			mappings.put(toolchain, new PermissionContext(toolchain, this));
+		}
+		PermissionContext context = mappings.get(toolchain);
+		if (context.LoadedUsersByLogin.containsKey(login)) {
+			return context.LoadedUsersByLogin.get(login);
+		} else {
+			return null;
+		}
+	}
+
+	private final Map<String, PermissionContext> mappings = new HashMap<>();
 
 	public LayeredUserDB(String dbName) throws DatabaseException {
 		super(dbName);
-		this.makeTable("users", KEY("ID"), TEXT("name"), TEXT("usergroup"), TEXT("login"), BIGTEXT("permissions"));
-		loadLocalUsers();
-		loadRemoteUsers();
+		this.dropTable("users");
+		this.makeTable("users", KEY("ID"), TEXT("name"), TEXT("usergroup"), TEXT("login"), BIGTEXT("permissions"), TEXT("toolchain"));
 	}
 
 	private static class RemoteUser {
@@ -49,24 +83,17 @@ public abstract class LayeredUserDB extends LayeredDBFileWrapperDB {
 		}
 	}
 
-	private final Map<String, String> getPrimaryGroups() throws DatabaseException {
+	private final Map<String, String> getPrimaryGroups(String toolchain) throws DatabaseException {
 		Map<String, String> mp = new HashMap<>();
 
 		final String usersTableName = "users";
 		final String groupsTableName = "groups";
 		final String userGroupsTableName = "users_group";
 
-		TableField[] fields = new TableField[] {
-				getField(groupsTableName, "name"),
-				getField(usersTableName, "login"),
-		};
-		ComparisionField[] comparators = new ComparisionField[] {
-				new ComparisionField(getField(userGroupsTableName, "primary_group"), 1)
-		};
+		TableField[] fields = new TableField[] { getField(groupsTableName, "name"), getField(usersTableName, "login"), };
+		ComparisionField[] comparators = new ComparisionField[] { new ComparisionField(getField(userGroupsTableName, "primary_group"), 1) };
 
-		TableJoin[] joins = new TableJoin[] {
-				new TableJoin(getField(usersTableName, "ID"), getField(userGroupsTableName, "user_id")),
-				new TableJoin(getField(groupsTableName, "ID"), getField(userGroupsTableName, "group_id")),
+		TableJoin[] joins = new TableJoin[] { new TableJoin(getField(usersTableName, "ID"), getField(userGroupsTableName, "user_id")), new TableJoin(getField(groupsTableName, "ID"), getField(userGroupsTableName, "group_id")),
 
 		};
 		JsonArray data = select(usersTableName, fields, comparators, joins, true);
@@ -77,14 +104,15 @@ public abstract class LayeredUserDB extends LayeredDBFileWrapperDB {
 		}
 		return mp;
 	}
-	
-	private final boolean loadLocalUsers() {
-		LoadedUsers.clear();
-		LoadedUsersByLogin.clear();
+
+	private final boolean loadLocalUsers(String toolchain, List<LocalUser> loadedUsers, Map<String, LocalUser> loadedUsersByLogin) {
+		loadedUsers.clear();
+		loadedUsersByLogin.clear();
+
 		try {
-			Map<String, String> primaryGroups = getPrimaryGroups();
+			Map<String, String> primaryGroups = getPrimaryGroups(toolchain);
 			final String tableName = "users";
-			JsonArray data = select(tableName, new TableField[] { getField(tableName, "ID"), getField(tableName, "name"), getField(tableName, "login"), getField(tableName, "usergroup") }, true);
+			JsonArray data = select(tableName, new TableField[] { getField(tableName, "ID"), getField(tableName, "name"), getField(tableName, "login"), getField(tableName, "usergroup") }, true, new ComparisionField(getField(tableName, "toolchain"), toolchain));
 			for (JsonValue val : data.Value) {
 				JsonObject obj = val.asObject();
 				int id = obj.getNumber("ID").Value;
@@ -93,8 +121,8 @@ public abstract class LayeredUserDB extends LayeredDBFileWrapperDB {
 				String login = obj.getString("login").Value;
 				String permGroup = primaryGroups.containsKey(login.toLowerCase()) ? primaryGroups.get(login.toLowerCase()) : "";
 				LocalUser user = new LocalUser(id, login, usergroup, name, permGroup);
-				LoadedUsers.add(user);
-				LoadedUsersByLogin.put(login, user);
+				loadedUsers.add(user);
+				loadedUsersByLogin.put(login, user);
 			}
 		} catch (DatabaseException e) {
 			e.printStackTrace();
@@ -103,70 +131,42 @@ public abstract class LayeredUserDB extends LayeredDBFileWrapperDB {
 		return false;
 	}
 
-	private final boolean loadRemoteUsers() throws DatabaseException {
-		if (!Settings.UsersRemoteUserDB()) {
-			return true;
-		}
-		JsonArray arr = null;
+	@Override
+	public boolean clearUsers(String toolchain) {
 		try {
-			String jsn = MyFS.readFile(Settings.GetRemoteUserDB());
-			JsonValue val = JsonValue.parse(jsn);
-			if (val.isArray()) {
-				arr = val.asArray();
-			} else {
-				return false;
-			}
-		} catch (FileReadException e) {
+			this.execute_raw("DELETE FROM users WHERE toolchain='?'", toolchain);
+		} catch (DatabaseException e) {
+			e.printStackTrace();
 			return false;
 		}
-		if (arr == null) {
-			return false;
+		if (mappings.containsKey(toolchain)) {
+			mappings.get(toolchain).reload();
 		}
-
-		List<LocalUser> toUpdate = new ArrayList<>();
-		List<RemoteUser> toCreate = new ArrayList<>();
-
-		for (JsonValue val : arr.Value) {
-			if (val.isObject()) {
-				JsonObject obj = val.asObject();
-				if (obj.containsString("Name") && obj.containsString("Group") && obj.containsString("Login")) {
-					String login = obj.getString("Login").Value;
-					String name = obj.getString("Name").Value;
-					String group = obj.getString("Group").Value;
-					if (LoadedUsersByLogin.containsKey(login.toLowerCase())) {
-						LocalUser known = LoadedUsersByLogin.get(login.toLowerCase());
-						if (!name.equals(known.FullName) || !group.equals(known.Group)) {
-							toUpdate.add(new LocalUser(known.ID, login, group, name, ""));
-						}
-						continue;
-					} else {
-						toCreate.add(new RemoteUser(login, group, name));
-						continue;
-					}
-				}
-			}
-			throw new DatabaseException("Incorrect user JSON format");
-		}
-
-		for (LocalUser user : toUpdate) {
-			try {
-				final String tableName = "users";
-				this.update(tableName, user.ID, new ValuedField(this.getField(tableName, "name"), user.FullName), new ValuedField(this.getField(tableName, "usergroup"), user.Group), new ValuedField(this.getField(tableName, "login"), user.Login));
-			} catch (DatabaseException e) {
-				e.printStackTrace();
-			}
-		}
-
-		for (RemoteUser user : toCreate) {
-			try {
-				final String tableName = "users";
-				this.insert(tableName, new ValuedField(this.getField(tableName, "name"), user.FullName), new ValuedField(this.getField(tableName, "usergroup"), user.Group), new ValuedField(this.getField(tableName, "login"), user.Login));
-			} catch (DatabaseException e) {
-				e.printStackTrace();
-			}
-		}
-		loadLocalUsers();
 		return true;
 	}
 
+	@Override
+	public boolean createUser(String toolchain, String login, String origin, String fullName, List<String> permissionGroups) {
+		final String tableName = "users";
+		JsonArray res;
+		try {
+			res = this.select(tableName, new TableField[] { getField(tableName, "ID") }, false, new ComparisionField(getField(tableName, "toolchain"), toolchain), new ComparisionField(getField(tableName, "login"), login));
+			if (res.Value.size() == 0) {
+				return this.insert(tableName, new ValuedField(this.getField(tableName, "name"), fullName), new ValuedField(this.getField(tableName, "permissions"), "[]"), new ValuedField(this.getField(tableName, "usergroup"), origin), new ValuedField(this.getField(tableName, "login"), login), new ValuedField(this.getField(tableName, "toolchain"), toolchain));
+			} else if (res.Value.size() == 1) {
+				if (res.Value.get(0).isObject()) {
+					if (res.Value.get(0).asObject().containsNumber("ID")) {
+						int id = res.Value.get(0).asObject().getNumber("ID").Value;
+						return this.update(tableName, id, new ValuedField(this.getField(tableName, "name"), fullName), new ValuedField(this.getField(tableName, "permissions"), "[]"), new ValuedField(this.getField(tableName, "usergroup"), origin), new ValuedField(this.getField(tableName, "login"), login), new ValuedField(this.getField(tableName, "toolchain"), toolchain));
+					}
+				}
+				return false;
+			} else { // Multiple accounts in the same toolchain?
+				return false;
+			}
+		} catch (DatabaseException e) {
+			e.printStackTrace();
+			return false;
+		}
+	}
 }

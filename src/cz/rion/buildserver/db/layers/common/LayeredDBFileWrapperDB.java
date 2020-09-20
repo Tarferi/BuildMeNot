@@ -9,8 +9,7 @@ import java.util.regex.Pattern;
 
 import cz.rion.buildserver.db.RuntimeDB;
 import cz.rion.buildserver.db.StaticDB;
-import cz.rion.buildserver.db.layers.staticDB.LayeredFilesDB;
-import cz.rion.buildserver.db.layers.staticDB.LayeredVirtualFilesDB;
+import cz.rion.buildserver.db.layers.staticDB.LayeredImportDB;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
@@ -19,7 +18,7 @@ import cz.rion.buildserver.json.JsonValue.JsonString;
 import cz.rion.buildserver.json.JsonValue.JsonNumber;
 import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 
-public class LayeredDBFileWrapperDB extends LayeredVirtualFilesDB {
+public abstract class LayeredDBFileWrapperDB extends LayeredImportDB {
 
 	public static final Pattern FreeSQLSyntaxMatcher = Pattern.compile("(LOGIN|TEXT|BIGTEXT|INT|DATE)\\((\\w+)\\)", Pattern.MULTILINE);
 

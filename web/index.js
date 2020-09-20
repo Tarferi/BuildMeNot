@@ -649,9 +649,9 @@ var tester = function() {
 			self.setAllTestsEnabled(false);
 			self.setBlockTimeout(then);
 		}
-		if(!localStorage.getItem("rion.seen_faq")) {
-			localStorage.setItem("rion.seen_faq",1);
-			window.setTimeout(showFaq, 1000);
+		if(!localStorage.getItem("rion.seen_faq." + self.TOOLCHAIN)) {
+			localStorage.setItem("rion.seen_faq." + self.TOOLCHAIN, 1);
+			window.setTimeout(self.showFaq, 1000);
 		}
 	    window.setTimeout(self.mres, 1000);
 	}

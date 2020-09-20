@@ -36,7 +36,7 @@ public class HTTPAuthClient extends HTTPTestClient {
 		cookieLines.add("token=deleted; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT");
 
 		HTTPResponse resp = new HTTPResponse(request.protocol, 307, "Logout", new byte[0], null, cookieLines);
-		resp.addAdditionalHeaderField("Location", Settings.getAuthURL() + "?action=logout");
+		resp.addAdditionalHeaderField("Location", Settings.getAuthURL(getToolchain(request).getName()) + "?action=logout");
 		return resp;
 	}
 
@@ -119,8 +119,8 @@ public class HTTPAuthClient extends HTTPTestClient {
 				return null;
 			}
 		}
-		
-		String redirectLocation = Settings.getAuthURL() + "?cache=" + RuntimeDB.randomstr(32);
+
+		String redirectLocation = Settings.getAuthURL(getToolchain(request).getName()) + "?cache=" + RuntimeDB.randomstr(32);
 		String redirectMessage = "OK but login first";
 		List<String> cookieLines = request.cookiesLines;
 
@@ -146,7 +146,7 @@ public class HTTPAuthClient extends HTTPTestClient {
 		byte[] data = new byte[0];
 		HTTPResponse resp = new HTTPResponse(request.protocol, 307, redirectMessage, data, null, cookieLines);
 		resp.addAdditionalHeaderField("Location", redirectLocation);
-		
+
 		return resp;
 	}
 

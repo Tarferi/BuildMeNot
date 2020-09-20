@@ -202,8 +202,8 @@ public class Settings {
 		return instance.authURL.asString() != null;
 	}
 
-	public static String getAuthURL() {
-		return instance.authURL.asString();
+	public static String getAuthURL(String toolchain) {
+		return instance.authURL.asString() + "/" + toolchain.toLowerCase();
 	}
 
 	public static String getMainDB() {
