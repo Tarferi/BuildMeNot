@@ -25,6 +25,8 @@ import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.json.JsonValue.JsonString;
 import cz.rion.buildserver.test.GenericTest;
 import cz.rion.buildserver.test.TestManager;
+import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
+import cz.rion.buildserver.utils.CachedData;
 
 public class HTTPTestClient extends HTTPGraphProviderClient {
 
@@ -47,6 +49,11 @@ public class HTTPTestClient extends HTTPGraphProviderClient {
 
 	public String getASM() {
 		return asm;
+	}
+
+	@Override
+	public Toolchain getToolchain() {
+		return toolchain;
 	}
 
 	@Override
@@ -90,7 +97,28 @@ public class HTTPTestClient extends HTTPGraphProviderClient {
 		html = super.handleHTMLManipulation(host, path, html);
 		String toolchain = this.toolchain == null ? "alert(\"Nepodarilo se nacist toolchain\");" : this.toolchain.getName();
 		html = html.replace("$TOOLCHAIN$", toolchain);
+		html = html.replace("$FAQ_CONTENTS$", getFAQ(toolchain));
 		return html;
+	}
+
+	private final Map<String, CachedData<String>> faqCaches = new HashMap<>();
+
+	private String getFAQ(final String toolchain) {
+		String key = "FAQs/" + toolchain + ".faq";
+		if (!faqCaches.containsKey(key)) {
+			faqCaches.put(key, new CachedData<String>(10) {
+
+				@Override
+				protected String update() {
+					FileInfo fo = sdb.loadFile("FAQs/" + toolchain + ".faq", true);
+					if (fo == null) {
+						return "FAQ neni pro tento toolchain dostupne";
+					}
+					return fo.Contents;
+				}
+			});
+		}
+		return faqCaches.get(key).get();
 	}
 
 	private static String decode(byte[] data) throws HTTPClientException {
@@ -294,7 +322,7 @@ public class HTTPTestClient extends HTTPGraphProviderClient {
 										returnValue.add("wait", new JsonNumber(0, (badResults.AllowNext.getTime()) + ""));
 									}
 								} else if (act.equals("GRAPHS")) {
-									JsonValue graphs = this.loadGraphs();
+									JsonValue graphs = this.loadGraphs(toolchain.getName());
 									returnValue.add("code", new JsonNumber(0));
 									returnValue.add("data", graphs == null ? new JsonArray(new ArrayList<JsonValue>()) : graphs);
 									this.setIntention(HTTPClientIntentType.COLLECT_TESTS);

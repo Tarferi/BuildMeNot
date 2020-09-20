@@ -9,6 +9,7 @@ import java.util.Map;
 import cz.rion.buildserver.db.RuntimeDB;
 import cz.rion.buildserver.db.StaticDB;
 import cz.rion.buildserver.db.layers.common.LayeredDBFileWrapperDB;
+import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.db.layers.staticDB.LayeredFilesDB.DatabaseFile;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.exceptions.HTTPClientException;
@@ -17,7 +18,7 @@ import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 
-public class HTTPGraphProviderClient extends HTTPFileProviderClient {
+public abstract class HTTPGraphProviderClient extends HTTPFileProviderClient {
 
 	private final StaticDB sdb;
 	private final RuntimeDB db;
@@ -27,6 +28,8 @@ public class HTTPGraphProviderClient extends HTTPFileProviderClient {
 		this.sdb = sdb;
 		this.db = rdb;
 	}
+
+	protected abstract Toolchain getToolchain();
 
 	private FileInfo getFile(int fileID, boolean decodeBigString) {
 		FileInfo fo = null;
@@ -45,11 +48,37 @@ public class HTTPGraphProviderClient extends HTTPFileProviderClient {
 		return fo;
 	}
 
-	private FileInfo loadView(Map<String, Integer> fileIds, String view, boolean decodeBigString) {
+	private FileInfo loadView(Map<String, Integer> fileIds, String view, boolean decodeBigString, String toolchain) {
 		if (fileIds.containsKey(view)) {
 			int fileID = fileIds.get(view);
 			FileInfo fo = LayeredDBFileWrapperDB.processPostLoadedFile(db, LayeredDBFileWrapperDB.processPostLoadedFile(sdb, getFile(fileID, decodeBigString), decodeBigString), decodeBigString);
-			return fo;
+			if (fo != null) {
+				JsonValue jsn = JsonValue.parse(fo.Contents);
+				if (jsn != null) {
+					if (jsn.isObject()) {
+						JsonObject obj = jsn.asObject();
+						if (obj.containsArray("result")) {
+							JsonArray arr = obj.getArray("result");
+							JsonArray newArr = new JsonArray(new ArrayList<JsonValue>());
+							for (JsonValue val : arr.Value) {
+								if (val.isObject()) {
+									JsonObject xobj = val.asObject();
+									if (xobj.containsString("toolchain")) {
+										String tc = xobj.getString("toolchain").Value;
+										if (tc.equals(toolchain)) {
+											newArr.add(obj);
+										}
+									}
+								}
+							}
+							obj.remove("result");
+							obj.add("result", newArr);
+							return new FileInfo(fo.ID, fo.FileName, obj.getJsonString());
+						}
+					}
+				}
+			}
+			return null;
 		}
 		return null;
 	}
@@ -57,7 +86,7 @@ public class HTTPGraphProviderClient extends HTTPFileProviderClient {
 	private static JsonValue __cache = null;
 	private static long cacheCreation = 0;
 
-	protected JsonValue loadGraphs() {
+	protected JsonValue loadGraphs(String toolchain) {
 		long now = new Date().getTime();
 		long diff = now - cacheCreation;
 		if (diff < 1000 * 60) {
@@ -91,7 +120,7 @@ public class HTTPGraphProviderClient extends HTTPFileProviderClient {
 
 							JsonObject res = new JsonObject();
 
-							FileInfo loadedView = loadView(fileIds, view, true);
+							FileInfo loadedView = loadView(fileIds, view, true, toolchain);
 							if (loadedView == null) {
 								continue;
 							}
@@ -172,7 +201,7 @@ public class HTTPGraphProviderClient extends HTTPFileProviderClient {
 			int returnCode = 200;
 			String type = "text/json;";
 			String returnCodeDescription = "OK";
-			JsonValue graphs = loadGraphs();
+			JsonValue graphs = loadGraphs(this.getToolchain().getName());
 			String data = graphs == null ? "[]" : graphs.getJsonString();
 			this.setIntention(HTTPClientIntentType.GET_RESOURCE);
 			return new HTTPResponse(request.protocol, returnCode, returnCodeDescription, data, type, request.cookiesLines);
