@@ -1,5 +1,7 @@
 package cz.rion.buildserver.http;
 
+import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
+
 public abstract class AbstractHTTPClient {
 
 	public static enum HTTPClientIntentType {
@@ -11,7 +13,10 @@ public abstract class AbstractHTTPClient {
 	protected void setIntention(HTTPClientIntentType intention) {
 		this.intention = intention;
 	}
-	
+
+	protected void ToolChainKnown(Toolchain toolchain) {
+	}
+
 	public HTTPClientIntentType getIntention() {
 		return intention;
 	}
