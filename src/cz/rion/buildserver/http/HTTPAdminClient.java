@@ -17,7 +17,7 @@ import cz.rion.buildserver.json.JsonValue.JsonNumber;
 import cz.rion.buildserver.json.JsonValue.JsonString;
 import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 
-public class HTTPAdminClient extends HTTPParserClient {
+public abstract class HTTPAdminClient extends HTTPParserClient {
 
 	private final StaticDB sdb;
 	private final RuntimeDB db;
@@ -94,153 +94,13 @@ public class HTTPAdminClient extends HTTPParserClient {
 		}
 	}
 
-	private static final short[] js_codingOffsets = new short[] {
-			228,
-			196,
-			225,
-			193,
-			269,
-			268,
-			271,
-			270,
-			235,
-			203,
-			233,
-			201,
-			283,
-			282,
-			237,
-			205,
-			239,
-			207,
-			314,
-			313,
-			328,
-			327,
-			246,
-			214,
-			243,
-			211,
-			345,
-			344,
-			341,
-			340,
-			353,
-			352,
-			357,
-			356,
-			252,
-			220,
-			250,
-			218,
-			367,
-			366,
-			253,
-			221,
-			255,
-			376,
-			382,
-			381
+	private static final short[] js_codingOffsets = new short[] { 228, 196, 225, 193, 269, 268, 271, 270, 235, 203, 233, 201, 283, 282, 237, 205, 239, 207, 314, 313, 328, 327, 246, 214, 243, 211, 345, 344, 341, 340, 353, 352, 357, 356, 252, 220, 250, 218, 367, 366, 253, 221, 255, 376, 382, 381
 
 	};
 
-	private static final int[] java_codingOffsets = new int[] {
-			50084,
-			50052,
-			50081,
-			50049,
-			50317,
-			50316,
-			50319,
-			50318,
-			50091,
-			50059,
-			50089,
-			50057,
-			50331,
-			50330,
-			50093,
-			50061,
-			50095,
-			50063,
-			50362,
-			50361,
-			50568,
-			50567,
-			50102,
-			50070,
-			50099,
-			50067,
-			50585,
-			50584,
-			50581,
-			50580,
-			50593,
-			50592,
-			50597,
-			50596,
-			50108,
-			50076,
-			50106,
-			50074,
-			50607,
-			50606,
-			50109,
-			50077,
-			50111,
-			50616,
-			50622,
-			50621
-	};
+	private static final int[] java_codingOffsets = new int[] { 50084, 50052, 50081, 50049, 50317, 50316, 50319, 50318, 50091, 50059, 50089, 50057, 50331, 50330, 50093, 50061, 50095, 50063, 50362, 50361, 50568, 50567, 50102, 50070, 50099, 50067, 50585, 50584, 50581, 50580, 50593, 50592, 50597, 50596, 50108, 50076, 50106, 50074, 50607, 50606, 50109, 50077, 50111, 50616, 50622, 50621 };
 
-	private static final char[] codingTable = new char[] {
-			'ä',
-			'Ä',
-			'á',
-			'Á',
-			'č',
-			'Č',
-			'ď',
-			'Ď',
-			'ë',
-			'Ë',
-			'é',
-			'É',
-			'ě',
-			'Ě',
-			'í',
-			'Í',
-			'ï',
-			'Ï',
-			'ĺ',
-			'Ĺ',
-			'ň',
-			'Ň',
-			'ö',
-			'Ö',
-			'ó',
-			'Ó',
-			'ř',
-			'Ř',
-			'ŕ',
-			'Ŕ',
-			'š',
-			'Š',
-			'ť',
-			'Ť',
-			'ü',
-			'Ü',
-			'ú',
-			'Ú',
-			'ů',
-			'Ů',
-			'ý',
-			'Ý',
-			'ÿ',
-			'Ÿ',
-			'ž',
-			'Ž'
-	};
+	private static final char[] codingTable = new char[] { 'ä', 'Ä', 'á', 'Á', 'č', 'Č', 'ď', 'Ď', 'ë', 'Ë', 'é', 'É', 'ě', 'Ě', 'í', 'Í', 'ï', 'Ï', 'ĺ', 'Ĺ', 'ň', 'Ň', 'ö', 'Ö', 'ó', 'Ó', 'ř', 'Ř', 'ŕ', 'Ŕ', 'š', 'Š', 'ť', 'Ť', 'ü', 'Ü', 'ú', 'Ú', 'ů', 'Ů', 'ý', 'Ý', 'ÿ', 'Ÿ', 'ž', 'Ž' };
 
 	private String specialDec(String data) {
 		byte[] result = new byte[data.length() / 2];
@@ -312,7 +172,7 @@ public class HTTPAdminClient extends HTTPParserClient {
 					String fileName = parts[1];
 					if (!fileName.isEmpty()) {
 						try {
-							sdb.createFile(fileName, "");
+							sdb.createFile(fileName, "", false);
 							result.add("code", new JsonNumber(0));
 							result.add("result", new JsonString("File created"));
 							sdb.adminLog(getAddress(), getPermissions().Login, "create", "create:0:" + fileName);

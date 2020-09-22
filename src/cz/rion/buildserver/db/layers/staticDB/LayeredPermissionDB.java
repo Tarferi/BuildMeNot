@@ -15,9 +15,11 @@ import cz.rion.buildserver.json.JsonValue.JsonString;
 import cz.rion.buildserver.permissions.Permission;
 import cz.rion.buildserver.permissions.PermissionBranch;
 import cz.rion.buildserver.permissions.WebPermission;
-import cz.rion.buildserver.wrappers.MyFS;
+import cz.rion.buildserver.utils.CachedData;
 
 public class LayeredPermissionDB extends LayeredTestDB {
+
+	private static final int PERMISSION_REFRESH_SEC = 0;
 
 	public static class PermissionManager {
 
@@ -29,12 +31,12 @@ public class LayeredPermissionDB extends LayeredTestDB {
 			this.defaultUsername = defaultUsername;
 		}
 
-		public UsersPermission getPermissionForLogin(int session_id, String login, int user_id) {
-			return new UsersPermission(session_id, login, user_id, db);
+		public UsersPermission getPermissionForLogin(String toolchain, int session_id, String login, int user_id) {
+			return new UsersPermission(toolchain, session_id, login, user_id, db);
 		}
 
-		public UsersPermission getDefaultPermission() {
-			return new UsersPermission(0, defaultUsername, 0, db);
+		public UsersPermission getDefaultPermission(String toolchain) {
+			return new UsersPermission(toolchain, 0, defaultUsername, 0, db);
 		}
 	}
 
@@ -49,6 +51,7 @@ public class LayeredPermissionDB extends LayeredTestDB {
 		private int StaticUserID;
 		public final int UserID;
 		private int SessionID;
+		private final String Toolchain;
 
 		public int getSessionID() {
 			return SessionID;
@@ -64,23 +67,24 @@ public class LayeredPermissionDB extends LayeredTestDB {
 			return obj;
 		}
 
-		private UsersPermission(int session_id, String login, int user_id, LayeredPermissionDB db) {
+		private UsersPermission(String toolchain, int session_id, String login, int user_id, LayeredPermissionDB db) {
 			this.db = db;
 			this.Login = login;
 			this.UserID = user_id;
 			this.SessionID = session_id;
+			this.Toolchain = toolchain;
 		}
 
-		public final boolean allowDetails(String toolchain, String test_id) {
-			return can(WebPermission.SeeDetails(toolchain, test_id));
+		public final boolean allowDetails(String test_id) {
+			return can(WebPermission.SeeDetails(Toolchain, test_id));
 		}
 
-		public final boolean allowSee(String toolchain, String test_id) {
-			return can(WebPermission.SeeTest(toolchain, test_id));
+		public final boolean allowSee(String test_id) {
+			return can(WebPermission.SeeTest(Toolchain, test_id));
 		}
 
-		public boolean allowExecute(String toolchain, String test_id) {
-			return can(WebPermission.ExecuteTest(toolchain, test_id));
+		public boolean allowExecute(String test_id) {
+			return can(WebPermission.ExecuteTest(Toolchain, test_id));
 		}
 
 		public final boolean allowFireFox() {
@@ -96,10 +100,10 @@ public class LayeredPermissionDB extends LayeredTestDB {
 			if (permissions == null) {
 				permissions = new Permission("");
 				primaries = new ArrayList<>();
-				db.getPermissionsFor(Login, permissions, primaries);
+				db.getPermissionsFor(Login, permissions, primaries, Toolchain);
 			}
 			if (fullName == null) {
-				Object[] parts = db.getFullNameAndGroup(Login);
+				Object[] parts = db.getFullNameAndGroup(Login, Toolchain);
 				fullName = (String) parts[0];
 				userGroup = (String) parts[1];
 				StaticUserID = (int) parts[2];
@@ -143,320 +147,376 @@ public class LayeredPermissionDB extends LayeredTestDB {
 		return manager;
 	}
 
-	protected LayeredPermissionDB(String dbName) throws DatabaseException {
-		super(dbName);
-		if (Settings.GetInitGroupsAndUsers()) {
-			if (Settings.GetInitGroupsAndUsers()) {
-				throw new DatabaseException("Absolutely fucking not");
+	public void getPermissionsFor(String login, Permission permissions, List<String> primaries, String toolchain) {
+		List<InternalUserGroupMemberShip> groups = getUserGroups(login, toolchain);
+		if (groups != null) {
+			for (InternalUserGroupMemberShip group : groups) {
+				for (String perm : group.Group.getPermissions(true)) {
+					permissions.add(new PermissionBranch(perm));
+				}
+				if (group.isPrimary) {
+					primaries.add(group.Group.Name);
+				}
 			}
-			this.dropTable("groups");
-			this.dropTable("users_group");
-		}
-		this.makeTable("groups", KEY("ID"), NUMBER("parent_group_id"), TEXT("name"), BIGTEXT("permissions"));
-		this.makeTable("users_group", KEY("ID"), NUMBER("user_id"), NUMBER("group_id"), NUMBER("primary_group"));
-		if (Settings.GetInitGroupsAndUsers()) {
-			if (Settings.GetInitGroupsAndUsers()) {
-				throw new DatabaseException("Absolutely fucking not");
-			}
-			handleInit();
 		}
 	}
 
-	private void handleInit() {
-		handleInit("Admins.", "admins.json");
-		handleInit("ISU2020.Teachers.", "isu_teachers.json");
-		handleInit("ISU2020.Students.", "isu_students.json");
-		linkGroups();
+	private class InternalUserGroup {
+		private final String Name;
+		private final int ID;
+		private final List<String> Permissions = new ArrayList<>();
+		private InternalUserGroup Parent;
+
+		private InternalUserGroup(int id, String name, String permissions, InternalUserGroup Parent) {
+			this.Name = name;
+			this.ID = id;
+			this.Parent = Parent;
+			JsonValue val = JsonValue.parse(permissions);
+			if (val != null) {
+				if (val.isArray()) {
+					for (JsonValue v : val.asArray().Value) {
+						if (v.isString()) {
+							Permissions.add(v.asString().Value);
+						}
+					}
+				}
+			}
+		}
+
+		public List<String> getPermissions(boolean includeParent) {
+			List<String> perms = new ArrayList<>();
+			perms.addAll(Permissions);
+			if (includeParent && Parent != null && Parent != this) {
+				perms.addAll(Parent.getPermissions(includeParent));
+			}
+			return perms;
+		}
 	}
 
-	private void linkGroups() {
-		final String tableName = "groups";
-		try {
-			String file = MyFS.readFile("groups.json");
-			if (file != null) {
-				JsonValue val = JsonValue.parse(file);
-				if (val != null) {
+	private class InternalUserGroupMemberShip {
+		public final boolean isPrimary;
+		public final InternalUserGroup Group;
+
+		private InternalUserGroupMemberShip(boolean primary, InternalUserGroup group) {
+			this.isPrimary = primary;
+			this.Group = group;
+		}
+	}
+
+	private class GroupsCacheCLS extends CachedData<Map<Integer, InternalUserGroup>> {
+
+		private String toolchain;
+
+		public GroupsCacheCLS(String toolchain) {
+			super(PERMISSION_REFRESH_SEC);
+			this.toolchain = toolchain;
+		}
+
+		@Override
+		protected Map<Integer, InternalUserGroup> update() {
+			Map<Integer, InternalUserGroup> ret = new HashMap<>();
+			final String tableName = "groups";
+			try {
+				final TableField groups_id = getField(tableName, "ID");
+				final TableField groups_name = getField(tableName, "name");
+				final TableField groups_permission = getField(tableName, "permissions");
+				final TableField groups_parent = getField(tableName, "parent_group_id");
+				final TableField groups_toolchain = getField(tableName, "toolchain");
+
+				final TableField[] fields = new TableField[] { groups_id, groups_name, groups_permission, groups_parent, groups_toolchain };
+				final ComparisionField[] comparators = new ComparisionField[] { new ComparisionField(groups_toolchain, toolchain) };
+				JsonArray res = select(tableName, fields, true, comparators);
+				Map<Integer, Integer> parents = new HashMap<>();
+				for (JsonValue val : res.Value) {
+					boolean ok = false;
 					if (val.isObject()) {
 						JsonObject obj = val.asObject();
-						for (int i = 0; i < 2; i++) { // Do it twice so linkage can be direct
-							file = "";
-							for (Entry<String, JsonValue> entry : obj.getEntries()) {
-								String name = entry.getKey();
-								JsonObject grp = entry.getValue().asObject();
-
-								int parentID = 0;
-								int id = 0;
-								String permissions = "[]";
-
-								if (grp.containsString("Parent")) {
-									String parent = grp.getString("Parent").Value;
-									JsonArray res = this.select(tableName, new TableField[] { getField(tableName, "ID") }, false, new ComparisionField(getField(tableName, "name"), parent));
-									// JsonArray res = this.select("SELECT * FROM groups WHERE name = '?'",
-									// parent).getJSON();
-									if (res != null) {
-										if (!res.Value.isEmpty()) {
-											parentID = res.Value.get(0).asObject().getNumber("ID").Value;
-										}
-									}
-								}
-
-								if (grp.containsArray("Permissions")) {
-									permissions = grp.getArray("Permissions").getJsonString();
-								}
-
-								// Select or create new
-								JsonArray res = this.select(tableName, new TableField[] { getField(tableName, "ID") }, false, new ComparisionField(getField(tableName, "name"), name));
-								if (res.Value.isEmpty()) {
-									this.insert(tableName, new ValuedField(this.getField(tableName, "parent_group_id"), 0), new ValuedField(this.getField(tableName, "name"), name), new ValuedField(this.getField(tableName, "permissions"), "[]"));
-									res = this.select(tableName, new TableField[] { getField(tableName, "ID") }, false, new ComparisionField(getField(tableName, "name"), name));
-								}
-								if (res.Value.isEmpty()) {
-									throw new Exception("Database error?");
-								}
-								id = res.Value.get(0).asObject().getNumber("ID").Value;
-								// Update
-								this.update(tableName, id, new ValuedField(this.getField(tableName, "parent_group_id"), parentID), new ValuedField(this.getField(tableName, "permissions"), permissions));
-							}
+						if (obj.containsNumber("ID") && obj.containsString("name") && obj.containsString("permissions") && obj.containsNumber("parent_group_id")) {
+							int id = obj.getNumber("ID").Value;
+							String name = obj.getString("name").Value;
+							String perms = obj.getString("permissions").Value;
+							int parent_id = obj.getNumber("parent_group_id").Value;
+							ret.put(id, new InternalUserGroup(id, name, perms, (InternalUserGroup) null));
+							parents.put(id, parent_id);
+							ok = true;
 						}
 					}
+					if (!ok) {
+						return null;
+					}
 				}
+				for (Entry<Integer, Integer> parent : parents.entrySet()) {
+					int group_id = parent.getKey();
+					int parent_id = parent.getValue();
+					if (parent_id == -1) {
+						continue;
+					} else if (ret.containsKey(parent_id) && ret.containsKey(group_id)) {
+						ret.get(group_id).Parent = ret.get(parent_id);
+					} else {
+						return null;
+					}
+				}
+
+				return ret;
+			} catch (Exception e) {
+				e.printStackTrace();
 			}
-		} catch (
-
-		Exception e) {
-			e.printStackTrace();
+			return null;
 		}
-	}
 
-	private void handleInit(String prefix, String fileName) {
-		try {
-			String file = MyFS.readFile(fileName);
-			if (file != null) {
-				JsonValue val = JsonValue.parse(file);
-				if (val != null) {
-					if (val.isObject()) {
-						handleInit(prefix, val.asObject());
-					}
-				}
-			}
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-	}
+	};
 
-	private void initIUSGroup(String name, List<String> members) throws Exception {
-		try {
-			final String tableName = "groups";
-			JsonArray res = this.select(tableName, new TableField[] { getField(tableName, "ID") }, false, new ComparisionField(getField(tableName, "name"), name));
-			if (res.asArray().Value.isEmpty()) {
-				this.insert(tableName, new ValuedField(this.getField(tableName, "parent_group_id"), 0), new ValuedField(this.getField(tableName, "name"), name), new ValuedField(this.getField(tableName, "permissions"), "[]"));
-				res = this.select(tableName, new TableField[] { getField(tableName, "ID") }, false, new ComparisionField(getField(tableName, "name"), name));
-				if (res.asArray().Value.isEmpty()) {
-					throw new Exception("Failed to create new group");
-				}
-			}
-			int groupID = res.asArray().Value.get(0).asObject().getNumber("ID").Value;
-			// Validate members
-			if (members != null) {
-				final String usersTableName = "users";
-				if (!members.isEmpty()) {
-					Map<String, Boolean> presenceInGroup = new HashMap<>();
-					Map<String, Integer> usersByID = new HashMap<>();
-					res = this.select(usersTableName, new TableField[] { getField(usersTableName, "ID") }, false);
-					for (JsonValue val : res.Value) {
-						int id = val.asObject().getNumber("ID").Value;
-						String login = val.asObject().getString("login").Value;
-						usersByID.put(login, id);
-					}
-					final String tableName2 = "user_group";
+	private final Map<String, GroupsCacheCLS> GroupCaches = new HashMap<>();
 
-					res = this.select(usersTableName, new TableField[] { getField(usersTableName, "login") }, new ComparisionField[] { new ComparisionField(getField(tableName2, "group_id"), groupID) }, new TableJoin[] { new TableJoin(getField(tableName2, "user_id"), getField(usersTableName, "ID")) }, false);
-					if (res != null) {
-						if (res.isArray()) {
-							for (JsonValue val : res.asArray().Value) {
-								String login = val.asObject().getString("login").Value;
-								presenceInGroup.put(login, true);
-							}
-						}
-					}
-					for (String member : members) {
-						if (!presenceInGroup.containsKey(member) && usersByID.containsKey(member)) {
-							int userID = usersByID.get(member);
-							this.insert(tableName2, new ValuedField(this.getField(tableName2, "user_id"), userID), new ValuedField(this.getField(tableName2, "group_id"), groupID), new ValuedField(this.getField(tableName2, "primary_group"), 1));
-						}
-					}
-				}
-			}
-		} catch (DatabaseException e) {
-			e.printStackTrace();
-		}
-	}
-
-	private void handleInit(String prefix, JsonObject groups) throws Exception {
-		for (Entry<String, JsonValue> group : groups.getEntries()) {
-			String name = group.getKey();
-			JsonValue val = group.getValue();
-			List<String> members = new ArrayList<>();
-			if (val.isArray()) {
-				JsonArray ar = val.asArray();
-				for (JsonValue v : ar.Value) {
-					if (v.isString()) {
-						String str = v.asString().Value;
-						members.add(str);
-					}
-				}
-				initIUSGroup(prefix + name, members);
-			}
-		}
-	}
-
-	private void parsePermResult(JsonValue res, Permission perms, List<Integer> inspectGroups, List<String> primary) {
-		if (res != null) {
-			if (!res.asArray().Value.isEmpty()) {
-				for (JsonValue val : res.asArray().Value) {
-					int parent = val.asObject().getNumber("parent_group_id").Value;
-					if (parent != 0) {
-						inspectGroups.add(parent);
-					}
-					if (val.asObject().containsNumber("primary_group") && val.asObject().containsString("name")) {
-						int sprimary = val.asObject().getNumber("primary_group").Value;
-						if (sprimary == 1) {
-							primary.add(val.asObject().getString("name").Value);
-						}
-					}
-					JsonValue permVal = JsonValue.parse(val.asObject().getString("permissions").Value);
-					if (permVal != null) {
-						for (JsonValue permValVal : permVal.asArray().Value) {
-							perms.add(Permission.getBranch(permValVal.asString().Value));
-						}
-					}
-				}
-			}
-		}
-	}
-
-	private int getDefaultGroupID() throws DatabaseException {
-		final String defaultGroupName = Settings.GetDefaultGroup();
-		final String tableName = "groups";
-
-		JsonArray res = this.select(tableName, new TableField[] { getField(tableName, "ID") }, false, new ComparisionField(getField(tableName, "name"), defaultGroupName));
-
-		if (res.Value.isEmpty()) {
-			this.insert(tableName, new ValuedField(this.getField(tableName, "name"), defaultGroupName), new ValuedField(this.getField(tableName, "permissions"), "[]"));
-			res = this.select(tableName, new TableField[] { getField(tableName, "ID") }, false, new ComparisionField(getField(tableName, "name"), defaultGroupName));
-		}
-		if (!res.Value.isEmpty()) {
-			return res.Value.get(0).asObject().getNumber("ID").Value;
-		}
-		return -1;
-	}
-
-	private int getUserIDFromLogin(String login) throws DatabaseException {
-		final String tableName = "users";
-		JsonArray res = this.select(tableName, new TableField[] { getField(tableName, "ID") }, false, new ComparisionField(getField(tableName, "login"), login));
-		if (!res.Value.isEmpty()) {
-			return res.Value.get(0).asObject().getNumber("ID").Value;
-		}
-		return -1;
-	}
-
-	private void addUser(String name, String group, String login) {
-		try {
-			final String tableName = "users";
-			this.insert(tableName, new ValuedField(this.getField(tableName, "name"), name), new ValuedField(this.getField(tableName, "usergroup"), group), new ValuedField(this.getField(tableName, "login"), login), new ValuedField(this.getField(tableName, "permissions"), "[]"));
-		} catch (DatabaseException e) {
-			e.printStackTrace();
-		}
-	}
-
-	private void getPermissionsFor(String login, Permission perms, List<String> primary) {
-		try {
-			List<Integer> inspectGroups = new ArrayList<>();
-
-			final String usersTableName = "users";
-			final String groupsTableName = "groups";
-			final String userGroupsTableName = "users_group";
-
-			final TableField[] fields = new TableField[] {
-					getField(usersTableName, "permissions").getRenamedInstance("up"),
-
-					getField(userGroupsTableName, "primary_group"),
-
-					getField(groupsTableName, "name"),
-					getField(groupsTableName, "parent_group_id"),
-					getField(groupsTableName, "permissions")
-			};
-			final ComparisionField[] comparators = new ComparisionField[] {
-					new ComparisionField(getField(usersTableName, "login"), login)
-			};
-
-			final TableJoin[] joins = new TableJoin[] {
-					new TableJoin(getField(usersTableName, "ID"), getField(userGroupsTableName, "user_id")),
-					new TableJoin(getField(groupsTableName, "ID"), getField(userGroupsTableName, "group_id"))
-			};
-
-			JsonArray res = this.select(usersTableName, fields, comparators, joins, true);
-
-			// JsonArray res = this.select("SELECT users.permissions as up,
-			// users_group.primary_group, groups.name, groups.parent_group_id,
-			// groups.permissions FROM users, groups, users_group WHERE groups.ID =
-			// users_group.group_id AND users_group.user_id = users.ID AND users.login =
-			// '?'", login).getJSON();
-			if (res.Value.isEmpty()) {
-				int userID = getUserIDFromLogin(login);
-				if (userID == -1) {
-					addUser(login, "FIT", login);
-					userID = getUserIDFromLogin(login);
-				}
-
-				int defaultGroupID = getDefaultGroupID();
-				if (userID >= 0 && defaultGroupID >= 0) {
-					final String tableName = "users_group";
-					this.insert(tableName, new ValuedField(this.getField(tableName, "user_id"), userID), new ValuedField(this.getField(tableName, "group_id"), defaultGroupID), new ValuedField(this.getField(tableName, "primary_group"), 1));
-					// this.execute("INSERT INTO users_group (user_id, group_id, primary_group)
-					// VALUES (?, ?, ?)", userID, defaultGroupID, 1);
-				}
+	private Map<Integer, InternalUserGroup> loadGroups(String toolchain) {
+		synchronized (GroupCaches) {
+			if (GroupCaches.containsKey(toolchain)) {
+				return GroupCaches.get(toolchain).get();
 			} else {
-				try {
-					for (JsonValue perm : JsonValue.parse(res.Value.get(0).asObject().getString("up").Value).asArray().Value) {
-						perms.add(Permission.getBranch(perm.asString().Value));
+				GroupsCacheCLS cache = new GroupsCacheCLS(toolchain);
+				GroupCaches.put(toolchain, cache);
+				return cache.get();
+			}
+		}
+	}
+
+	private List<InternalUserGroupMemberShip> getUserMemberships(String toolchain, int userID) {
+		Map<Integer, InternalUserGroup> groups = loadGroups(toolchain);
+		if (groups != null) {
+			List<InternalUserGroupMemberShip> lst = new ArrayList<>();
+			final String tableName = "users_group";
+			try {
+				final TableField users_group_primary = getField(tableName, "primary_group");
+				final TableField users_group_user_id = getField(tableName, "user_id");
+				final TableField users_group_group_id = getField(tableName, "group_id");
+				final TableField groups_toolchain = getField(tableName, "toolchain");
+
+				final TableField[] fields = new TableField[] { users_group_primary, users_group_group_id };
+				final ComparisionField[] comparators = new ComparisionField[] { new ComparisionField(users_group_user_id, userID), new ComparisionField(groups_toolchain, toolchain) };
+				JsonArray res = select(tableName, fields, true, comparators);
+				for (JsonValue val : res.Value) {
+					boolean ok = false;
+					if (val.isObject()) {
+						JsonObject obj = val.asObject();
+						if (obj.containsNumber("primary_group") && obj.containsNumber("group_id")) {
+							int primary_group = obj.getNumber("primary_group").Value;
+							int group_id = obj.getNumber("group_id").Value;
+							if (!groups.containsKey(group_id)) {
+								return null;
+							}
+							lst.add(new InternalUserGroupMemberShip(primary_group == 1, groups.get(group_id)));
+							ok = true;
+						}
 					}
-				} catch (Exception e) {
-					e.printStackTrace();
+					if (!ok) {
+						return null;
+					}
+				}
+				return lst;
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		}
+		return null;
+	}
+
+	private List<InternalUserGroupMemberShip> getUserGroups(String login, String toolchain) {
+		Integer userID = this.getUserIDByLogin(login, toolchain);
+		if (userID != null) {
+			return getUserMemberships(toolchain, userID);
+		}
+		return null;
+	}
+
+	protected LayeredPermissionDB(String dbName) throws DatabaseException {
+		super(dbName);
+		this.makeTable("groups", KEY("ID"), NUMBER("parent_group_id"), TEXT("name"), BIGTEXT("permissions"), TEXT("toolchain"));
+		this.makeTable("users_group", KEY("ID"), NUMBER("user_id"), NUMBER("group_id"), NUMBER("primary_group"), TEXT("toolchain"));
+	}
+
+	@Override
+	public boolean clearUsers(String toolchain) {
+		if (super.clearUsers(toolchain)) {
+			try {
+				this.execute_raw("DELETE FROM groups WHERE toolchain = ?", toolchain);
+				this.execute_raw("DELETE FROM users_group WHERE toolchain = ?", toolchain);
+				return true;
+			} catch (DatabaseException e) {
+				e.printStackTrace();
+				return false;
+			}
+		}
+		return false;
+	}
+
+	private Integer getUserIDByLogin(String login, String toolchain) {
+		final String tableName = "users";
+		try {
+			JsonArray res = this.select(tableName, new TableField[] { getField(tableName, "ID") }, false, new ComparisionField(getField(tableName, "login"), login), new ComparisionField(getField(tableName, "toolchain"), toolchain));
+			if (res.Value.size() == 1) {
+				JsonValue val = res.Value.get(0);
+				if (val.isObject()) {
+					if (val.asObject().containsNumber("ID")) {
+						return val.asObject().getNumber("ID").Value;
+					}
 				}
 			}
-			parsePermResult(res, perms, inspectGroups, primary);
-			while (!inspectGroups.isEmpty()) {
-				int id = inspectGroups.remove(0);
-
-				final String tableName = "groups";
-				res = this.select(tableName, new TableField[] { getField(tableName, "parent_group_id"), getField(tableName, "permissions") }, true, new ComparisionField(getField(tableName, "ID"), id));
-				parsePermResult(res, perms, inspectGroups, primary);
-			}
-
 		} catch (DatabaseException e) {
 			e.printStackTrace();
 		}
+		return null;
 	}
 
-	public Object[] getFullNameAndGroup(String login) {
+	private Integer createGroup(String toolchain, int parentID, String child, String newPermissions, boolean create) {
+		final String tableName = "groups";
 		try {
-			final String tableName = "users";
-			JsonArray res = this.select(tableName, new TableField[] { getField(tableName, "name"), getField(tableName, "usergroup"), getField(tableName, "ID") }, true, new ComparisionField(getField(tableName, "login"), login));
-			if (!res.Value.isEmpty()) {
-				String name = res.Value.get(0).asObject().getString("name").Value;
-				String grp = res.Value.get(0).asObject().getString("usergroup").Value;
-				int id = res.Value.get(0).asObject().getNumber("ID").Value;
-				return new Object[] { name, grp, id };
+			JsonArray res = this.select(tableName, new TableField[] { getField(tableName, "ID") }, false, new ComparisionField(getField(tableName, "name"), child), new ComparisionField(getField(tableName, "toolchain"), toolchain));
+			if (res.Value.size() == 1) { // Exists
+				JsonValue val = res.Value.get(0);
+				if (val.isObject()) {
+					if (val.asObject().containsNumber("ID")) {
+						int id = val.asObject().getNumber("ID").Value;
+						if (newPermissions != null) { // Replace permissions
+							if (this.update(tableName, id, new ValuedField(getField(tableName, "permissions"), newPermissions), new ValuedField(getField(tableName, "parent_group_id"), parentID))) {
+								return id;
+							}
+						} else { // No need to update permissions, just update parent
+							if (this.update(tableName, id, new ValuedField(getField(tableName, "parent_group_id"), parentID))) {
+								return id;
+							}
+						}
+					}
+				}
+			} else if (res.Value.size() == 0 && create) { // It doesn't exist, create
+				newPermissions = newPermissions == null ? "[]" : newPermissions;
+				if (this.insert(tableName, new ValuedField(getField(tableName, "permissions"), newPermissions), new ValuedField(getField(tableName, "name"), child), new ValuedField(getField(tableName, "parent_group_id"), parentID), new ValuedField(getField(tableName, "toolchain"), toolchain))) {
+					res = this.select(tableName, new TableField[] { getField(tableName, "ID") }, false, new ComparisionField(getField(tableName, "name"), child), new ComparisionField(getField(tableName, "toolchain"), toolchain));
+					if (res.Value.size() == 1) { // Exists
+						JsonValue val = res.Value.get(0);
+						if (val.isObject()) {
+							if (val.asObject().containsNumber("ID")) {
+								int id = val.asObject().getNumber("ID").Value;
+								return id;
+							}
+						}
+
+					}
+				}
 			}
 		} catch (DatabaseException e) {
 			e.printStackTrace();
 		}
-		return new Object[] { login, Settings.GetDefaultGroup(), 0 };
+		return null;
 	}
 
-	public UsersPermission loadPermissions(int session_id, String login, int user_id) {
-		return new UsersPermission(session_id, login, user_id, this);
+	private boolean assignGroup(String toolchain, int groupID, int userID, boolean primary) {
+		final String tableName = "users_group";
+		int newPrimary = primary ? 1 : 0;
+		try {
+			JsonArray res = this.select(tableName, new TableField[] { getField(tableName, "ID"), getField(tableName, "primary_group") }, false, new ComparisionField(getField(tableName, "user_id"), userID), new ComparisionField(getField(tableName, "group_id"), groupID), new ComparisionField(getField(tableName, "toolchain"), toolchain));
+			if (res.Value.size() == 1) { // Exists
+				JsonValue val = res.Value.get(0);
+				if (val.isObject()) {
+					if (val.asObject().containsNumber("ID") && val.asObject().containsNumber("primary_group")) {
+						int id = val.asObject().getNumber("ID").Value;
+						int primary_group = val.asObject().getNumber("primary_group").Value;
+						if (primary_group != newPrimary) { // Update primary
+							return this.update(tableName, id, new ValuedField(getField(tableName, "primary_group"), newPrimary));
+						} else { // Current data is valid
+							return true;
+						}
+					}
+				}
+			} else if (res.Value.size() == 0) { // It doesn't exist, create
+				return this.insert(tableName, new ValuedField(getField(tableName, "user_id"), userID), new ValuedField(getField(tableName, "group_id"), groupID), new ValuedField(getField(tableName, "primary_group"), newPrimary), new ValuedField(getField(tableName, "toolchain"), toolchain));
+			}
+		} catch (DatabaseException e) {
+			e.printStackTrace();
+		}
+		return false;
 	}
 
+	private Integer getGroupIDByName(String toolchain, String group) {
+		return getGroupIDByName(toolchain, group, null);
+	}
+
+	private Integer getGroupIDByName(String toolchain, String group, Integer parentID) {
+		if (group.trim().isEmpty()) {
+			return null;
+		}
+
+		String[] parts = group.trim().split("\\.");
+		StringBuilder total = new StringBuilder();
+
+		Integer lastID = parentID;
+		for (int i = 0; i < parts.length; i++) {
+			String part = parts[i].trim();
+			String currentName = i == 0 ? part : total.toString() + "." + part;
+			lastID = createGroup(toolchain, lastID, currentName, null, parentID != null);
+			if (lastID == null) {
+				return null;
+			}
+			total.append(i == 0 ? part : "." + part);
+		}
+		return lastID;
+	}
+
+	@Override
+	public Integer getRootPermissionGroup(String toolchain, String name) {
+		return createGroup(toolchain, -1, name, null, true);
+	}
+
+	@Override
+	public boolean addPermission(String toolchain, String group, String permission) {
+		Map<Integer, InternalUserGroup> groups = loadGroups(toolchain);
+		if (groups != null) {
+			for (Entry<Integer, InternalUserGroup> entry : groups.entrySet()) {
+				if (entry.getValue().Name.equals(group)) {
+					int parentID = entry.getValue().Parent == null ? -1 : entry.getValue().Parent.ID;
+					JsonArray ja = new JsonArray(new ArrayList<JsonValue>());
+					boolean add = true;
+					for (String perm : entry.getValue().getPermissions(false)) {
+						ja.add(new JsonString(perm));
+						if (permission.trim().equals(perm)) {
+							add = false;
+						}
+					}
+					if (add) {
+						ja.add(new JsonString(permission.trim()));
+					}
+					if (this.createGroup(toolchain, parentID, group, ja.getJsonString(), true) == null) {
+						return false;
+					}
+
+				}
+			}
+			return true;
+		}
+		return false;
+	}
+
+	@Override
+	public boolean createUser(String toolchain, String login, String origin, String fullName, List<String> permissionGroups, int rootPermissionGroupID) {
+		if (super.createUser(toolchain, login, origin, fullName, permissionGroups, rootPermissionGroupID)) { // Create row in "users" table
+
+			// Get the user ID and verify that it has all the groups
+			Integer userID = getUserIDByLogin(login, toolchain);
+
+			for (String group : permissionGroups) {
+				Integer groupID = getGroupIDByName(toolchain, group, rootPermissionGroupID);
+				if (groupID == null) {
+					return false;
+				}
+				if (!assignGroup(toolchain, groupID, userID, true)) {
+					return false;
+				}
+			}
+
+			if (userID == null) {
+				return false;
+			}
+			return true;
+		}
+		return false;
+	}
 }

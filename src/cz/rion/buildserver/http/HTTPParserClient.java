@@ -10,23 +10,40 @@ import java.util.Map.Entry;
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.RuntimeDB;
 import cz.rion.buildserver.db.StaticDB;
+import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.exceptions.HTTPClientException;
+import cz.rion.buildserver.exceptions.NoSuchToolchainException;
 import cz.rion.buildserver.exceptions.SwitchClientException;
 
-public class HTTPParserClient extends HTTPPermissionClient {
+public abstract class HTTPParserClient extends HTTPPermissionClient {
 
 	public final int BuilderID;
 	private final CompatibleSocketClient client;
+	private Toolchain toolchain = null;
+	private final StaticDB sdb;
 
 	protected HTTPParserClient(CompatibleSocketClient client, int BuilderID, RuntimeDB rdb, StaticDB sdb) {
 		super(client, BuilderID, rdb, sdb);
 		this.client = client;
 		this.BuilderID = BuilderID;
+		this.sdb = sdb;
 	}
 
 	protected boolean objectionsAgainstRedirection(HTTPRequest request) {
 		return false;
+	}
+
+	private Toolchain getToolchain(HTTPRequest request) {
+		if (toolchain == null) {
+			String toolchain = sdb.getToolchainMapping(request.host);
+			try {
+				this.toolchain = sdb.getToolchain(toolchain == null ? "" : toolchain);
+			} catch (NoSuchToolchainException e) {
+				e.printStackTrace();
+			}
+		}
+		return toolchain;
 	}
 
 	protected void handle(HTTPResponse response) throws HTTPClientException {
@@ -91,7 +108,7 @@ public class HTTPParserClient extends HTTPPermissionClient {
 	protected String handleJSManipulation(String host, String path, String js) {
 		return js;
 	}
-	
+
 	protected String handleHTMLManipulation(String host, String path, String html) {
 		return html;
 	}
@@ -167,7 +184,9 @@ public class HTTPParserClient extends HTTPPermissionClient {
 			throw new HTTPClientException("Invalid hostname");
 		}
 		String host = header.get("host");
-		return new HTTPRequest(method, host, protocol, path, data, header, cookiesLines);
+		HTTPRequest req = new HTTPRequest(method, host, protocol, path, data, header, cookiesLines);
+		ToolChainKnown(getToolchain(req));
+		return req;
 	}
 
 	private HTTPRequest handle() throws HTTPClientException, SwitchClientException {

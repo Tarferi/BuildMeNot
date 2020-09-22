@@ -7,18 +7,19 @@ import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 import cz.rion.buildserver.wrappers.MyThread;
 
-public class LayeredThreadDB extends LayeredUserDB {
+public abstract class LayeredThreadDB extends LayeredUserDB {
 
 	private static int DB_THREAD_BASE = 0x002FFFFF;
 	private static final String ThreadsDir = "threads/";
 	private static final String ThreadsExtension = ".thread";
 	private static final String ThreadsAllThreads = "All Threads";
 
+	private final List<MyThread> threads = new ArrayList<>();
+	
 	public LayeredThreadDB(String dbName) throws DatabaseException {
 		super(dbName);
 	}
 
-	private final List<MyThread> threads = new ArrayList<>();
 
 	@Override
 	public List<DatabaseFile> getFiles() {
@@ -38,11 +39,11 @@ public class LayeredThreadDB extends LayeredUserDB {
 	}
 
 	@Override
-	public FileInfo createFile(String name, String contents) throws DatabaseException {
+	public FileInfo createFile(String name, String contents, boolean overwriteExisting) throws DatabaseException {
 		if (name.startsWith(ThreadsDir) && name.endsWith(ThreadsExtension)) {
 			throw new DatabaseException("Cannnot create " + name + ": reserved file name");
 		}
-		return super.createFile(name, contents);
+		return super.createFile(name, contents, overwriteExisting);
 	}
 
 	@Override
@@ -106,5 +107,4 @@ public class LayeredThreadDB extends LayeredUserDB {
 			return super.getFile(fileID, decodeBigString);
 		}
 	}
-
 }

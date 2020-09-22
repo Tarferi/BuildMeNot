@@ -8,47 +8,176 @@ import java.util.Map.Entry;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.exceptions.FileWriteException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
-import cz.rion.buildserver.wrappers.FileReadException;
+import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 import cz.rion.buildserver.wrappers.MyFS;
 
 public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
 
 	private final Object syncer = new Object();
 
-	private static class ImportMetaFile implements VirtualFile {
+	private Map<String, ImportMetaFile> loadedVirtualFiles = new HashMap<>();
+
+	static interface WritableData {
+		void write(String data);
+	}
+
+	private class ImportMetaFile implements VirtualFile {
 
 		private final String name;
 		private String value = "";
 		private final Object syncer;
+		private final boolean realFile;
+		private final LayeredFilesDB fdb;
+		private DatabaseFile realFileObj = null;
+		private WritableData onReady;
 
-		public ImportMetaFile(Object syncer, String name) {
+		public ImportMetaFile(Object syncer, String name, boolean addRealFile, LayeredFilesDB fdb) {
 			this.name = name;
 			this.syncer = syncer;
+			this.realFile = addRealFile;
+			this.fdb = fdb;
+			if (realFile) {
+				loadedVirtualFiles.put(name, this);
+			}
+		}
 
-			String[] cname = name.split("\\/");
-			String aname = cname[cname.length - 1];
-			try {
-				write(MyFS.readFile(aname + ".txt"));
-			} catch (FileReadException e) {
+		private List<String> print(String currentPadding, String singlePadding, JsonValue val) {
+			List<String> lines = new ArrayList<>();
+			if (val.isArray()) {
+				if (val.asArray().Value.isEmpty()) {
+					lines.add(currentPadding + "[]");
+				} else {
+					lines.add(currentPadding + "[");
+					int valuesLeft = val.asArray().Value.size();
+					for (JsonValue v : val.asArray().Value) {
+						List<String> nestedLines = print(currentPadding + singlePadding, singlePadding, v);
+						if (valuesLeft > 1) {
+							String lastLine = nestedLines.remove(nestedLines.size() - 1);
+							nestedLines.add(lastLine + ",");
+							valuesLeft--;
+						}
+						lines.addAll(nestedLines);
+					}
+					lines.add(currentPadding + "]");
+				}
+			} else if (val.isObject()) {
+				if (val.asObject().getEntries().isEmpty()) {
+					lines.add(currentPadding + "{}");
+				} else {
+					lines.add(currentPadding + "{");
+					int valuesLeft = val.asObject().getEntries().size();
+					for (Entry<String, JsonValue> x : val.asObject().getEntries()) {
+						List<String> nestedLines = print(currentPadding + singlePadding, singlePadding, x.getValue());
+						if (valuesLeft > 1) {
+							String lastLine = nestedLines.remove(nestedLines.size() - 1);
+							nestedLines.add(lastLine + ",");
+							valuesLeft--;
+						}
+						String firstLine = nestedLines.remove(0);
+						firstLine = currentPadding + singlePadding + "\"" + x.getKey() + "\": " + firstLine.trim();
+						nestedLines.add(0, firstLine);
+						lines.addAll(nestedLines);
+					}
+					lines.add(currentPadding + "}");
+				}
+			} else {
+				lines.add(currentPadding + val.getJsonString());
+			}
+			return lines;
+		}
+
+		private String format(String data) {
+			JsonValue val = JsonValue.parse(data);
+			if (val != null) {
+				List<String> lines = print("", "    ", val);
+				boolean first = true;
+				StringBuilder sb = new StringBuilder();
+				for (String l : lines) {
+					if (!first) {
+						sb.append("\n");
+					}
+					sb.append(l);
+					first = false;
+				}
+				return sb.toString();
+			}
+			return data;
+		}
+
+		private boolean ensureFile(List<DatabaseFile> files) {
+			if (realFile) {
+				if (realFileObj != null) {
+					return true;
+				} else {
+					for (DatabaseFile file : files) {
+						if (file.FileName.equals(name)) {
+							realFileObj = file;
+							if (onReady != null) {
+								onReady.write(read());
+								onReady = null;
+							}
+							return true;
+						}
+					}
+					try {
+						fdb.createFile(name, "", true);
+					} catch (DatabaseException e) {
+						e.printStackTrace();
+					}
+					return false;
+				}
+			} else {
+				if (onReady != null) {
+					onReady.write(read());
+					onReady = null;
+				}
+				return true;
+			}
+		}
+
+		public void writeWhenReady(WritableData onReady) {
+			if (realFile && realFileObj == null) {
+				this.onReady = onReady;
+			} else {
+				onReady.write(read());
 			}
 		}
 
 		@Override
 		public String read() {
 			synchronized (syncer) {
-				return value;
+				if (realFile) {
+					if (realFileObj == null) {
+						return "Failed to read file";
+					}
+					try {
+						return format(fdb.getFile(realFileObj.ID, true).Contents);
+					} catch (DatabaseException e) {
+						e.printStackTrace();
+						return "Failed to read file";
+					}
+				} else {
+					return value;
+				}
 			}
 		}
 
 		@Override
 		public void write(String data) {
 			synchronized (syncer) {
-				value = data;
+				if (realFile) {
+					if (realFileObj != null) {
+						fdb.storeFile(realFileObj, realFileObj.FileName, data);
+					}
+				} else {
+					value = data;
+				}
 			}
 		}
 
@@ -88,6 +217,8 @@ public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
 		private final ImportMetaFile users;
 		private final ImportMetaFile groups;
 		private final Object syncer;
+		private final ImportMetaFile perms;
+		private final ImportMetaFile defaultSettingsFile;
 
 		private class InternalPasswdUser {
 			public final String login;
@@ -133,6 +264,27 @@ public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
 			}
 		}
 
+		private class InternalTeamMember {
+			public final String login;
+			public final String name;
+
+			private InternalTeamMember(String login, String name) {
+				this.login = login;
+				this.name = name;
+			}
+		}
+
+		private class InternalTeam {
+
+			public final int TeamID;
+			public final InternalTeamMember[] MemberLoginsAndNames;
+
+			private InternalTeam(int teamID, InternalTeamMember[] memberLogins) {
+				this.TeamID = teamID;
+				this.MemberLoginsAndNames = memberLogins;
+			}
+		}
+
 		private class InternalCourse {
 
 			public final List<InternalResultUser> results = new ArrayList<>();
@@ -141,6 +293,8 @@ public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
 				List<InternalTeacher> teachers = new ArrayList<>();
 				List<InternalEnrollment> enrollemnts = new ArrayList<>();
 				Map<Integer, InternalVariant> variants = new HashMap<>();
+
+				Map<String, InternalTeam> teams = null;
 
 				Map<String, InternalResultUser> result = new HashMap<>();
 
@@ -161,10 +315,73 @@ public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
 				} else {
 					if (val.isArray()) {
 						JsonArray arr = val.asArray();
-						if (arr.Value.size() == 3) {
+						if (arr.Value.size() == 3 || arr.Value.size() == 4) {
 							JsonValue jvariants = arr.Value.get(0);
 							JsonValue jenrollments = arr.Value.get(1);
 							JsonValue jteachers = arr.Value.get(2);
+
+							if (arr.Value.size() == 4) { // Load teams
+								JsonValue jteams = arr.Value.get(3);
+								if (jteams.isObject()) {
+									JsonObject jteamso = jteams.asObject();
+									if (jteamso.containsArray("data")) {
+										JsonArray ateams = jteamso.getArray("data");
+										teams = new HashMap<>();
+										for (JsonValue ateam : ateams.Value) {
+											if (ateam.isObject()) {
+												JsonObject oteam = ateam.asObject();
+												if (oteam.containsNumber("id")) {
+													int teamID = oteam.getNumber("id").Value;
+
+													if (oteam.containsString("leader_login") && oteam.containsString("leader_name")) {
+
+														String leader = oteam.getString("leader_login").Value;
+														String leader_name = oteam.getString("leader_name").Value;
+														InternalTeamMember[] members = new InternalTeamMember[] { new InternalTeamMember(leader, leader_name) };
+														if (oteam.containsArray("members")) {
+															JsonArray jmembers = oteam.getArray("members");
+															InternalTeamMember[] newMembers = new InternalTeamMember[1 + jmembers.Value.size()];
+															newMembers[0] = members[0];
+															members = newMembers;
+															int memberID = 1;
+															for (JsonValue jmember : jmembers.Value) {
+																if (jmember.isObject()) {
+																	JsonObject omember = jmember.asObject();
+																	if (omember.containsString("login")) {
+																		String login = omember.getString("login").Value;
+																		String name = omember.getString("name").Value;
+																		newMembers[memberID] = new InternalTeamMember(login, name);
+																	} else {
+																		ok = false;
+																	}
+																} else {
+																	ok = false;
+																}
+																memberID++;
+															}
+															if (ok) {
+																for (InternalTeamMember member : members) {
+																	teams.put(member.login, new InternalTeam(teamID, members));
+																}
+															}
+														}
+													} // Teams without leader are empty
+												} else {
+													ok = false;
+												}
+											} else {
+												ok = false;
+											}
+										}
+									} else {
+										ok = false;
+									}
+
+								} else {
+									ok = false;
+								}
+							}
+
 							if (jvariants.isObject() && jenrollments.isObject() && jteachers.isObject()) {
 								JsonObject avariants = jvariants.asObject();
 								JsonObject aenrollments = jenrollments.asObject();
@@ -187,6 +404,7 @@ public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
 											ok = false;
 										}
 									}
+									variants.put(0, new InternalVariant(0, "Registered"));
 
 									for (JsonValue var : aenrollments.getArray("data").Value) {
 										if (!var.isObject()) {
@@ -198,7 +416,28 @@ public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
 											String name = obj.getString("name").Value;
 											String email = obj.getString("email").Value;
 											String login = email.split("@")[0];
+											if (teams != null) {
+												if (teams.containsKey(login)) {
+													InternalTeam team = teams.get(login);
+													for (InternalTeamMember member : team.MemberLoginsAndNames) {
+														enrollemnts.add(new InternalEnrollment(var_id, member.login, member.name));
+													}
+												}
+											}
 											enrollemnts.add(new InternalEnrollment(var_id, login, name));
+										} else if (obj.containsString("name") && obj.containsString("email")) {
+											String name = obj.getString("name").Value;
+											String email = obj.getString("email").Value;
+											String login = email.split("@")[0];
+											if (teams != null) {
+												if (teams.containsKey(login)) {
+													InternalTeam team = teams.get(login);
+													for (InternalTeamMember member : team.MemberLoginsAndNames) {
+														enrollemnts.add(new InternalEnrollment(0, member.login, member.name));
+													}
+												}
+											}
+											enrollemnts.add(new InternalEnrollment(0, login, name));
 										} else {
 											ok = false;
 										}
@@ -255,38 +494,42 @@ public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
 			}
 		}
 
-		public ImportMetaFunctioningFile(Object syncer, String name, ImportMetaFile users, ImportMetaFile groups) {
-			super(syncer, name);
+		private class InternalDefaultPermission {
+			public final String GroupName;
+			public final String Permission;
+
+			private InternalDefaultPermission(String name, String perm) {
+				this.GroupName = name;
+				this.Permission = perm;
+			}
+		}
+
+		public ImportMetaFunctioningFile(Object syncer, String name, ImportMetaFile users, ImportMetaFile groups, ImportMetaFile defaultPermissionsFile, ImportMetaFile defaultSettingsFile, LayeredFilesDB fdb) {
+			super(syncer, name, false, fdb);
 			this.users = users;
 			this.groups = groups;
+			this.perms = defaultPermissionsFile;
+			this.defaultSettingsFile = defaultSettingsFile;
 			this.syncer = syncer;
 			writeEmpty();
 		}
 
+		private void superWrite(String data) {
+			super.write(data);
+			;
+		}
+
 		public void writeEmpty() {
 			synchronized (syncer) {
-				StringBuilder sb = new StringBuilder();
-				sb.append("# Import novych uzivatelu. Tohle smaze vsechny existujici uzivatele!\n");
-				sb.append("# Pred importem vypln nasledujici udaje\n\n");
-				sb.append("# Regularni vyraz, kterym se aplikuje na nazvy variant\n");
-				sb.append("RegexGroupSearch: tpl ([\\S]+) (\\d+):(\\d+) *- *(\\d+):(\\d+), lab. (\\S+), .+\n");
-				sb.append("# Regularni vyraz, kterym se provede nahrazeni vyberu predchozim vyrazem\n");
-				sb.append("RegexGroupReplace: $6_$2:$3\n");
-				sb.append("# Skolni rok (stane se soucasti retezce skupin\n");
-				sb.append("CourseYear: 2020\n");
-				sb.append("# Nazev predmetu (stane se soucasti retezce skupin\n");
-				sb.append("CourseName: IZP\n");
-				sb.append("# Predpona studentskeho retezce skupin\n");
-				sb.append("StudentsGroupPrefix: students.\n");
-				sb.append("# Predpona uceitelskeho retezce skupin\n");
-				sb.append("TeachersGroupPrefix: teachers\n");
-				sb.append("# Toolchain pro uzivatele\n");
-				sb.append("Toolchain: IZP\n");
-				sb.append("\n");
-				sb.append("\n");
-				sb.append("# Jakmile je vse OK, odkomunetuj nasledujici radek. Pokud chce zacit znovu, uloz prazdny soubor\n");
-				sb.append("#confirm\n");
-				super.write(sb.toString());
+				super.write(defaultSettingsFile.read());
+				defaultSettingsFile.writeWhenReady(new WritableData() {
+
+					@Override
+					public void write(String data) {
+						superWrite(data);
+					}
+
+				});
 			}
 		}
 
@@ -326,10 +569,11 @@ public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
 
 					StringBuilder processLog = new StringBuilder();
 					List<InternalResultUser> loadedUsers = process(data, CourseName, CourseYear, RegexGroupSearch, RegexGroupReplace, StudentsGroupPrefix, TeachersGroupPrefix, processLog);
-					if (loadedUsers == null) {
+					List<InternalDefaultPermission> defPerms = this.loadDefaultPermissions();
+					if (loadedUsers == null || defPerms == null) {
 						super.write("# Import failed\n\n\n" + processLog + "\n\n========= Original Data ===========" + data);
 					} else {
-						super.write(replaceUsers(loadedUsers, Toolchain) + "\n\n\n ====== Protocol =======\n" + processLog.toString());
+						super.write(replaceUsers(loadedUsers, Toolchain, Settings.GetDefaultGroup(), defPerms) + "\n\n\n ====== Protocol =======\n" + processLog.toString());
 					}
 				} else {
 					super.write("# Missing some mandatory fields. Save as empty file to reset\n" + data);
@@ -372,29 +616,113 @@ public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
 			}
 			return ret;
 		}
+
+		private List<InternalDefaultPermission> loadDefaultPermissions() {
+			List<InternalDefaultPermission> lst = new ArrayList<>();
+			String permData = this.perms.read();
+			JsonValue val = JsonValue.parse(permData);
+			if (val != null) {
+				if (val.isObject()) {
+					JsonObject obj = val.asObject();
+					for (Entry<String, JsonValue> entry : obj.getEntries()) {
+						boolean ok = false;
+						String group = entry.getKey();
+						if (entry.getValue().isArray()) {
+							JsonArray pa = entry.getValue().asArray();
+							for (JsonValue p : pa.Value) {
+								if (p.isString()) {
+									String perm = p.asString().Value;
+									lst.add(new InternalDefaultPermission(group, perm));
+									ok = true;
+								}
+							}
+						}
+						if (!ok) {
+							return null;
+						}
+					}
+					return lst;
+				}
+			}
+			return null;
+		}
+	}
+
+	private void addVirtualImporterForToolchain(String toolchain) {
+		ImportMetaFile UsersFile = new ImportMetaFile(syncer, "importy/" + toolchain + "/Users.db", true, this);
+		ImportMetaFile GroupsFile = new ImportMetaFile(syncer, "importy/" + toolchain + "/Groups.db", true, this);
+		ImportMetaFile DefaultPermissionsFile = new ImportMetaFile(syncer, "importy/" + toolchain + "/DefaultPermissions.db", true, this);
+		ImportMetaFile DefaultSettings = new ImportMetaFile(syncer, "importy/" + toolchain + "/Configuration.db", true, this);
+		ImportMetaFunctioningFile ImportFile = new ImportMetaFunctioningFile(syncer, "importy/" + toolchain + "/Import.exe", UsersFile, GroupsFile, DefaultPermissionsFile, DefaultSettings, this);
+		super.registerVirtualFile(ImportFile);
+
 	}
 
 	public LayeredImportDB(String fileName) throws DatabaseException {
 		super(fileName);
-		ImportMetaFile UsersFile = new ImportMetaFile(syncer, "importy/Users.db");
-		ImportMetaFile GroupsFile = new ImportMetaFile(syncer, "importy/Groups.db");
-		ImportMetaFunctioningFile ImportFile = new ImportMetaFunctioningFile(syncer, "importy/Import.exe", UsersFile, GroupsFile);
-		super.registerVirtualFile(UsersFile);
-		super.registerVirtualFile(GroupsFile);
-		super.registerVirtualFile(ImportFile);
+		addVirtualImporterForToolchain("IZP");
+		addVirtualImporterForToolchain("ISU");
+	}
+
+	@Override
+	public List<DatabaseFile> getFiles() {
+		synchronized (syncer) {
+			List<DatabaseFile> files = super.getFiles();
+			for (ImportMetaFile myFile : loadedVirtualFiles.values()) {
+				myFile.ensureFile(files);
+			}
+			return files;
+		}
+	}
+
+	@Override
+	public FileInfo loadFile(String name, boolean decodeBigString) {
+		FileInfo fo = super.loadFile(name, decodeBigString);
+		if (fo != null) {
+			if (loadedVirtualFiles.containsKey(fo.FileName)) {
+				return new FileInfo(fo.ID, fo.FileName, loadedVirtualFiles.get(fo.FileName).format(fo.Contents));
+			}
+		}
+		return fo;
+	}
+
+	@Override
+	public FileInfo getFile(int fileID, boolean decodeBigString) throws DatabaseException {
+		FileInfo fo = super.getFile(fileID, decodeBigString);
+		if (fo != null) {
+			if (loadedVirtualFiles.containsKey(fo.FileName)) {
+				return new FileInfo(fo.ID, fo.FileName, loadedVirtualFiles.get(fo.FileName).format(fo.Contents));
+			}
+		}
+		return fo;
 	}
 
 	public abstract boolean clearUsers(String toolchain);
 
-	public abstract boolean createUser(String toolchain, String login, String origin, String fullName, List<String> permissionGroups);
+	public abstract Integer getRootPermissionGroup(String toolchain, String name);
 
-	private String replaceUsers(List<InternalResultUser> users, String toolchain) {
+	public abstract boolean createUser(String toolchain, String login, String origin, String fullName, List<String> permissionGroups, int rootPermissionGroupID);
+
+	public abstract boolean addPermission(String toolchain, String group, String permission);
+
+	private String replaceUsers(List<InternalResultUser> users, String toolchain, String rootPermissionGroupName, List<ImportMetaFunctioningFile.InternalDefaultPermission> defPerms) {
 		if (!clearUsers(toolchain)) {
 			return "Failed to purge user database";
 		}
+		Integer rootGroup = getRootPermissionGroup(toolchain, rootPermissionGroupName);
+		if (rootGroup == null) {
+			return "Failed to create root permission group";
+		}
+
 		for (InternalResultUser user : users) {
-			if (!createUser(toolchain, user.login, user.origin, user.name, user.groups)) {
+			if (!createUser(toolchain, user.login, user.origin, user.name, user.groups, rootGroup)) {
 				return "Failed to create user(s)";
+			}
+		}
+
+		for (ImportMetaFunctioningFile.InternalDefaultPermission perm : defPerms) {
+			if (!this.addPermission(toolchain, perm.GroupName, perm.Permission)) {
+				return "Failed to add permissions for group \"" + perm.GroupName + "\"";
 			}
 		}
 		return "Users imported and loaded";

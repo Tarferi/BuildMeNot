@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.layers.common.LayeredDBFileWrapperDB;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.exceptions.DatabaseException;
@@ -56,7 +57,6 @@ public abstract class LayeredUserDB extends LayeredDBFileWrapperDB {
 
 	public LayeredUserDB(String dbName) throws DatabaseException {
 		super(dbName);
-		this.dropTable("users");
 		this.makeTable("users", KEY("ID"), TEXT("name"), TEXT("usergroup"), TEXT("login"), BIGTEXT("permissions"), TEXT("toolchain"));
 	}
 
@@ -131,10 +131,26 @@ public abstract class LayeredUserDB extends LayeredDBFileWrapperDB {
 		return false;
 	}
 
+	public Object[] getFullNameAndGroup(String login, String toolchain) {
+		try {
+			final String tableName = "users";
+			JsonArray res = this.select(tableName, new TableField[] { getField(tableName, "name"), getField(tableName, "usergroup"), getField(tableName, "ID") }, true, new ComparisionField(getField(tableName, "login"), login), new ComparisionField(getField(tableName, "toolchain"), toolchain));
+			if (!res.Value.isEmpty()) {
+				String name = res.Value.get(0).asObject().getString("name").Value;
+				String grp = res.Value.get(0).asObject().getString("usergroup").Value;
+				int id = res.Value.get(0).asObject().getNumber("ID").Value;
+				return new Object[] { name, grp, id };
+			}
+		} catch (DatabaseException e) {
+			e.printStackTrace();
+		}
+		return new Object[] { login, Settings.GetDefaultGroup(), 0 };
+	}
+
 	@Override
 	public boolean clearUsers(String toolchain) {
 		try {
-			this.execute_raw("DELETE FROM users WHERE toolchain='?'", toolchain);
+			this.execute_raw("DELETE FROM users WHERE toolchain = ?", toolchain);
 		} catch (DatabaseException e) {
 			e.printStackTrace();
 			return false;
@@ -146,7 +162,7 @@ public abstract class LayeredUserDB extends LayeredDBFileWrapperDB {
 	}
 
 	@Override
-	public boolean createUser(String toolchain, String login, String origin, String fullName, List<String> permissionGroups) {
+	public boolean createUser(String toolchain, String login, String origin, String fullName, List<String> permissionGroups, int rootPermissionGroupID) {
 		final String tableName = "users";
 		JsonArray res;
 		try {

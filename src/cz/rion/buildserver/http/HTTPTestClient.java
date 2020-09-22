@@ -52,19 +52,6 @@ public class HTTPTestClient extends HTTPGraphProviderClient {
 	}
 
 	@Override
-	public Toolchain getToolchain(HTTPRequest request) {
-		if(toolchain==null) {
-			String toolchain = sdb.getToolchainMapping(request.host);
-			try {
-				this.toolchain = sdb.getToolchain(toolchain == null ? "" : toolchain);
-			} catch (NoSuchToolchainException e) {
-				e.printStackTrace();
-			}
-		}
-		return toolchain;
-	}
-
-	@Override
 	public boolean objectionsAgainstRedirection(HTTPRequest request) {
 		boolean others = super.objectionsAgainstRedirection(request);
 		if (!others) { // Others don't want redirection, we
@@ -231,7 +218,7 @@ public class HTTPTestClient extends HTTPGraphProviderClient {
 								test_id = obj.getString("id").Value;
 								asm = obj.getString("asm").Value;
 
-								if (!getPermissions().allowExecute(toolchain.getName(), test_id)) {
+								if (!getPermissions().allowExecute(test_id)) {
 									returnValue.add("code", new JsonNumber(55));
 									returnValue.add("result", new JsonString("Hacking much?"));
 								} else {
@@ -299,7 +286,7 @@ public class HTTPTestClient extends HTTPGraphProviderClient {
 									}
 
 									for (GenericTest tst : tsts) {
-										if (!getPermissions().allowSee(toolchain.getName(), tst.getID())) {
+										if (!getPermissions().allowSee(tst.getID())) {
 											continue;
 										}
 										if (tst.isSecret() && !getPermissions().allowSeeSecretTests()) {
@@ -310,7 +297,7 @@ public class HTTPTestClient extends HTTPGraphProviderClient {
 										tobj.add("zadani", new JsonString(tst.getDescription()));
 										tobj.add("init", new JsonString(tst.getSubmittedCode()));
 										tobj.add("id", new JsonString(tst.getID()));
-										if (!getPermissions().allowExecute(toolchain.getName(), tst.getID())) {
+										if (!getPermissions().allowExecute(tst.getID())) {
 											tobj.add("noexec", new JsonNumber(1));
 										}
 										tobj.add("hidden", new JsonNumber(tst.isHidden() ? 1 : 0));
@@ -349,7 +336,7 @@ public class HTTPTestClient extends HTTPGraphProviderClient {
 			}
 		}
 		String resultJson;
-		if (returnValue.containsObject("details") && !this.getPermissions().allowDetails(toolchain.getName(), test_id)) {
+		if (returnValue.containsObject("details") && !this.getPermissions().allowDetails(test_id)) {
 			JsonValue details = returnValue.get("details");
 			returnValue.remove("details");
 			resultJson = returnValue.getJsonString(); // So that the "details" are not sent

@@ -6,7 +6,7 @@ import cz.rion.buildserver.exceptions.FileWriteException;
 import cz.rion.buildserver.wrappers.FileReadException;
 import cz.rion.buildserver.wrappers.MyFS;
 
-public class LayeredSettingsDB extends LayeredToolchainMappingDB {
+public abstract class LayeredSettingsDB extends LayeredToolchainMappingDB {
 
 	private static final String SettingsFileName = "settings.ini";
 

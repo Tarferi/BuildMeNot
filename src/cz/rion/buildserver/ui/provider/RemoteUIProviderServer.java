@@ -172,7 +172,7 @@ public class RemoteUIProviderServer {
 		String newName = inBuffer.readString();
 		outBuffer.writeInt(FileCreatedEvent.ID);
 		try {
-			FileInfo fo = sdb.createFile(newName, "");
+			FileInfo fo = sdb.createFile(newName, "", false);
 			if (fo == null) {
 				outBuffer.writeInt(0);
 				return;

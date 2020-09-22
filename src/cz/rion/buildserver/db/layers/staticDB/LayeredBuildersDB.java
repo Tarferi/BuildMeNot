@@ -26,7 +26,7 @@ import cz.rion.buildserver.wrappers.MyExec;
 import cz.rion.buildserver.wrappers.MyExec.MyExecResult;
 import cz.rion.buildserver.wrappers.MyFS;
 
-public class LayeredBuildersDB extends LayeredSettingsDB {
+public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 
 	public static class ToolExecutionResult {
 		public final String stdout;

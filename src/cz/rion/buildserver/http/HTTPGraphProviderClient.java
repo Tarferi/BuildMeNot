@@ -22,6 +22,7 @@ public abstract class HTTPGraphProviderClient extends HTTPFileProviderClient {
 
 	private final StaticDB sdb;
 	private final RuntimeDB db;
+	private Toolchain toolchain;
 
 	protected HTTPGraphProviderClient(CompatibleSocketClient client, int BuilderID, RuntimeDB rdb, StaticDB sdb) {
 		super(client, BuilderID, rdb, sdb);
@@ -29,7 +30,10 @@ public abstract class HTTPGraphProviderClient extends HTTPFileProviderClient {
 		this.db = rdb;
 	}
 
-	protected abstract Toolchain getToolchain(HTTPRequest request);
+	protected void ToolChainKnown(Toolchain toolchain) {
+		super.ToolChainKnown(toolchain);
+		this.toolchain = toolchain;
+	}
 
 	private FileInfo getFile(int fileID, boolean decodeBigString) {
 		FileInfo fo = null;
@@ -201,7 +205,7 @@ public abstract class HTTPGraphProviderClient extends HTTPFileProviderClient {
 			int returnCode = 200;
 			String type = "text/json;";
 			String returnCodeDescription = "OK";
-			JsonValue graphs = loadGraphs(this.getToolchain(request).getName());
+			JsonValue graphs = loadGraphs(toolchain.getName());
 			String data = graphs == null ? "[]" : graphs.getJsonString();
 			this.setIntention(HTTPClientIntentType.GET_RESOURCE);
 			return new HTTPResponse(request.protocol, returnCode, returnCodeDescription, data, type, request.cookiesLines);

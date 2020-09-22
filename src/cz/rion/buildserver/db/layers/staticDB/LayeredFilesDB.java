@@ -59,11 +59,28 @@ public abstract class LayeredFilesDB extends LayeredStaticDB {
 		return new String(n, Settings.getDefaultCharset());
 	}
 
-	public FileInfo createFile(String name, String contents) throws DatabaseException {
+	public FileInfo createFile(String name, String contents, boolean overwriteExisting) throws DatabaseException {
 		final String tableName = "files";
 		synchronized (fileTable) {
 			try {
-				this.insert(tableName, new ValuedField(this.getField(tableName, "name"), name), new ValuedField(this.getField(tableName, "deleted"), 0), new ValuedField(this.getField(tableName, "contents"), encodeFileContents(contents)));
+				boolean insertNew = true;
+				if (overwriteExisting) {
+					JsonArray res = select(tableName, new TableField[] { getField(tableName, "ID") }, false, new ComparisionField(getField(tableName, "name"), name), new ComparisionField(getField(tableName, "deleted"), 0));
+					if (res.Value.size() == 1) { // Existing
+						JsonValue val = res.Value.get(0);
+						if (val.isObject()) {
+							JsonObject obj = val.asObject();
+							if (obj.containsNumber("ID") && obj.containsString("name") && obj.containsString("contents")) {
+								int id = obj.getNumber("ID").Value;
+								insertNew = false;
+								this.update(tableName, id, new ValuedField(this.getField(tableName, "contents"), encodeFileContents(contents)));
+							}
+						}
+					}
+				}
+				if (insertNew) {
+					this.insert(tableName, new ValuedField(this.getField(tableName, "name"), name), new ValuedField(this.getField(tableName, "deleted"), 0), new ValuedField(this.getField(tableName, "contents"), encodeFileContents(contents)));
+				}
 			} catch (DatabaseException e) {
 				e.printStackTrace();
 			}

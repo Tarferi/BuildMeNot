@@ -4,7 +4,7 @@ import java.util.Date;
 
 import cz.rion.buildserver.exceptions.DatabaseException;
 
-public class LayeredAdminLogDB extends LayeredThreadDB {
+public abstract class LayeredAdminLogDB extends LayeredThreadDB {
 
 	public LayeredAdminLogDB(String dbName) throws DatabaseException {
 		super(dbName);

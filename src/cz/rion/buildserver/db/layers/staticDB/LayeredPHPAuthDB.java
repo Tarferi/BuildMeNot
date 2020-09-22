@@ -15,7 +15,7 @@ import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.json.JsonValue.JsonString;
 import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 
-public class LayeredPHPAuthDB extends LayeredConsoleOutputDB {
+public abstract class LayeredPHPAuthDB extends LayeredConsoleOutputDB {
 
 	private static final String AuthFileName = "auth/index.php";
 

@@ -6,6 +6,7 @@ import java.util.List;
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.RuntimeDB;
 import cz.rion.buildserver.db.StaticDB;
+import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.exceptions.ChangeOfSessionAddressException;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.exceptions.HTTPClientException;
@@ -16,6 +17,13 @@ public class HTTPAuthClient extends HTTPTestClient {
 
 	private final CompatibleSocketClient client;
 	private final RuntimeDB db;
+	private Toolchain toolchain;
+
+	@Override
+	protected void ToolChainKnown(Toolchain toolchain) {
+		super.ToolChainKnown(toolchain);
+		this.toolchain = toolchain;
+	}
 
 	protected HTTPAuthClient(CompatibleSocketClient client, int BuilderID, RuntimeDB db, StaticDB sdb, TestManager tests) {
 		super(client, BuilderID, db, sdb, tests);
@@ -36,7 +44,7 @@ public class HTTPAuthClient extends HTTPTestClient {
 		cookieLines.add("token=deleted; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT");
 
 		HTTPResponse resp = new HTTPResponse(request.protocol, 307, "Logout", new byte[0], null, cookieLines);
-		resp.addAdditionalHeaderField("Location", Settings.getAuthURL(getToolchain(request).getName()) + "?action=logout");
+		resp.addAdditionalHeaderField("Location", Settings.getAuthURL(toolchain.getName()) + "?action=logout");
 		return resp;
 	}
 
@@ -120,7 +128,7 @@ public class HTTPAuthClient extends HTTPTestClient {
 			}
 		}
 
-		String redirectLocation = Settings.getAuthURL(getToolchain(request).getName()) + "?cache=" + RuntimeDB.randomstr(32);
+		String redirectLocation = Settings.getAuthURL(toolchain.getName()) + "?cache=" + RuntimeDB.randomstr(32);
 		String redirectMessage = "OK but login first";
 		List<String> cookieLines = request.cookiesLines;
 

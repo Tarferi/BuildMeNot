@@ -54,11 +54,11 @@ public class LayeredVirtualFilesDB extends LayeredFilesDB {
 	}
 
 	@Override
-	public FileInfo createFile(String name, String contents) throws DatabaseException {
+	public FileInfo createFile(String name, String contents, boolean overwriteExisting) throws DatabaseException {
 		if (filesByName.containsKey(name)) {
 			throw new DatabaseException("Cannnot create " + name + ": reserved file name");
 		}
-		return super.createFile(name, contents);
+		return super.createFile(name, contents, overwriteExisting);
 	}
 
 	@Override

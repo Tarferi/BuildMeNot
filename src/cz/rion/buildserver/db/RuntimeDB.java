@@ -53,13 +53,7 @@ public class RuntimeDB extends LayeredMetaDB {
 	}
 
 	public enum BadResultType {
-		Good(0, 0, 0),
-		BadTests(2, 0, 1),
-		BadBase(10, 5, 2),
-		Timeout(0, 0, 3),
-		SegFault(10, 0, 6),
-		BadInstructions(10, 15, 8),
-		Uncompillable(30, 30, 10);
+		Good(0, 0, 0), BadTests(2, 0, 1), BadBase(10, 5, 2), Timeout(0, 0, 3), SegFault(10, 0, 6), BadInstructions(10, 15, 8), Uncompillable(30, 30, 10);
 
 		private final int Severity;
 		private final int FirstMinutes;
@@ -75,9 +69,7 @@ public class RuntimeDB extends LayeredMetaDB {
 	public BadResults GetBadResultsForUser(int UserID) throws DatabaseException {
 		synchronized (syncer_user_timeouts) {
 			final String tableName = "user_timeouts";
-			final TableField[] fields = new TableField[] {
-					getField(tableName, "ID"),
-					getField(tableName, "allow_next")
+			final TableField[] fields = new TableField[] { getField(tableName, "ID"), getField(tableName, "allow_next")
 
 			};
 			JsonArray res = select(tableName, fields, false, new ComparisionField(getField(tableName, "user_id"), UserID), new ComparisionField(getField(tableName, "live"), 1));
@@ -114,14 +106,7 @@ public class RuntimeDB extends LayeredMetaDB {
 		public void store(boolean newlyFinished) throws DatabaseException {
 			synchronized (syncer_user_timeouts) {
 				final String tableName = "user_timeouts";
-				final TableField[] fields = new TableField[] {
-						getField(tableName, "last_time"),
-						getField(tableName, "allow_next"),
-						getField(tableName, "bad_instr"),
-						getField(tableName, "bad_segfaults"),
-						getField(tableName, "bad_base"),
-						getField(tableName, "bad_uncompilable")
-				};
+				final TableField[] fields = new TableField[] { getField(tableName, "last_time"), getField(tableName, "allow_next"), getField(tableName, "bad_instr"), getField(tableName, "bad_segfaults"), getField(tableName, "bad_base"), getField(tableName, "bad_uncompilable") };
 				boolean createNew = true;
 				int segFaults = 0;
 				int bads = 0;
@@ -159,16 +144,7 @@ public class RuntimeDB extends LayeredMetaDB {
 				totalDelay *= minute;
 				nextDate = totalDelay > 0 ? new Date().getTime() + totalDelay : nextDate;
 
-				final ValuedField[] vfields = new ValuedField[] {
-						new ValuedField(getField(tableName, "last_time"), new Date().getTime()),
-						new ValuedField(getField(tableName, "bad_instr"), bads),
-						new ValuedField(getField(tableName, "bad_segfaults"), segFaults),
-						new ValuedField(getField(tableName, "bad_base"), bases),
-						new ValuedField(getField(tableName, "bad_uncompilable"), uncompilables),
-						new ValuedField(getField(tableName, "allow_next"), nextDate),
-						new ValuedField(getField(tableName, "live"), 1),
-						new ValuedField(getField(tableName, "user_id"), UserID)
-				};
+				final ValuedField[] vfields = new ValuedField[] { new ValuedField(getField(tableName, "last_time"), new Date().getTime()), new ValuedField(getField(tableName, "bad_instr"), bads), new ValuedField(getField(tableName, "bad_segfaults"), segFaults), new ValuedField(getField(tableName, "bad_base"), bases), new ValuedField(getField(tableName, "bad_uncompilable"), uncompilables), new ValuedField(getField(tableName, "allow_next"), nextDate), new ValuedField(getField(tableName, "live"), 1), new ValuedField(getField(tableName, "user_id"), UserID) };
 				this.AllowNext.setTime(nextDate);
 				if (next == BadResultType.Good && newlyFinished) {
 					this.AllowNext.setTime(new Date().getTime() - 10000);
@@ -229,24 +205,9 @@ public class RuntimeDB extends LayeredMetaDB {
 		try {
 			final String tableName1 = "users";
 			final String tableName2 = "compilations";
-			TableField[] selectFields = new TableField[] {
-					getField(tableName1, "login"),
-					getField(tableName2, "ID"),
-					getField(tableName2, "toolchain"),
-					getField(tableName2, "test_id"),
-					getField(tableName2, "creation_time"),
-					getField(tableName2, "asm"),
-					getField(tableName2, "code")
-			};
-			ComparisionField[] comparators = new ComparisionField[] {
-					new ComparisionField(getField(tableName2, "code"), 0),
-					new ComparisionField(getField(tableName2, "test_id"), "", FieldComparator.NotEquals),
-					new ComparisionField(getField(tableName2, "toolchain"), toolchain),
-					new ComparisionField(getField(tableName1, "login"), login)
-			};
-			TableJoin[] joins = new TableJoin[] {
-					new TableJoin(getField(tableName1, "ID"), getField(tableName2, "user_id"))
-			};
+			TableField[] selectFields = new TableField[] { getField(tableName1, "login"), getField(tableName2, "ID"), getField(tableName2, "toolchain"), getField(tableName2, "test_id"), getField(tableName2, "creation_time"), getField(tableName2, "asm"), getField(tableName2, "code") };
+			ComparisionField[] comparators = new ComparisionField[] { new ComparisionField(getField(tableName2, "code"), 0), new ComparisionField(getField(tableName2, "test_id"), "", FieldComparator.NotEquals), new ComparisionField(getField(tableName2, "toolchain"), toolchain), new ComparisionField(getField(tableName1, "login"), login) };
+			TableJoin[] joins = new TableJoin[] { new TableJoin(getField(tableName1, "ID"), getField(tableName2, "user_id")) };
 			JsonArray jsn = select(tableName1, selectFields, comparators, joins, true);
 			for (JsonValue val : jsn.Value) {
 				if (val.isObject()) {
@@ -278,20 +239,8 @@ public class RuntimeDB extends LayeredMetaDB {
 			}
 			final String tableName = result.contains(":)") ? "dbV1Good" : "dbV1";
 
-			ValuedField[] updateData = new ValuedField[] {
-					new ValuedField(this.getField(tableName, "address"), address),
-					new ValuedField(this.getField(tableName, "port"), port),
-					new ValuedField(this.getField(tableName, "asm"), asm),
-					new ValuedField(this.getField(tableName, "test_id"), test_id),
-					new ValuedField(this.getField(tableName, "creation_time"), time.getTime()),
-					new ValuedField(this.getField(tableName, "code"), resultCode),
-					new ValuedField(this.getField(tableName, "result"), result),
-					new ValuedField(this.getField(tableName, "full"), full) };
+			ValuedField[] updateData = new ValuedField[] { new ValuedField(this.getField(tableName, "address"), address), new ValuedField(this.getField(tableName, "port"), port), new ValuedField(this.getField(tableName, "asm"), asm), new ValuedField(this.getField(tableName, "test_id"), test_id), new ValuedField(this.getField(tableName, "creation_time"), time.getTime()), new ValuedField(this.getField(tableName, "code"), resultCode), new ValuedField(this.getField(tableName, "result"), result), new ValuedField(this.getField(tableName, "full"), full) };
 			insert(tableName, updateData);
-			// executeExc("INSERT INTO " + table + " (address, port, asm, test_id,
-			// creation_time, code, result, full) VALUES ('?', ?, '?', '?', ?, ?, '?',
-			// '?');", address, port, asm, test_id, time.getTime(), resultCode, result,
-			// full);
 		}
 	}
 
@@ -396,21 +345,8 @@ public class RuntimeDB extends LayeredMetaDB {
 
 			final String tableName = "compilations";
 
-			ValuedField[] updateData = new ValuedField[] {
-					new ValuedField(this.getField(tableName, "address"), address),
-					new ValuedField(this.getField(tableName, "port"), port),
-					new ValuedField(this.getField(tableName, "asm"), asm),
-					new ValuedField(this.getField(tableName, "toolchain"), toolchain),
-					new ValuedField(this.getField(tableName, "test_id"), test_id),
-					new ValuedField(this.getField(tableName, "user_id"), user_id),
-					new ValuedField(this.getField(tableName, "session_id"), session_id),
-					new ValuedField(this.getField(tableName, "creation_time"), time.getTime()),
-					new ValuedField(this.getField(tableName, "code"), resultCode),
-					new ValuedField(this.getField(tableName, "result"), result),
-					new ValuedField(this.getField(tableName, "full"), full),
-					new ValuedField(this.getField(tableName, "bad_tests_details"), details),
-					new ValuedField(this.getField(tableName, "bad_tests"), bad_tests),
-					new ValuedField(this.getField(tableName, "good_tests"), good_test) };
+			ValuedField[] updateData = new ValuedField[] { new ValuedField(this.getField(tableName, "address"), address), new ValuedField(this.getField(tableName, "port"), port), new ValuedField(this.getField(tableName, "asm"), asm), new ValuedField(this.getField(tableName, "toolchain"), toolchain), new ValuedField(this.getField(tableName, "test_id"), test_id), new ValuedField(this.getField(tableName, "user_id"), user_id), new ValuedField(this.getField(tableName, "session_id"), session_id), new ValuedField(this.getField(tableName, "creation_time"), time.getTime()), new ValuedField(this.getField(tableName, "code"), resultCode), new ValuedField(this.getField(tableName, "result"), result), new ValuedField(this.getField(tableName, "full"), full), new ValuedField(this.getField(tableName,
+					"bad_tests_details"), details), new ValuedField(this.getField(tableName, "bad_tests"), bad_tests), new ValuedField(this.getField(tableName, "good_tests"), good_test) };
 			insert(tableName, updateData);
 		}
 
@@ -426,6 +362,9 @@ public class RuntimeDB extends LayeredMetaDB {
 	}
 
 	public int getUserIDFromLogin(String login) throws DatabaseException {
+		if (login == null) {
+			return -1;
+		}
 		synchronized (syncer_users) {
 
 			final String tableName = "users";
@@ -529,18 +468,9 @@ public class RuntimeDB extends LayeredMetaDB {
 							newSessionToken = randomstr(32);
 						}
 
-						ValuedField[] updateData = new ValuedField[] {
-								new ValuedField(this.getField(tableName, "hash"), newSessionToken),
-								new ValuedField(this.getField(tableName, "address"), address),
-								new ValuedField(this.getField(tableName, "live"), 1),
-								new ValuedField(this.getField(tableName, "user_id"), user_id),
-								new ValuedField(this.getField(tableName, "last_action"), now),
-								new ValuedField(this.getField(tableName, "creation_time"), now) };
+						ValuedField[] updateData = new ValuedField[] { new ValuedField(this.getField(tableName, "hash"), newSessionToken), new ValuedField(this.getField(tableName, "address"), address), new ValuedField(this.getField(tableName, "live"), 1), new ValuedField(this.getField(tableName, "user_id"), user_id), new ValuedField(this.getField(tableName, "last_action"), now), new ValuedField(this.getField(tableName, "creation_time"), now) };
 
 						if (!insert(tableName, updateData)) {
-							// if (!this.execute("INSERT INTO session (hash, address, live, user_id,
-							// last_action, creation_time) VALUES ('?', '?', ?, ?, ?, ?)", newSessionToken,
-							// address, 1, user_id, now, now)) {
 							return null;
 						}
 						res = this.select(tableName, new TableField[] { this.getField(tableName, "ID"), this.getField(tableName, "hash") }, false, new ComparisionField(this.getField(tableName, "user_id"), user_id));
@@ -549,11 +479,8 @@ public class RuntimeDB extends LayeredMetaDB {
 						}
 					} else {
 
-						ValuedField[] updateData = new ValuedField[] {
-								new ValuedField(this.getField(tableName, "last_action"), now) };
+						ValuedField[] updateData = new ValuedField[] { new ValuedField(this.getField(tableName, "last_action"), now) };
 						this.update(tableName, "user_id", user_id, updateData);
-						// this.execute("UPDATE session SET last_action = ? WHERE user_id = ?", now,
-						// user_id);
 					}
 					val = res.Value.get(0);
 					if (val.isObject()) {
@@ -644,8 +571,6 @@ public class RuntimeDB extends LayeredMetaDB {
 		final String tableName = "session";
 		try {
 			this.update(tableName, new String[] { "hash", "live" }, new Object[] { sessionToken, 1 }, new ValuedField(this.getField(tableName, "last_action"), new Date().getTime()));
-			// this.execute("UPDATE session SET last_action = ? WHERE hash = '?' AND live =
-			// ?", new Date().getTime(), sessionToken, 1);
 		} catch (DatabaseException e) {
 			e.printStackTrace();
 		}

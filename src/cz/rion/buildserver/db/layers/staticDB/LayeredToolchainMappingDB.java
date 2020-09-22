@@ -8,7 +8,7 @@ import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 
-public class LayeredToolchainMappingDB extends LayeredPHPAuthDB {
+public abstract class LayeredToolchainMappingDB extends LayeredPHPAuthDB {
 
 	private final Map<String, String> mapping = new HashMap<>();
 

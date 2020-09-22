@@ -6,7 +6,7 @@ import java.io.PrintStream;
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.exceptions.DatabaseException;
 
-public class LayeredConsoleOutputDB extends LayeredAdminLogDB {
+public abstract class LayeredConsoleOutputDB extends LayeredAdminLogDB {
 
 	private static final String STDOUTFileName = "stdout.stream";
 	private static final String STDERRFileName = "stderr.stream";

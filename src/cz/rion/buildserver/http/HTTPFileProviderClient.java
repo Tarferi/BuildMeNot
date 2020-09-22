@@ -8,7 +8,7 @@ import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 import cz.rion.buildserver.wrappers.FileReadException;
 import cz.rion.buildserver.wrappers.MyFS;
 
-public class HTTPFileProviderClient extends HTTPAdminClient {
+public abstract class HTTPFileProviderClient extends HTTPAdminClient {
 
 	private final StaticDB sdb;
 	private String endPoint;

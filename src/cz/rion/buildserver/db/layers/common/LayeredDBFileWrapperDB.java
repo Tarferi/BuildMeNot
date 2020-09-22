@@ -80,15 +80,15 @@ public abstract class LayeredDBFileWrapperDB extends LayeredImportDB {
 	}
 
 	@Override
-	public FileInfo createFile(String name, String contents) throws DatabaseException {
+	public FileInfo createFile(String name, String contents, boolean overwriteExisting) throws DatabaseException {
 		if (name.startsWith(dbFilePrefix)) {
 			if (name.endsWith(viewFileSuffix)) {
-				return super.createFile(name, contents);
+				return super.createFile(name, contents, overwriteExisting);
 			} else {
 				return null;
 			}
 		} else {
-			return super.createFile(name, contents);
+			return super.createFile(name, contents, overwriteExisting);
 		}
 	}
 
@@ -250,14 +250,7 @@ public abstract class LayeredDBFileWrapperDB extends LayeredImportDB {
 		try {
 			freeSQL = Pattern.compile("\\%NOW\\%", Pattern.MULTILINE).matcher(freeSQL).replaceAll(new Date().getTime() + "");
 			String tSQL = freeSQL.toLowerCase();
-			final String[] bannedKW = new String[] {
-					"update",
-					"insert",
-					"delete",
-					"drop",
-					"alter",
-					"create"
-			};
+			final String[] bannedKW = new String[] { "update", "insert", "delete", "drop", "alter", "create" };
 			for (String banned : bannedKW) {
 				if (tSQL.contains(banned)) {
 					throw new DatabaseException("Forbidden command: " + banned);

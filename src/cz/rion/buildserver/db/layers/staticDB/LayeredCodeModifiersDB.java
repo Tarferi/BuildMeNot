@@ -9,7 +9,7 @@ import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.test.GenericTest;
 import cz.rion.buildserver.test.JsonTestManager;
 
-public class LayeredCodeModifiersDB extends LayeredBuildersDB {
+public abstract class LayeredCodeModifiersDB extends LayeredBuildersDB {
 
 	private static final class NasmBaseModifier implements LayeredBuildersDB.ToolInputModifier {
 
