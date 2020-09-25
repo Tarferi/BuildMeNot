@@ -7,8 +7,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 
-import cz.rion.buildserver.Settings;
-
 public abstract class JsonValue {
 
 	@Override
@@ -118,11 +116,31 @@ public abstract class JsonValue {
 					if (next == '\\') {
 						inst.nextChar(false);
 						next = inst.getCurrentChar();
-						next = next == 'r' ? '\r' : next;
-						next = next == 'n' ? '\n' : next;
-						next = next == 't' ? '\t' : next;
-						next = next == '\\' ? '\\' : next;
-						sb.append(next);
+						if (next == 'u' || next == 'U') {
+							int value = 0;
+							for (int i = 0; i < 4; i++) {
+								inst.nextChar(false);
+								next = inst.getCurrentChar();
+								int n = 0;
+								if (next >= '0' && next <= '9') {
+									n = (int) (next - '0');
+								} else if (next >= 'a' && next <= 'f') {
+									n = 10 + ((int) (next - 'a'));
+								} else if (next >= 'A' && next <= 'F') {
+									n = 10 + ((int) (next - 'A'));
+								}
+								value <<= 4;
+								value += n;
+							}
+							char[] chars = Character.toChars(value);
+							sb.append(chars);
+						} else {
+							next = next == 'r' ? '\r' : next;
+							next = next == 'n' ? '\n' : next;
+							next = next == 't' ? '\t' : next;
+							next = next == '\\' ? '\\' : next;
+							sb.append(next);
+						}
 						continue;
 					}
 					if (next == '"' && previous != '\\') {
@@ -289,81 +307,42 @@ public abstract class JsonValue {
 			this.Value = value;
 		}
 
+		private String getHexEscape(int codePoint) {
+			String s = "0000" + Integer.toHexString(codePoint);
+			return s.substring(s.length() - 4, s.length());
+		}
+
 		@Override
 		public String getJsonString() {
+			StringBuilder nsb = new StringBuilder();
+			nsb.append('"');
 			String newValue = Value == null ? "null" : Value;
-			newValue = newValue.replaceAll("Á", "&#193;");
-			newValue = newValue.replaceAll("á", "&#225;");
-			newValue = newValue.replaceAll("é", "&#233;");
-			newValue = newValue.replaceAll("É", "&#201;");
-			newValue = newValue.replaceAll("Í", "&#205;");
-			newValue = newValue.replaceAll("í", "&#237;");
-			newValue = newValue.replaceAll("Ó", "&#211;");
-			newValue = newValue.replaceAll("ó", "&#243;");
-			newValue = newValue.replaceAll("Ú", "&#218;");
-			newValue = newValue.replaceAll("ú", "&#250;");
-			newValue = newValue.replaceAll("Ý", "&#221;");
-			newValue = newValue.replaceAll("ý", "&#253;");
-			// newValue=newValue.replaceAll("Ä", "&#196;");
-			newValue = newValue.replaceAll("ä", "&#228;");
-			newValue = newValue.replaceAll("Ë", "&#203;");
-			newValue = newValue.replaceAll("ë", "&#235;");
-			newValue = newValue.replaceAll("Ï", "&#207;");
-			newValue = newValue.replaceAll("ï", "&#239;");
-			newValue = newValue.replaceAll("Ö", "&#214;");
-			newValue = newValue.replaceAll("ö", "&#246;");
-			newValue = newValue.replaceAll("Ü", "&#220;");
-			newValue = newValue.replaceAll("ü", "&#252;");
-			newValue = newValue.replaceAll("ÿ", "&#255;");
-			newValue = newValue.replaceAll("Č", "&#268;");
-			newValue = newValue.replaceAll("č", "&#269;");
-			newValue = newValue.replaceAll("Ď", "&#270;");
-			newValue = newValue.replaceAll("ď", "&#271;");
-			newValue = newValue.replaceAll("ě", "&#283;");
-			newValue = newValue.replaceAll("Ě", "&#282;");
-			newValue = newValue.replaceAll("Ň", "&#327;");
-			newValue = newValue.replaceAll("ň", "&#328;");
-			newValue = newValue.replaceAll("Ř", "&#344;");
-			newValue = newValue.replaceAll("ř", "&#345;");
-			newValue = newValue.replaceAll("Š", "&#352;");
-			newValue = newValue.replaceAll("š", "&#353;");
-			// newValue=newValue.replaceAll("Ť", "&#356;");
-			newValue = newValue.replaceAll("ť", "&#357;");
-			newValue = newValue.replaceAll("Ů", "&#366;");
-			newValue = newValue.replaceAll("ů", "&#367;");
-			newValue = newValue.replaceAll("Ž", "&#381;");
-			newValue = newValue.replaceAll("ž", "&#382;");
-			newValue = newValue.replaceAll("Ÿ", "&#376;");
-
-			StringBuilder sb = new StringBuilder();
-			sb.append("\"");
-			for (byte b : newValue.getBytes(Settings.getDefaultCharset())) {
-				int c = (int) (b & 0xff);
+			char[] chars = newValue.toCharArray();
+			for (int i = 0; i < chars.length; i++) {
+				int cp = Character.codePointAt(chars, i);
+				char c = chars[i];
 				if (c == '\n') {
-					sb.append("\\n");
-				} else if (c == '\r') {
-					sb.append("\\r");
-				} else if (c == '\\') {
-					sb.append("\\\\");
-				} else if (c == '"') {
-					sb.append("\\\"");
+					nsb.append("\\n");
 				} else if (c == '\t') {
-					sb.append("\\t");
+					nsb.append("\\t");
+				} else if (c == '\r') {
+					nsb.append("\\r");
 				} else if (c == '\f') {
-					sb.append("\\f");
+					nsb.append("\\f");
 				} else if (c == '\b') {
-					sb.append("\\b");
-				} else if (c >= 32 && c <= 126) {
-					sb.append((char) b);
+					nsb.append("\\b");
+				} else if (c == '\\') {
+					nsb.append("\\\\");
+				} else if (c == '"') {
+					nsb.append("\\\"");
+				} else if (cp >= 32 && cp <= 126) {
+					nsb.append(c);
 				} else {
-					sb.append("\\u00");
-					String hex = "00" + Integer.toHexString(c);
-					hex = hex.substring(hex.length() - 2, hex.length());
-					sb.append(hex);
+					nsb.append("\\u" + getHexEscape(chars[i]));
 				}
 			}
-			sb.append("\"");
-			return sb.toString();
+			nsb.append('"');
+			return nsb.toString();
 		}
 	}
 
