@@ -13,6 +13,7 @@ import cz.rion.buildserver.db.StaticDB;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.exceptions.HTTPClientException;
+import cz.rion.buildserver.exceptions.NoFurhterParseException;
 import cz.rion.buildserver.exceptions.NoSuchToolchainException;
 import cz.rion.buildserver.exceptions.SwitchClientException;
 
@@ -34,13 +35,13 @@ public abstract class HTTPParserClient extends HTTPPermissionClient {
 		return false;
 	}
 
-	private Toolchain getToolchain(HTTPRequest request) {
+	private Toolchain getToolchain(HTTPRequest request) throws NoSuchToolchainException {
 		if (toolchain == null) {
 			String toolchain = sdb.getToolchainMapping(request.host);
 			try {
 				this.toolchain = sdb.getToolchain(toolchain == null ? "" : toolchain);
 			} catch (NoSuchToolchainException e) {
-				e.printStackTrace();
+				throw e;
 			}
 		}
 		return toolchain;
@@ -120,7 +121,7 @@ public abstract class HTTPParserClient extends HTTPPermissionClient {
 		return new HTTPResponse(request.protocol, returnCode, returnCodeDescription, "Not implemented", type, request.cookiesLines);
 	}
 
-	protected HTTPRequest handle(String method, String path, String protocol) throws HTTPClientException, SwitchClientException {
+	protected HTTPRequest handle(String method, String path, String protocol) throws HTTPClientException, SwitchClientException, NoFurhterParseException {
 		Map<String, String> header = new HashMap<>();
 		List<String> cookiesLines = new ArrayList<>();
 		while (true) {
@@ -185,11 +186,20 @@ public abstract class HTTPParserClient extends HTTPPermissionClient {
 		}
 		String host = header.get("host");
 		HTTPRequest req = new HTTPRequest(method, host, protocol, path, data, header, cookiesLines);
-		ToolChainKnown(getToolchain(req));
+		Toolchain newToolchain;
+		try {
+			newToolchain = getToolchain(req);
+		} catch (NoSuchToolchainException e) {
+			throw new NoFurhterParseException(writeNoSuchToolchain(req));
+		}
+		if (newToolchain == null) {
+			throw new NoFurhterParseException(writeNoSuchToolchain(req));
+		}
+		ToolChainKnown(newToolchain);
 		return req;
 	}
 
-	private HTTPRequest handle() throws HTTPClientException, SwitchClientException {
+	private HTTPRequest handle() throws HTTPClientException, SwitchClientException, NoFurhterParseException {
 		String header = readLine();
 		String[] headerSplit = header.split(" ");
 		if (headerSplit.length < 3) {
@@ -211,6 +221,11 @@ public abstract class HTTPParserClient extends HTTPPermissionClient {
 			} catch (SwitchClientException e) {
 				keepAlive = true;
 				throw e;
+			} catch (NoFurhterParseException e) {
+				try {
+					handle(e.response);
+				} catch (HTTPClientException e1) {
+				}
 			}
 
 		} finally {
@@ -227,6 +242,12 @@ public abstract class HTTPParserClient extends HTTPPermissionClient {
 				}
 			}
 		}
+	}
+
+	private HTTPResponse writeNoSuchToolchain(HTTPRequest request) {
+		byte[] data = "No such toolchain is known".getBytes(Settings.getDefaultCharset());
+		HTTPResponse resp = new HTTPResponse(request.protocol, 200, "OK", data, null, request.cookiesLines);
+		return resp;
 	}
 
 	private void close() {

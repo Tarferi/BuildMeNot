@@ -43,12 +43,10 @@ var tester = function() {
 	
 	}
 	
-	self.dec = function(str) {
-		var res="";
-		// Decode UTF-8
-		var decTable = {
+	// Decoded UTF-8
+	var decTable = {
 				
-				195: {
+					195: {
 					63: 193, // "??"
 					161: 225, // "á"
 					169: 233, // "é"
@@ -98,9 +96,35 @@ var tester = function() {
 					190: 382, // "ž"
 					184: 376 // "Ÿ"
 	
+	
 				}
 		};
+		
+    var reversedDecTable = {};
+    { // Sestavime reverzni prvky
+		var getDecDiv = document.createElement("span");
+		var getDec = function(enc) {
+		   getDecDiv.innerHTML = enc;
+		   return getDecDiv.innerHTML;
+		}
+		
+		// Entities
+		var reverseMapping = {};
+		for(var x1 in decTable) {
+		   if(decTable.hasOwnProperty(x1)) {
+		      for(var x2 in decTable[x1]) {
+		         if(decTable[x1].hasOwnProperty(x2)) {
+		            var value = decTable[x1][x2];
+		            var reversed = getDec("&#" + value + ";");
+		            reverseMapping[value] = reversed;
+		         }
+		      }
+		   }
+		}
+	}
 	
+	self.dec = function(str) {
+		var res="";
 		for(var i = 0; i < str.length; i++) {
 			var x = str.charAt(i);
 			var c = str.charCodeAt(i);
@@ -119,6 +143,24 @@ var tester = function() {
 			}
 			res+=x;
 		}
+		
+		var newValue = [];
+		str = res;
+		for(var i = 0; i < str.length; i++) {
+		   if(str[i] == '&' && str.indexOf('#',i) == i + 1 && str.indexOf(';',i) >i+1) { // Tag
+		      var tagValue = str.substr(i+2, str.indexOf(';',i)-(i+2));
+		      if(!isNaN(tagValue)) {
+		         tagValue = tagValue * 1;
+		         if(tagValue in reverseMapping) {
+		            newValue.push(reverseMapping[tagValue]);
+		            i = str.indexOf(';',i);
+		            continue;
+		         }
+		      }
+		   }
+		   newValue.push(str[i]);
+		}
+		res = newValue.join("");
 		return res;
 	}
 	
@@ -215,7 +257,7 @@ var tester = function() {
 			            		"contents":[
 			            			{
 				            			"type":"Button",
-					            		"innerHTML":"Skrýt",
+					            		"innerHTML":"SkrĂ˝t",
 					            		"id":"btnHide"
 			            			}
 			            		]
@@ -243,7 +285,7 @@ var tester = function() {
 			                           {
 			                              "type":"button",
 			                              "id":"runtests",
-			                              "innerHTML":"Otestovat řešení"
+			                              "innerHTML":"Otestovat Ĺ™eĹˇenĂ­"
 			                           },
 			                           {
 			                        	   "type":"div",
@@ -260,7 +302,7 @@ var tester = function() {
 			                     {
 			                        "type":"div",
 			                        "class":"w121",
-			                        "innerHTML":"Zadání"
+			                        "innerHTML":"ZadĂˇnĂ­"
 			                     },
 			                     {
 			                        "type":"div",
@@ -276,7 +318,7 @@ var tester = function() {
 			                     {
 			                        "type":"div",
 			                        "class":"w131",
-			                        "innerHTML": "&#344;ešení"
+			                        "innerHTML": "&#344;eĹˇenĂ­"
 			                     },
 			                     {
 			                        "type":"div",
@@ -406,7 +448,7 @@ var tester = function() {
 		this.setCollapsed = function(collapsed) {
 			self.mainPnl.style.display = collapsed ?  "none" : "table";
 			if(self.btnHide){
-				self.btnHide.innerHTML = collapsed ? "Zobrazit" : "Skrýt";
+				self.btnHide.innerHTML = collapsed ? "Zobrazit" : "SkrĂ˝t";
 			}
 			if(self.nwBorder){
 				self.nwBorder.style.borderLeft = collapsed ? "1px solid black" : "";
@@ -419,11 +461,11 @@ var tester = function() {
 			var struct = tester.reconstructUI(UI);
 			var el = struct[0];
 			var ids = struct[1];
-			var solvStr = data.finished_date ? " (vyřešeno "+data.finished_date+")" : "";
+			var solvStr = data.finished_date ? " (vyĹ™eĹˇeno "+data.finished_date+")" : "";
 			ids.txtArea.innerHTML = data.finished_code ? data.finished_code :  data.init;
 			ids.txtBrief.innerHTML = data.title+solvStr;
 			ids.txtDescr.innerHTML = data.zadani;
-			ids.txtSolution.innerHTML = "Zde se objeví detaily testů tvého řešení";
+			ids.txtSolution.innerHTML = "Zde se objevĂ­ detaily testĹŻ tvĂ©ho Ĺ™eĹˇenĂ­";
 			
 			self.ta = ids.txtArea;
 			self.b1 = ids.runtests;
@@ -444,7 +486,7 @@ var tester = function() {
 			var el = document.createElement("div"); // Hlavni prvek
 			el.classList.add("txtTest");
 			
-			var solvStr = data.finished_date ? " (vyřešeno "+data.finished_date+")" : "";
+			var solvStr = data.finished_date ? " (vyĹ™eĹˇeno "+data.finished_date+")" : "";
 			
 			getNewElement2(el, "div", "txtTestLbl", data.title + solvStr);
 			
@@ -454,7 +496,7 @@ var tester = function() {
 			self.ta = getNewElement2(wr, "textarea", "txtAsm", data.init);
 			
 			var pc = getNewElement1(wr, "div", "pnlControls");
-			self.b1 = getNewElement2(pc, "button", false, "Otestovat řešení");
+			self.b1 = getNewElement2(pc, "button", false, "Otestovat Ĺ™eĹˇenĂ­");
 				
 	
 			// Zadani
@@ -464,8 +506,8 @@ var tester = function() {
 			
 			// Reseni
 			var sl = getNewElement1(el, "div", "txtDescr");
-			getNewElement2(sl, "div", ["txtDescrName", "txtDescrNameSolution"], "�?ešení");
-			self.rs = getNewElement2(sl, "span", "txtDescrSolutionLog", "Zde se objevi detaily testů tvého řešení")
+			getNewElement2(sl, "div", ["txtDescrName", "txtDescrNameSolution"], "ďż˝?eĹˇenĂ­");
+			self.rs = getNewElement2(sl, "span", "txtDescrSolutionLog", "Zde se objevi detaily testĹŻ tvĂ©ho Ĺ™eĹˇenĂ­")
 			setup();
 			return el;
 		};
@@ -531,13 +573,13 @@ var tester = function() {
 	
 	self.getErrorSolution = function(code) {
 		if(code == 0){
-			return self.dec("<span class=\"log_err\">Nepodařilo se kontaktovat sestavovací server</span>");
+			return self.dec("<span class=\"log_err\">NepodaĹ™ilo se kontaktovat sestavovacĂ­ server</span>");
 		} else if(code == 1){
-			return self.dec("<span class=\"log_err\">Nepodařilo se dekódovat odpověď sestavovacího serveru</span>");
+			return self.dec("<span class=\"log_err\">NepodaĹ™ilo se dekĂłdovat odpovÄ›ÄŹ sestavovacĂ­ho serveru</span>");
 		}else if(code == 53){
-			return self.dec("<span class=\"log_err\">Byl jsi odhlášen. Pro přihlášení si obnov stránku (nezapome�? si někam bokem uložit kód, který se právě snažíš přeloži)</span>");
+			return self.dec("<span class=\"log_err\">Byl jsi odhlĂˇĹˇen. Pro pĹ™ihlĂˇĹˇenĂ­ si obnov strĂˇnku (nezapomeďż˝? si nÄ›kam bokem uloĹľit kĂłd, kterĂ˝ se prĂˇvÄ› snaĹľĂ­Ĺˇ pĹ™eloĹľi)</span>");
 		} else {
-			return self.dec("<span class=\"log_err\">Neznámá chyba</span>");
+			return self.dec("<span class=\"log_err\">NeznĂˇmĂˇ chyba</span>");
 		}
 	}
 	
@@ -674,13 +716,13 @@ var tester = function() {
 						if(jsn.code == 53){
 							document.location.reload();
 						} else {
-							cbFail(self.dec("Nepodařilo se nahrát testy: <br />" + jsn.result));
+							cbFail(self.dec("NepodaĹ™ilo se nahrĂˇt testy: <br />" + jsn.result));
 						}
 					}
 					return;
 				}
 			}
-			cbFail(self.dec("Nepodařilo se dekódovat testy"));
+			cbFail(self.dec("NepodaĹ™ilo se dekĂłdovat testy"));
 		};
 		var data = {"action":"COLLECT"}
 		var txtEnc = "q=" + self.encode(JSON.stringify(data));
@@ -718,7 +760,7 @@ var tester = function() {
 			opts.title.text = graphData.Name;
 		}
 		if(graphData.Options && graphData.Options.Plag) {
-			graphData.Data.x.unshift("Plagiátorů");
+			graphData.Data.x.unshift("PlagiĂˇtorĹŻ");
 			graphData.Data.y[0].data.unshift(graphData.Options.Plag)
 		}
 		var chart = new Chart(ctx, {
@@ -801,7 +843,7 @@ var tester = function() {
 					}
 				}
 			}
-			cbFail(self.dec("Nepodařilo se dekódovat statistiky"));
+			cbFail(self.dec("NepodaĹ™ilo se dekĂłdovat statistiky"));
 		};
 		var data = {"action":"GRAPHS"}
 		var txtEnc = "q=" + self.encode(JSON.stringify(data));
