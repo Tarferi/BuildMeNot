@@ -1,7 +1,6 @@
 package cz.rion.buildserver.http;
 
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -17,6 +16,7 @@ import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
+import cz.rion.buildserver.utils.CachedData;
 
 public abstract class HTTPGraphProviderClient extends HTTPFileProviderClient {
 
@@ -67,10 +67,10 @@ public abstract class HTTPGraphProviderClient extends HTTPFileProviderClient {
 							for (JsonValue val : arr.Value) {
 								if (val.isObject()) {
 									JsonObject xobj = val.asObject();
-									if (xobj.containsString("toolchain")) {
-										String tc = xobj.getString("toolchain").Value;
+									if (xobj.containsString("ToolChain")) {
+										String tc = xobj.getString("ToolChain").Value;
 										if (tc.equals(toolchain)) {
-											newArr.add(obj);
+											newArr.add(xobj);
 										}
 									}
 								}
@@ -87,116 +87,132 @@ public abstract class HTTPGraphProviderClient extends HTTPFileProviderClient {
 		return null;
 	}
 
-	private static JsonValue __cache = null;
-	private static long cacheCreation = 0;
+	private class CachedGraphs extends CachedData<JsonValue> {
 
-	protected JsonValue loadGraphs(String toolchain) {
-		long now = new Date().getTime();
-		long diff = now - cacheCreation;
-		if (diff < 1000 * 60) {
-			return __cache;
-		}
-		// Preload database files
-		List<DatabaseFile> files = sdb.getFiles();
-		LayeredDBFileWrapperDB.loadDatabaseFiles(db, files);
-		Map<String, Integer> fileIds = new HashMap<>();
-		for (DatabaseFile file : files) {
-			fileIds.put(file.FileName, file.ID);
+		private final String toolchain;
+
+		public CachedGraphs(String toolchain) {
+			super(60);
+			this.toolchain = toolchain;
 		}
 
-		// Load tests
-		FileInfo src = sdb.loadFile("graphs.cfg", true);
+		@Override
+		protected JsonValue update() {
+			// Preload database files
+			List<DatabaseFile> files = sdb.getFiles();
+			LayeredDBFileWrapperDB.loadDatabaseFiles(db, files);
+			Map<String, Integer> fileIds = new HashMap<>();
+			for (DatabaseFile file : files) {
+				fileIds.put(file.FileName, file.ID);
+			}
 
-		if (src != null) {
-			JsonValue val = JsonValue.parse(src.Contents);
-			if (val != null) {
-				if (val.isArray()) {
-					JsonArray result = new JsonArray(new ArrayList<JsonValue>());
-					for (JsonValue v : val.asArray().Value) {
-						try {
-							if (!v.isObject()) {
-								continue;
-							}
-							JsonObject obj = v.asObject();
-							String view = obj.getString("View").Value;
-							String x = obj.getString("X").Value;
-							JsonArray y = obj.getArray("Y");
+			// Load tests
+			FileInfo src = sdb.loadFile("graphs.cfg", true);
 
-							JsonObject res = new JsonObject();
-
-							FileInfo loadedView = loadView(fileIds, view, true, toolchain);
-							if (loadedView == null) {
-								continue;
-							}
-							JsonValue viewData = JsonValue.parse(loadedView.Contents);
-							if (viewData == null) {
-								continue;
-							}
-							JsonObject dataColumns = new JsonObject();
-
-							if (!viewData.isObject()) {
-								continue;
-							}
-							JsonObject vobj = viewData.asObject();
-							if (!vobj.containsArray("result")) {
-								continue;
-							}
-							List<JsonValue> vres = vobj.getArray("result").Value;
-
-							JsonArray xData = new JsonArray(new ArrayList<JsonValue>());
-							JsonArray yData = new JsonArray(new ArrayList<JsonValue>());
-
-							String[] yNames = new String[y.Value.size()];
-							JsonArray[] yVals = new JsonArray[y.Value.size()];
-							int index = 0;
-							for (JsonValue vy : y.Value) {
-								yNames[index] = vy.asObject().getString("Column").Value;
-								yVals[index] = new JsonArray(new ArrayList<JsonValue>());
-								index++;
-							}
-
-							// Load values for all columns
-							for (JsonValue vd : vres) {
-								JsonValue xVal = vd.asObject().get(x);
-								for (int i = 0; i < yNames.length; i++) {
-									JsonValue yVal = vd.asObject().get(yNames[i]);
-									yVals[i].add(yVal);
+			if (src != null) {
+				JsonValue val = JsonValue.parse(src.Contents);
+				if (val != null) {
+					if (val.isArray()) {
+						JsonArray result = new JsonArray(new ArrayList<JsonValue>());
+						for (JsonValue v : val.asArray().Value) {
+							try {
+								if (!v.isObject()) {
+									continue;
 								}
-								xData.add(xVal);
-							}
-							dataColumns.add("x", xData);
+								JsonObject obj = v.asObject();
+								String view = obj.getString("View").Value;
+								String x = obj.getString("X").Value;
+								JsonArray y = obj.getArray("Y");
 
-							for (int i = 0; i < yNames.length; i++) {
-								JsonObject yObj = y.Value.get(i).asObject();
-								yObj.add("data", yVals[i]);
-								yData.add(yObj);
-							}
+								JsonObject res = new JsonObject();
 
-							dataColumns.add("y", yData);
-							res.add("Name", obj.getString("Name"));
-							res.add("X-label", obj.getString("X-label"));
-							res.add("Y-label", obj.getString("Y-label"));
-							if (obj.contains("Options")) {
-								res.add("Options", obj.get("Options"));
-							}
-							if (obj.contains("LibOptions")) {
-								res.add("LibOptions", obj.get("LibOptions"));
-							}
-							res.add("Data", dataColumns);
+								FileInfo loadedView = loadView(fileIds, view, true, toolchain);
+								if (loadedView == null) {
+									continue;
+								}
+								JsonValue viewData = JsonValue.parse(loadedView.Contents);
+								if (viewData == null) {
+									continue;
+								}
+								JsonObject dataColumns = new JsonObject();
 
-							result.add(res);
-						} catch (Throwable e) {
-							e.printStackTrace();
-							continue;
+								if (!viewData.isObject()) {
+									continue;
+								}
+								JsonObject vobj = viewData.asObject();
+								if (!vobj.containsArray("result")) {
+									continue;
+								}
+								List<JsonValue> vres = vobj.getArray("result").Value;
+
+								JsonArray xData = new JsonArray(new ArrayList<JsonValue>());
+								JsonArray yData = new JsonArray(new ArrayList<JsonValue>());
+
+								String[] yNames = new String[y.Value.size()];
+								JsonArray[] yVals = new JsonArray[y.Value.size()];
+								int index = 0;
+								for (JsonValue vy : y.Value) {
+									yNames[index] = vy.asObject().getString("Column").Value;
+									yVals[index] = new JsonArray(new ArrayList<JsonValue>());
+									index++;
+								}
+
+								// Load values for all columns
+								for (JsonValue vd : vres) {
+									JsonValue xVal = vd.asObject().get(x);
+									for (int i = 0; i < yNames.length; i++) {
+										JsonValue yVal = vd.asObject().get(yNames[i]);
+										yVals[i].add(yVal);
+									}
+									xData.add(xVal);
+								}
+								dataColumns.add("x", xData);
+
+								for (int i = 0; i < yNames.length; i++) {
+									JsonObject yObj = y.Value.get(i).asObject();
+									yObj.add("data", yVals[i]);
+									yData.add(yObj);
+								}
+
+								dataColumns.add("y", yData);
+								res.add("Name", obj.getString("Name"));
+								res.add("X-label", obj.getString("X-label"));
+								res.add("Y-label", obj.getString("Y-label"));
+								if (obj.contains("Options")) {
+									res.add("Options", obj.get("Options"));
+								}
+								if (obj.contains("LibOptions")) {
+									res.add("LibOptions", obj.get("LibOptions"));
+								}
+								res.add("Data", dataColumns);
+
+								result.add(res);
+							} catch (Throwable e) {
+								e.printStackTrace();
+								continue;
+							}
 						}
+						return result;
 					}
-					__cache = result;
-					cacheCreation = now;
-					return result;
 				}
 			}
+			return null;
 		}
-		return null;
+
+	}
+
+	private final Map<String, CachedGraphs> loadedGraps = new HashMap<>();
+
+	protected JsonValue loadGraphs(String toolchain) {
+		synchronized (loadedGraps) {
+			if (loadedGraps.containsKey(toolchain)) {
+				return loadedGraps.get(toolchain).get();
+			} else {
+				CachedGraphs cg = new CachedGraphs(toolchain);
+				loadedGraps.put(toolchain, cg);
+				return cg.get();
+			}
+		}
 	}
 
 	@Override
