@@ -227,7 +227,7 @@ public class Settings {
 	}
 
 	public static Charset getDefaultCharset() {
-		return Charset.forName("windows-1250");
+		return Charset.forName("UTF-8");
 	}
 
 	public static boolean RunOnlyUI() {

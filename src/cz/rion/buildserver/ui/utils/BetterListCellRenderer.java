@@ -11,6 +11,8 @@ import cz.rion.buildserver.ui.icons.IconManager;
 
 public class BetterListCellRenderer extends DefaultListCellRenderer {
 
+	private static final long serialVersionUID = 1L;
+
 	private JLabel label;
 
 	private boolean icons = false;

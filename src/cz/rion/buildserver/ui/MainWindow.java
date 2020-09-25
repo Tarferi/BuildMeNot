@@ -15,6 +15,9 @@ import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
 
 public class MainWindow extends JFrame implements StatusChangeListener, PingEventListener {
+	
+	private static final long serialVersionUID = 1L;
+
 	private final ConnectionPanel pnlConnect;
 	private final StatusPanel pnlStatus;
 	private final UsersPanel pnlUsers;

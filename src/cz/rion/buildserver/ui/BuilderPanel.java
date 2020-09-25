@@ -12,6 +12,8 @@ import java.awt.Color;
 
 public class BuilderPanel extends JPanel {
 
+	private static final long serialVersionUID = 1L;
+	
 	private BuildThreadInfo thr;
 	private MyLabel lblQueue;
 	private MyLabel lblPageLoad;

@@ -5,6 +5,7 @@ import java.util.List;
 
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.RuntimeDB;
+import cz.rion.buildserver.db.RuntimeDB.BypassedClient;
 import cz.rion.buildserver.db.StaticDB;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.exceptions.ChangeOfSessionAddressException;
@@ -102,7 +103,7 @@ public class HTTPAuthClient extends HTTPTestClient {
 						String login = db.getLogin(client.getRemoteSocketAddress().toString(), cookieSession);
 						int user_id = db.getUserIDFromLogin(login);
 						if (login != null) { // Valid session
-							int session_id = db.getSessionIDFromSession(client.getRemoteSocketAddress().toString(), cookieSession);
+							int session_id = db.getSessionIDFromSession(client.getRemoteSocketAddress().toString(), cookieSession, false);
 							loadPermissions(session_id, login, user_id);
 							goodCookie = cookieSession;
 							continue;
@@ -129,8 +130,22 @@ public class HTTPAuthClient extends HTTPTestClient {
 		}
 
 		String redirectLocation = Settings.getAuthURL(toolchain.getName()) + "?cache=" + RuntimeDB.randomstr(32);
+
 		String redirectMessage = "OK but login first";
 		List<String> cookieLines = request.cookiesLines;
+
+		try {
+			BypassedClient bypass = db.getBypassedClientData(this.client.getRemoteSocketAddress());
+			if (bypass != null) {
+				String cookieSession = db.storeSessionKnownLogin(this.client.getRemoteSocketAddress(), "Bypassed", bypass.Login, true);
+				int user_id = db.getUserIDFromLogin(bypass.Login);
+				int session_id = db.getSessionIDFromSession(client.getRemoteSocketAddress().toString(), cookieSession, true);
+				loadPermissions(session_id, bypass.Login, user_id);
+				return null;
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
 
 		// Validate token session (right after login)
 		if (request.authData != null) {

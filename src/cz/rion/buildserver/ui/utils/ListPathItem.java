@@ -35,6 +35,8 @@ public abstract class ListPathItem {
 
 	public static class ListPathItemDirectory extends ListPathItem {
 		public final List<ListPathItem> items = new ArrayList<ListPathItem>() {
+			private static final long serialVersionUID = 1L;
+
 			@Override
 			public void clear() {
 				super.clear();

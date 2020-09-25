@@ -23,6 +23,7 @@ import cz.rion.buildserver.json.JsonValue.JsonNumber;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.json.JsonValue.JsonString;
 import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
+import cz.rion.buildserver.utils.CachedData;
 
 public class RuntimeDB extends LayeredMetaDB {
 
@@ -38,6 +39,7 @@ public class RuntimeDB extends LayeredMetaDB {
 	public RuntimeDB(String fileName, StaticDB sdb) throws DatabaseException {
 		super(fileName, "RuntimeDB");
 		crypto = CryptoManager.getCrypto(sdb);
+		CachedBypassedClientData = new CachedBypassedClientDataCls(sdb);
 		new StatDB(this);
 		makeTable("users", KEY("ID"), TEXT("login"));
 		makeTable("session", KEY("ID"), TEXT("address"), TEXT("hash"), NUMBER("live"), NUMBER("user_id"), DATE("last_action"), DATE("creation_time"));
@@ -409,11 +411,73 @@ public class RuntimeDB extends LayeredMetaDB {
 		if (add.length == 2) { // IPv4 ?
 			address = add[0];
 		} else { // IPv6 ?
+			address = address.replaceAll("\\[", "").replaceAll("\\]", "").replaceAll("/", "");
+			String[] parts = address.split(":");
+			int last = Integer.parseInt(parts[parts.length - 1]);
+			if (last > 0xff) {
+				address = address.substring(0, address.lastIndexOf(":"));
+			}
 		}
 		return address;
 	}
 
+	public String storeSessionKnownLogin(String address, String authToken, String login, boolean allowChangeAddress) throws Exception {
+		long now = new Date().getTime() / 1000;
+		final String tableName = "session";
+		synchronized (syncer_sessions) {
+			int user_id = getUserIDFromLogin(login);
+			if (user_id == -1) {
+				this.log_expired_crypto(address, authToken, "Invalid user - looking for: " + login);
+				throw new Exception("Invalid user (looking for " + login + ")");
+			}
+			// Get live sessions
+			ComparisionField[] cf;
+			if (allowChangeAddress) {
+				cf = new ComparisionField[] { new ComparisionField(this.getField(tableName, "user_id"), user_id), new ComparisionField(this.getField(tableName, "live"), 1) };
+			} else {
+				cf = new ComparisionField[] { new ComparisionField(this.getField(tableName, "user_id"), user_id), new ComparisionField(this.getField(tableName, "live"), 1), new ComparisionField(this.getField(tableName, "address"), address) };
+			}
+			JsonArray res = this.select(tableName, new TableField[] { this.getField(tableName, "ID"), this.getField(tableName, "hash") }, false, cf);
+			if (res.Value.size() == 0) { // No such session, create new
+				String newSessionToken = randomstr(32);
+				while (true) { // Must not exist already
+
+					res = this.select(tableName, new TableField[] { this.getField(tableName, "ID"), this.getField(tableName, "hash") }, false, new ComparisionField(this.getField(tableName, "hash"), newSessionToken));
+					if (res.Value.size() == 0) {
+						break;
+					}
+					newSessionToken = randomstr(32);
+				}
+
+				ValuedField[] updateData = new ValuedField[] { new ValuedField(this.getField(tableName, "hash"), newSessionToken), new ValuedField(this.getField(tableName, "address"), address), new ValuedField(this.getField(tableName, "live"), 1), new ValuedField(this.getField(tableName, "user_id"), user_id), new ValuedField(this.getField(tableName, "last_action"), now), new ValuedField(this.getField(tableName, "creation_time"), now) };
+
+				if (!insert(tableName, updateData)) {
+					return null;
+				}
+				res = this.select(tableName, new TableField[] { this.getField(tableName, "ID"), this.getField(tableName, "hash") }, false, new ComparisionField(this.getField(tableName, "user_id"), user_id));
+				if (res.Value.size() == 0) {
+					throw new Exception("Failed to update session in database");
+				}
+			} else {
+
+				ValuedField[] updateData = new ValuedField[] { new ValuedField(this.getField(tableName, "last_action"), now) };
+				this.update(tableName, "user_id", user_id, updateData);
+			}
+			JsonValue val = res.Value.get(0);
+			if (val.isObject()) {
+				JsonObject obj = val.asObject();
+				if (obj.containsString("hash")) {
+					String hash = obj.getString("hash").Value;
+					return hash;
+				}
+			}
+			throw new Exception("Database error?");
+		}
+
+	}
+
 	public String storeSession(String address, String authToken) throws Exception {
+
 		address = getAddress(address);
 
 		if (crypto == null) {
@@ -447,51 +511,7 @@ public class RuntimeDB extends LayeredMetaDB {
 				}
 
 				String login = obj.getString("login").Value;
-				final String tableName = "session";
-				synchronized (syncer_sessions) {
-					int user_id = getUserIDFromLogin(login);
-					if (user_id == -1) {
-						this.log_expired_crypto(address, authToken, "Invalid user - looking for: " + login);
-						throw new Exception("Invalid user (looking for " + login + ")");
-					}
-					// Get live sessions
-
-					JsonArray res = this.select(tableName, new TableField[] { this.getField(tableName, "ID"), this.getField(tableName, "hash") }, false, new ComparisionField(this.getField(tableName, "user_id"), user_id), new ComparisionField(this.getField(tableName, "live"), 1), new ComparisionField(this.getField(tableName, "address"), address));
-					if (res.Value.size() == 0) { // No such session, create new
-						String newSessionToken = randomstr(32);
-						while (true) { // Must not exist already
-
-							res = this.select(tableName, new TableField[] { this.getField(tableName, "ID"), this.getField(tableName, "hash") }, false, new ComparisionField(this.getField(tableName, "hash"), newSessionToken));
-							if (res.Value.size() == 0) {
-								break;
-							}
-							newSessionToken = randomstr(32);
-						}
-
-						ValuedField[] updateData = new ValuedField[] { new ValuedField(this.getField(tableName, "hash"), newSessionToken), new ValuedField(this.getField(tableName, "address"), address), new ValuedField(this.getField(tableName, "live"), 1), new ValuedField(this.getField(tableName, "user_id"), user_id), new ValuedField(this.getField(tableName, "last_action"), now), new ValuedField(this.getField(tableName, "creation_time"), now) };
-
-						if (!insert(tableName, updateData)) {
-							return null;
-						}
-						res = this.select(tableName, new TableField[] { this.getField(tableName, "ID"), this.getField(tableName, "hash") }, false, new ComparisionField(this.getField(tableName, "user_id"), user_id));
-						if (res.Value.size() == 0) {
-							throw new Exception("Failed to update session in database");
-						}
-					} else {
-
-						ValuedField[] updateData = new ValuedField[] { new ValuedField(this.getField(tableName, "last_action"), now) };
-						this.update(tableName, "user_id", user_id, updateData);
-					}
-					val = res.Value.get(0);
-					if (val.isObject()) {
-						obj = val.asObject();
-						if (obj.containsString("hash")) {
-							String hash = obj.getString("hash").Value;
-							return hash;
-						}
-					}
-					throw new Exception("Database error?");
-				}
+				return storeSessionKnownLogin(address, authToken, login, false);
 			} else {
 				this.log_expired_crypto(address, authToken, "Parse failed - missing fields");
 				throw new Exception("Invalid auth structure: missing fields");
@@ -501,7 +521,7 @@ public class RuntimeDB extends LayeredMetaDB {
 		}
 	}
 
-	public int getSessionIDFromSession(String address, String session) throws DatabaseException, ChangeOfSessionAddressException {
+	public int getSessionIDFromSession(String address, String session, boolean allowChangeOfAddress) throws DatabaseException, ChangeOfSessionAddressException {
 		address = getAddress(address);
 		synchronized (syncer_sessions) {
 			final String tableName = "session";
@@ -513,7 +533,7 @@ public class RuntimeDB extends LayeredMetaDB {
 					JsonObject obj = val.asObject();
 					if (obj.containsString("address")) {
 						String addr = obj.getString("address").Value;
-						if (!addr.equals(address)) {
+						if (!addr.equals(address) && !allowChangeOfAddress) {
 							throw new ChangeOfSessionAddressException();
 						}
 						if (obj.containsNumber("ID")) {
@@ -787,5 +807,54 @@ public class RuntimeDB extends LayeredMetaDB {
 
 	public FileInfo getSpecialFile(int fileID, boolean interpret) {
 		return handleSpecialView(null, fileID, interpret);
+	}
+
+	public static class BypassedClient {
+		public final String Address;
+		public final String Login;
+
+		private BypassedClient(String addr, String login) {
+			this.Address = addr;
+			this.Login = login;
+		}
+	}
+
+	private static class CachedBypassedClientDataCls extends CachedData<Map<String, BypassedClient>> {
+
+		private StaticDB sdb;
+
+		public CachedBypassedClientDataCls(StaticDB sdb) {
+			super(30);
+			this.sdb = sdb;
+		}
+
+		@Override
+		protected Map<String, BypassedClient> update() {
+			Map<String, BypassedClient> result = new HashMap<>();
+			FileInfo f = sdb.loadFile("remapped_users.ini", true);
+			if (f != null) {
+				for (String line : f.Contents.split("\n")) {
+					line = line.trim();
+					if (line.isEmpty() || line.startsWith("#")) {
+						continue;
+					}
+					String[] parts = line.split("=", 2);
+					if (parts.length == 2) {
+						String address = parts[0].trim();
+						String login = parts[1].trim();
+						result.put(address, new BypassedClient(address, login));
+					}
+				}
+
+			}
+			return result;
+		}
+
+	};
+
+	private final CachedBypassedClientDataCls CachedBypassedClientData;
+
+	public BypassedClient getBypassedClientData(String remoteSocketAddress) {
+		return CachedBypassedClientData.get().get(getAddress(remoteSocketAddress));
 	}
 }

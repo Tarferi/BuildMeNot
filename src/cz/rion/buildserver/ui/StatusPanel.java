@@ -22,7 +22,9 @@ import cz.rion.buildserver.ui.events.StatusMessageEvent.StatusMessage;
 import cz.rion.buildserver.ui.events.StatusMessageEvent.StatusMessageListener;
 
 public class StatusPanel extends JPanel implements BuilderAvailableListener, StatusMessageListener, BuilderUpdateListener {
-
+	
+	private static final long serialVersionUID = 1L;
+	
 	private JPanel pnlBuilders;
 	private Status status;
 	private UIDriver driver;

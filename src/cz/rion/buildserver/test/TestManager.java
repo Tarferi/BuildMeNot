@@ -8,28 +8,22 @@ import java.util.List;
 import java.util.Map;
 
 import cz.rion.buildserver.Settings;
-import cz.rion.buildserver.db.RuntimeDB.BadResultType;
 import cz.rion.buildserver.db.RuntimeDB.BadResults;
 import cz.rion.buildserver.db.StaticDB;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.ExecutionResult;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.ToolchainLogger;
 import cz.rion.buildserver.exceptions.CommandLineExecutionException;
-import cz.rion.buildserver.exceptions.GoLinkExecutionException;
-import cz.rion.buildserver.exceptions.NasmExecutionException;
 import cz.rion.buildserver.exceptions.NoSuchToolchainException;
-import cz.rion.buildserver.exceptions.RuntimeExecutionException;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonNumber;
 import cz.rion.buildserver.json.JsonValue.JsonString;
 import cz.rion.buildserver.wrappers.MyExec;
-import cz.rion.buildserver.wrappers.NasmWrapper;
 import cz.rion.buildserver.wrappers.MyExec.MyExecResult;
 import cz.rion.buildserver.wrappers.MyExec.TestResultsExpectations;
 import cz.rion.buildserver.wrappers.MyFS;
-import cz.rion.buildserver.wrappers.NasmWrapper.RunResult;
 
 public class TestManager {
 

@@ -8,6 +8,7 @@ import javax.swing.AbstractListModel;
 
 public abstract class FilterModel<T> extends AbstractListModel<T> {
 
+	private static final long serialVersionUID = 1L;
 	private T[] data;
 	private String filter = "";
 	private final List<T> filteredData = new ArrayList<>();

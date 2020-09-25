@@ -43,7 +43,9 @@ import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
 
 public class TableView extends JPanel implements UserListLoadedListener {
-
+	
+	private static final long serialVersionUID = 1L;
+	
 	protected static final SimpleDateFormat dateFormat = new SimpleDateFormat("dd. MM. yyyy - HH:mm");
 
 	private final DefaultTableCellRenderer renderBigString = new DefaultTableCellRenderer();

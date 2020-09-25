@@ -436,10 +436,6 @@ public class LayeredPermissionDB extends LayeredTestDB {
 		return false;
 	}
 
-	private Integer getGroupIDByName(String toolchain, String group) {
-		return getGroupIDByName(toolchain, group, null);
-	}
-
 	private Integer getGroupIDByName(String toolchain, String group, Integer parentID) {
 		if (group.trim().isEmpty()) {
 			return null;

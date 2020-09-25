@@ -17,6 +17,8 @@ import cz.rion.buildserver.ui.utils.ListPathItem.ListPathItemDirectory;
 
 public class NavigationList extends JList<ListPathItem> {
 
+	private static final long serialVersionUID = 1L;
+
 	private ListPathItemDirectory root = new ListPathItemDirectory("root", null);
 
 	private ListPathItemDirectory cwd = root;
@@ -98,6 +100,8 @@ public class NavigationList extends JList<ListPathItem> {
 			}
 		});
 		setModel(new FilterModel<ListPathItem>(ListPathItem.class, dir.items, filter) {
+
+			private static final long serialVersionUID = 1L;
 
 			@Override
 			public boolean show(ListPathItem item, String filter) {

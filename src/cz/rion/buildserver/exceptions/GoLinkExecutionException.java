@@ -4,6 +4,7 @@ import cz.rion.buildserver.wrappers.MyExec.MyExecResult;
 
 public class GoLinkExecutionException extends Exception {
 
+	private static final long serialVersionUID = 1L;
 	public final String description;
 	public final MyExecResult execResult;
 

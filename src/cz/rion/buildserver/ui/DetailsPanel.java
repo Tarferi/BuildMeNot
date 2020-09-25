@@ -24,6 +24,8 @@ import java.util.List;
 
 public class DetailsPanel extends JPanel {
 
+	private static final long serialVersionUID = 1L;
+
 	protected static interface DetailsPanelCloseListener {
 		public void close();
 	}

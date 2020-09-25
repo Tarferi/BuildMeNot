@@ -37,6 +37,7 @@ import java.awt.Font;
 
 public class UsersPanel extends JPanel implements UserListLoadedListener {
 
+	private static final long serialVersionUID = 1L;
 	private final UIDriver driver;
 	private Status status;
 	private MyTextField txtUserFilter;
@@ -65,6 +66,8 @@ public class UsersPanel extends JPanel implements UserListLoadedListener {
 			}
 		}
 		list.setModel(new FilterModel<UserInfo>(items, filter) {
+
+			private static final long serialVersionUID = 1L;
 
 			@Override
 			public boolean show(UserInfo item, String filter) {
@@ -184,6 +187,8 @@ public class UsersPanel extends JPanel implements UserListLoadedListener {
 		pnlOverview.add(lblRegisted, "cell 1 0");
 
 		pnlDiv = new JPanel() {
+			private static final long serialVersionUID = 1L;
+
 			@Override
 			public void paint(Graphics g) {
 				super.paint(g);

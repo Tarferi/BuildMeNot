@@ -49,6 +49,7 @@ import java.awt.event.ComponentEvent;
 
 public class FilesPanel extends JPanel implements FileListLoadedListener, FileLoadedListener, FileSavedListener, FileCreatedListener, DatabaseRowEditEventListener {
 
+	private static final long serialVersionUID = 1L;
 	private final UIDriver driver;
 	private Status status;
 	private MyTextField txtFileFilter;

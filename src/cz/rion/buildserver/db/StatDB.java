@@ -8,7 +8,6 @@ import java.util.List;
 import cz.rion.buildserver.db.SQLiteDB.ComparisionField;
 import cz.rion.buildserver.db.SQLiteDB.FieldComparator;
 import cz.rion.buildserver.db.SQLiteDB.TableField;
-import cz.rion.buildserver.exceptions.CompressionException;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
