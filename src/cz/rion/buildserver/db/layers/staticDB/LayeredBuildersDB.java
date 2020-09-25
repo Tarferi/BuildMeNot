@@ -20,6 +20,7 @@ import cz.rion.buildserver.exceptions.NoSuchToolchainException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
+import cz.rion.buildserver.json.JsonValue.JsonString;
 import cz.rion.buildserver.test.GenericTest;
 import cz.rion.buildserver.wrappers.FileReadException;
 import cz.rion.buildserver.wrappers.MyExec;
@@ -27,6 +28,8 @@ import cz.rion.buildserver.wrappers.MyExec.MyExecResult;
 import cz.rion.buildserver.wrappers.MyFS;
 
 public abstract class LayeredBuildersDB extends LayeredSettingsDB {
+
+	private static final boolean SERIALIZE_JSON = true;
 
 	public static class ToolExecutionResult {
 		public final String stdout;
@@ -360,32 +363,59 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 	}
 
 	private static final String[] unserializeParams(String params) throws DatabaseException {
-		try {
-			int paramsLengthIndex = params.indexOf('!');
-			int totalParams = Integer.parseInt(params.substring(0, paramsLengthIndex));
-			String[] paramsArr = new String[totalParams];
-			params = params.substring(paramsLengthIndex + 1);
-			for (int i = 0; i < paramsArr.length; i++) {
-				int nextIndex = params.indexOf('!');
-				int nextParamLength = Integer.parseInt(params.substring(0, nextIndex));
-				params = params.substring(nextIndex + 1);
-				paramsArr[i] = params.substring(0, nextParamLength);
-				params = params.substring(nextParamLength);
+		if (SERIALIZE_JSON) {
+			JsonValue val = JsonValue.parse(params);
+			if (val.isArray()) {
+				JsonArray arr = val.asArray();
+				String[] data = new String[arr.Value.size()];
+				for (int i = 0; i < data.length; i++) {
+					JsonValue v = arr.Value.get(i);
+					if (!v.isString()) {
+						throw new DatabaseException("Invalid param string: " + params);
+					} else {
+						data[i] = v.asString().Value;
+					}
+				}
+				return data;
 			}
-			return paramsArr;
-		} catch (Exception e) {
+
 			throw new DatabaseException("Invalid param string: " + params);
+		} else {
+			try {
+				int paramsLengthIndex = params.indexOf('!');
+				int totalParams = Integer.parseInt(params.substring(0, paramsLengthIndex));
+				String[] paramsArr = new String[totalParams];
+				params = params.substring(paramsLengthIndex + 1);
+				for (int i = 0; i < paramsArr.length; i++) {
+					int nextIndex = params.indexOf('!');
+					int nextParamLength = Integer.parseInt(params.substring(0, nextIndex));
+					params = params.substring(nextIndex + 1);
+					paramsArr[i] = params.substring(0, nextParamLength);
+					params = params.substring(nextParamLength);
+				}
+				return paramsArr;
+			} catch (Exception e) {
+				throw new DatabaseException("Invalid param string: " + params);
+			}
 		}
 	}
 
 	private static final String serializeParams(String[] params) {
-		StringBuilder sb = new StringBuilder();
-		sb.append(params.length + "!");
-		for (String param : params) {
-			sb.append(param.length() + "!");
-			sb.append(param);
+		if (SERIALIZE_JSON) {
+			JsonArray arr = new JsonArray();
+			for (String param : params) {
+				arr.add(new JsonString(param));
+			}
+			return arr.getJsonString();
+		} else {
+			StringBuilder sb = new StringBuilder();
+			sb.append(params.length + "!");
+			for (String param : params) {
+				sb.append(param.length() + "!");
+				sb.append(param);
+			}
+			return sb.toString();
 		}
-		return sb.toString();
 	}
 
 	private static final class ToolLink {

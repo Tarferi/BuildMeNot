@@ -43,9 +43,9 @@ import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
 
 public class TableView extends JPanel implements UserListLoadedListener {
-	
+
 	private static final long serialVersionUID = 1L;
-	
+
 	protected static final SimpleDateFormat dateFormat = new SimpleDateFormat("dd. MM. yyyy - HH:mm");
 
 	private final DefaultTableCellRenderer renderBigString = new DefaultTableCellRenderer();
@@ -112,8 +112,22 @@ public class TableView extends JPanel implements UserListLoadedListener {
 	private static class BigStringTableValue extends TableValue {
 		public final String BigString;
 
+		private static String getSizeValue(String displayed) {
+			int sz = displayed.length();
+			String val = "" + sz;
+			String unit = "bytes";
+			if (sz < 5 * 1024) {
+				// nothing
+			} else {
+				sz = (sz * 100) / 1024;
+				val = (sz / 100) + (sz % 100 == 0 ? "" : "." + sz % 100);
+				unit = "KB";
+			}
+			return val + " " + unit;
+		}
+
 		private BigStringTableValue(String displayedValue) {
-			super(displayedValue.length() + " bytes", displayedValue);
+			super(getSizeValue(displayedValue), displayedValue);
 			this.BigString = displayedValue;
 		}
 

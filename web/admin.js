@@ -59,7 +59,7 @@ var Admin = function() {
 				"colSpan" : 2,
 				"contents" : [ {
 					"type" : "Button",
-					"innerHTML" : "ZavÅ™Ã­t",
+					"innerHTML" : "Zavøít",
 					"class" : "adm_td_main_header_closeButton",
 					"id" : "btnCloseAdmin"
 				} ]
@@ -1102,7 +1102,15 @@ var AdminEditor = function(adminer) {
 					if (!cellObj) {
 						cellObj = "";
 					}
-					cellObj = "<i>" + cellObj.length + " bajtÅ¯</i>";
+					var sz = cellObj.length;
+					var unit = "bajtù";
+					if(sz < 5 * 1024) {
+					   // nothing
+					} else {
+					  sz = Math.round((sz*100) / 1024)/100;
+					  unit = "KB";
+					}
+					cellObj = "<i>" + sz + " "+unit+"</i>";
 				}
 				cell.innerHTML = cellObj
 				row.appendChild(cell);
