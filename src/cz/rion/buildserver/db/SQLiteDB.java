@@ -229,7 +229,7 @@ public abstract class SQLiteDB {
 				stmt.execute();
 				return true;
 			} catch (SQLException e) {
-				throw new DatabaseException("Failed to execute: " + sql, e);
+				throw new DatabaseException("Failed to execute raw exec: " + sql, e);
 			}
 		}
 	}
@@ -390,7 +390,7 @@ public abstract class SQLiteDB {
 				PreparedStatement stmt = prepareStatement(sql, params);
 				return new DatabaseResult(stmt.executeQuery());
 			} catch (SQLException e) {
-				throw new DatabaseException("Failed to execute: " + sql, e);
+				throw new DatabaseException("Failed to execute raw select: " + sql, e);
 			}
 		}
 	}

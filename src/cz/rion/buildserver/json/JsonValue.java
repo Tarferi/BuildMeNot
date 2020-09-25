@@ -430,6 +430,10 @@ public abstract class JsonValue {
 			this.Value.add(value);
 		}
 
+		public JsonArray() {
+			this(new ArrayList<JsonValue>());
+		}
+
 		public JsonArray(List<JsonValue> values) {
 			this.Value = values;
 		}

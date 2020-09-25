@@ -14,10 +14,12 @@ public class Settings {
 	private final SettingsValue nasmExecutable = new SettingsValue("nasm", ValueType.STRING, "nasm.exe");
 	private final SettingsValue gccExecutable = new SettingsValue("GCCName", ValueType.STRING, "gcc.exe");
 	private final SettingsValue gccPath = new SettingsValue("GCCPath", ValueType.STRING, "./gcc/");
+	private final SettingsValue GCCFinalExecutable = new SettingsValue("GCCFinalExecutable", ValueType.STRING, "run.exe");
+	private final SettingsValue gccExecParams = new SettingsValue("GCCExecParams", ValueType.STRING_ARRAY, new String[] {});
 	private final SettingsValue golinkexecutable = new SettingsValue("GoLink", ValueType.STRING, "GoLink.exe");
 	private final SettingsValue golinkparams = new SettingsValue("GoLinkParams", ValueType.STRING_ARRAY, new String[] { "/mix", "msvcrt.dll", "kernel32.dll" });
 	private final SettingsValue nasmparams = new SettingsValue("NasmParams", ValueType.STRING_ARRAY, new String[] { "-f", "win32" });
-	private final SettingsValue execParams = new SettingsValue("ExecParams", ValueType.STRING_ARRAY, new String[] {});
+	private final SettingsValue nasmExecParams = new SettingsValue("ASMExecParams", ValueType.STRING_ARRAY, new String[] {});
 	private final SettingsValue nasmPath = new SettingsValue("nasmPath", ValueType.STRING, "");
 	private final SettingsValue golinkPath = new SettingsValue("GoLinkPath", ValueType.STRING, "");
 	private final SettingsValue showUI = new SettingsValue("UI", ValueType.BOOLEAN, 1);
@@ -170,8 +172,12 @@ public class Settings {
 		return instance.golinkparams.asStringArray();
 	}
 
-	public static String[] getGExecutableParams() {
-		return instance.execParams.asStringArray();
+	public static String[] getAsmExecutableRunnerParams() {
+		return instance.nasmExecParams.asStringArray();
+	}
+
+	public static String[] getGccExecutableRunnerParams() {
+		return instance.gccExecParams.asStringArray();
 	}
 
 	public static boolean showUI() {
@@ -292,5 +298,9 @@ public class Settings {
 
 	public static boolean getForceTimeoutOnErrors() {
 		return instance.forceTimeoutOnErrors.asBoolean();
+	}
+
+	public static String getGCCFilalExecutable() {
+		return instance.GCCFinalExecutable.asString();
 	}
 }

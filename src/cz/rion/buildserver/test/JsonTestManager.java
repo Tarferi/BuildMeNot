@@ -10,9 +10,11 @@ import java.util.regex.Pattern;
 import cz.rion.buildserver.db.StaticDB;
 import cz.rion.buildserver.db.RuntimeDB.BadResultType;
 import cz.rion.buildserver.db.RuntimeDB.BadResults;
+import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.db.layers.staticDB.LayeredFilesDB.DatabaseFile;
 import cz.rion.buildserver.exceptions.CommandLineExecutionException;
 import cz.rion.buildserver.exceptions.DatabaseException;
+import cz.rion.buildserver.exceptions.NoSuchToolchainException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
@@ -42,7 +44,7 @@ public class JsonTestManager {
 		private final String[] allowedInstructions;
 		public final boolean replace;
 		private final ReplacementEntry[] replacement;
-		private final String toolchain;
+		private final Toolchain toolchain;
 
 		@Override
 		public String getID() {
@@ -57,7 +59,7 @@ public class JsonTestManager {
 			SystemFailureMessage finalOsError = new SystemFailureMessage();
 			for (TestVerificationData test : tests) {
 				try {
-					MyExecResult result = input.execute(test.stdin, test.arguments, test.timeout);
+					MyExecResult result = input.execute(test.stdin, test.arguments, test.timeout, toolchain);
 					SystemFailureMessage osError = new SystemFailureMessage(result);
 					if (osError.Type == SystemFailureMessageType.Segfault) {
 						badResults.setNext(BadResultType.SegFault);
@@ -96,7 +98,7 @@ public class JsonTestManager {
 			}
 		}
 
-		private JsonTest(String id, String toolchain, String title, String description, List<TestVerificationData> tests, String initialASM, String append, String prepend, boolean isHidden, boolean isSecret, String[] allowedInstructions, boolean replace, ReplacementEntry[] replacement) {
+		private JsonTest(String id, Toolchain toolchain, String title, String description, List<TestVerificationData> tests, String initialASM, String append, String prepend, boolean isHidden, boolean isSecret, String[] allowedInstructions, boolean replace, ReplacementEntry[] replacement) {
 			this.id = id;
 			this.title = title;
 			this.description = description;
@@ -239,7 +241,7 @@ public class JsonTestManager {
 			final Matcher matcher = pattern.matcher(asm);
 
 			// The substituted value will be contained in the result variable
-			String path = new File("./nasm/").getAbsolutePath().replaceAll("\\\\", "\\\\\\\\")+"\\\\";
+			String path = new File("./nasm/").getAbsolutePath().replaceAll("\\\\", "\\\\\\\\") + "\\\\";
 			asm = matcher.replaceAll("%include \"" + path + "$1\"");
 
 			this.finalASM = asm;
@@ -248,16 +250,12 @@ public class JsonTestManager {
 
 		@Override
 		public String getToolchain() {
-			return toolchain;
+			return toolchain.getName();
 		}
 	}
 
 	private enum SystemFailureMessageType {
-		None(0, ""),
-		Timeout(5, "Tvému kódu vypršel pøidìlený èas na test. Optimalizuj ho a zkus to znovu..."),
-		Segfault(10, "Segmentation fault"),
-		PermissionDenied(20, "Interní selhání. Prosím nahlaš to @Tarferi"),
-		StderrSomething(30, "");
+		None(0, ""), Timeout(5, "Tvému kódu vypršel pøidìlený èas na test. Optimalizuj ho a zkus to znovu..."), Segfault(10, "Segmentation fault"), PermissionDenied(20, "Interní selhání. Prosím nahlaš to @Tarferi"), StderrSomething(30, "");
 
 		public final int Severity;
 		private final String Message;
@@ -401,7 +399,7 @@ public class JsonTestManager {
 		}
 	}
 
-	private static GenericTest ConvertJsonToTest(String path, JsonObject obj) {
+	private static GenericTest ConvertJsonToTest(String path, JsonObject obj, StaticDB sdb) {
 		// Get category name. Find last "tests/" from the end
 		String[] tmp = path.split("tests\\/");
 		String category = tmp[tmp.length - 1].split("\\/")[0];
@@ -492,9 +490,17 @@ public class JsonTestManager {
 			boolean secret = obj.containsNumber("secret") ? obj.getNumber("secret").Value == 1 : false;
 			boolean replace = obj.containsNumber("replace") ? obj.getNumber("replace").Value == 1 : false;
 
-			return new JsonTest(id, toolchain, title, description, tvd, initialASM, append, prepend, hidden, secret, allowedInstructions, replace, replacement);
+			Toolchain tc = null;
+			try {
+				tc = sdb.getToolchain(toolchain);
+			} catch (NoSuchToolchainException e) {
+			}
+			if (tc != null) {
+				return new JsonTest(id, tc, title, description, tvd, initialASM, append, prepend, hidden, secret, allowedInstructions, replace, replacement);
+			}
 		}
 		return null;
+
 	}
 
 	public static List<GenericTest> load(StaticDB sdb, String testDirectory) {
@@ -503,7 +509,7 @@ public class JsonTestManager {
 		fillFSTests(tests, testDirectory);
 		fillDBTests(sdb, tests);
 		for (Pair<String, JsonObject> obj : tests) {
-			GenericTest test = ConvertJsonToTest(obj.Key, obj.Value);
+			GenericTest test = ConvertJsonToTest(obj.Key, obj.Value, sdb);
 			if (test != null) {
 				lst.add(test);
 			}

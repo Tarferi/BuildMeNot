@@ -7,6 +7,10 @@ import java.util.concurrent.TimeUnit;
 
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.exceptions.CommandLineExecutionException;
+import cz.rion.buildserver.json.JsonValue.JsonObject;
+import cz.rion.buildserver.json.JsonValue.JsonString;
+import cz.rion.buildserver.json.JsonValue.JsonArray;
+import cz.rion.buildserver.json.JsonValue.JsonNumber;
 
 public class MyExec {
 

@@ -188,37 +188,31 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 
 		/**
 		 * 
-		 * @param builderPath
-		 *            Path of the builder
-		 * @param builderName
-		 *            Name of the builder
-		 * @param failIfThisFileExists
-		 *            Fail if this file exists. Empty to disable
-		 * @param failIfThisFileDoesntExist
-		 *            Failed if this file doesn't exist. Empty to disable
-		 * @param expectedReturnCode
-		 *            Expected return code
-		 * @param builderParams
-		 *            Parameters to provide to this builder
-		 * @param timeout
-		 *            Builder timeout
-		 * @param builderExecutableName
-		 *            Builder executable name. If empty, nothing is executed, but code
-		 *            is still modified. This can be used to alter code internally
-		 * @param codeModifiers
-		 *            If expected input file is not empty, a code is provided and that
-		 *            will be passed to modifiers and stored to expected input file
-		 * @param expectedOutputFile
-		 *            If this builder provides output for the next builder in chain,
-		 *            this will be read as next code to provide. First empty expected
-		 *            output file disables all next
-		 * @param expectedInputFile
-		 *            Provides input file as output for modifiers and input for builder
-		 *            itself. If empty, no operations in modifiers happen
-		 * @param provideStdin
-		 *            If set to "1", stdin is passed to the builder
-		 * @param stdoutOutputHandler
-		 *            If not empty, this handler acts the same way as {@link #modifiers}
+		 * @param builderPath               Path of the builder
+		 * @param builderName               Name of the builder
+		 * @param failIfThisFileExists      Fail if this file exists. Empty to disable
+		 * @param failIfThisFileDoesntExist Failed if this file doesn't exist. Empty to
+		 *                                  disable
+		 * @param expectedReturnCode        Expected return code
+		 * @param builderParams             Parameters to provide to this builder
+		 * @param timeout                   Builder timeout
+		 * @param builderExecutableName     Builder executable name. If empty, nothing
+		 *                                  is executed, but code is still modified.
+		 *                                  This can be used to alter code internally
+		 * @param codeModifiers             If expected input file is not empty, a code
+		 *                                  is provided and that will be passed to
+		 *                                  modifiers and stored to expected input file
+		 * @param expectedOutputFile        If this builder provides output for the next
+		 *                                  builder in chain, this will be read as next
+		 *                                  code to provide. First empty expected output
+		 *                                  file disables all next
+		 * @param expectedInputFile         Provides input file as output for modifiers
+		 *                                  and input for builder itself. If empty, no
+		 *                                  operations in modifiers happen
+		 * @param provideStdin              If set to "1", stdin is passed to the
+		 *                                  builder
+		 * @param stdoutOutputHandler       If not empty, this handler acts the same way
+		 *                                  as {@link #modifiers}
 		 * 
 		 * @throws DatabaseException
 		 */
@@ -287,10 +281,12 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 		private final Tool[] tools;
 		private final String name;
 		private final String pathPrefix;
+		public final String[] runnerParams;
 
 		public ExecutionResult run(ToolchainLogger errors, GenericTest test, String workingDirectory, String inputString, String stdin, String login) {
 			MyFS.deleteFileSilent(workingDirectory);
 			boolean codeKnown = true;
+
 			ToolExecutionResult[] lst = new ToolExecutionResult[tools.length];
 			int lastUpdateOfOutput = -1;
 			for (int i = 0; i < tools.length; i++) {
@@ -334,10 +330,11 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 			return new ExecutionResult(lst);
 		}
 
-		public Toolchain(String name, String prefix, Tool[] tools) {
+		public Toolchain(String name, String prefix, Tool[] tools, String runnerParams) throws DatabaseException {
 			this.tools = tools;
 			this.name = name;
 			this.pathPrefix = prefix;
+			this.runnerParams = unserializeParams(runnerParams);
 		}
 
 		public String getLastOutputFileName() {
@@ -439,7 +436,7 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 
 		this.makeTable("builders", KEY("ID"), TEXT("name"), TEXT("builder_path"), TEXT("builder_executable"), TEXT("params"), TEXT("fail_if_file_exists"), TEXT("fail_if_file_doesnt_exist"), NUMBER("expected_result"), NUMBER("valid"), NUMBER("timeout"), TEXT("expected_outputFile"), TEXT("expected_inputFile"), TEXT("modifiers"), NUMBER("provide_stdin"), TEXT("stdout_output_handler"), TEXT("stderr_output_handler"));
 		this.makeTable("tools", KEY("ID"), TEXT("builder"), NUMBER("next"), NUMBER("valid"));
-		this.makeTable("toolchain", KEY("ID"), TEXT("name"), NUMBER("first_tool"), TEXT("target_path_prefix"), NUMBER("valid"));
+		this.makeTable("toolchain", KEY("ID"), TEXT("name"), NUMBER("first_tool"), TEXT("target_path_prefix"), TEXT("runner_params"), NUMBER("valid"));
 		initDefaultToolchains();
 	}
 
@@ -562,9 +559,10 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 		final TableField fname = this.getField(tableName, "name");
 		final TableField ffirst = this.getField(tableName, "first_tool");
 		final TableField fprefix = this.getField(tableName, "target_path_prefix");
+		final TableField frunner_params = this.getField(tableName, "runner_params");
 		final TableField fvalid = this.getField(tableName, "valid");
 
-		JsonArray res = this.select(tableName, new TableField[] { fname, ffirst, fprefix }, false, new ComparisionField(fvalid, 1));
+		JsonArray res = this.select(tableName, new TableField[] { fname, ffirst, fprefix, frunner_params }, false, new ComparisionField(fvalid, 1));
 
 		for (JsonValue val : res.Value) {
 			if (val.isObject()) {
@@ -574,7 +572,8 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 					String target_path_prefix = obj.getString("target_path_prefix").Value;
 					int first_tool = obj.getNumber("first_tool").Value;
 					Tool[] ntools = getToolsByFirstID(tools, links, first_tool);
-					result.put(name, new Toolchain(name, target_path_prefix, ntools));
+					String runner_params = obj.getString("runner_params").Value;
+					result.put(name, new Toolchain(name, target_path_prefix, ntools, runner_params));
 				}
 			}
 		}
@@ -697,22 +696,7 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 		final TableField fstderr_output_handler = this.getField(tableName, "stderr_output_handler");
 
 		final TableField fvalid = this.getField(tableName, "valid");
-		ValuedField[] values = new ValuedField[] {
-				new ValuedField(fname, name),
-				new ValuedField(fbpath, builderPath),
-				new ValuedField(ffailex, failIfFile_exists),
-				new ValuedField(ffailnonex, failIfFileDoesntExist),
-				new ValuedField(fret, expectedResult),
-				new ValuedField(fpar, serializeParams(params)),
-				new ValuedField(ftimeout, timeout),
-				new ValuedField(fexec, builderExecutable),
-				new ValuedField(fexpectedOutputFile, expectedOutputFile),
-				new ValuedField(fexpectedInputFile, expectedInputFile),
-				new ValuedField(fmod, serializeParams(modifiers)),
-				new ValuedField(fprovide_stdin, provideStdin),
-				new ValuedField(fstdout_output_handler, serializeParams(stdoutOutputHandler)),
-				new ValuedField(fstderr_output_handler, serializeParams(stderrOutputHandler)),
-				new ValuedField(fvalid, 1) };
+		ValuedField[] values = new ValuedField[] { new ValuedField(fname, name), new ValuedField(fbpath, builderPath), new ValuedField(ffailex, failIfFile_exists), new ValuedField(ffailnonex, failIfFileDoesntExist), new ValuedField(fret, expectedResult), new ValuedField(fpar, serializeParams(params)), new ValuedField(ftimeout, timeout), new ValuedField(fexec, builderExecutable), new ValuedField(fexpectedOutputFile, expectedOutputFile), new ValuedField(fexpectedInputFile, expectedInputFile), new ValuedField(fmod, serializeParams(modifiers)), new ValuedField(fprovide_stdin, provideStdin), new ValuedField(fstdout_output_handler, serializeParams(stdoutOutputHandler)), new ValuedField(fstderr_output_handler, serializeParams(stderrOutputHandler)), new ValuedField(fvalid, 1) };
 		if (!builderExists(name)) {
 			this.insert(tableName, values);
 		}
@@ -839,7 +823,7 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 		return new UniqueToolLink(firstID);
 	}
 
-	private void createToolchain(String name, String prefix, boolean utilizeExistingLink, String... builders) throws DatabaseException {
+	private void createToolchain(String name, String prefix, boolean utilizeExistingLink, String[] runnerParams, String... builders) throws DatabaseException {
 		for (String builder : builders) {
 			if (!builderExists(builder)) {
 				throw new DatabaseException("Cannot create new toolchain: '" + name + "' because builder '" + builder + "' doesn't exist");
@@ -855,22 +839,23 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 		final TableField ffirst = this.getField(tableName, "first_tool");
 		final TableField fprefix = this.getField(tableName, "target_path_prefix");
 		final TableField fvalid = this.getField(tableName, "valid");
-		this.insert(tableName, new ValuedField(fname, name), new ValuedField(ffirst, lnk.ID), new ValuedField(fprefix, prefix), new ValuedField(fvalid, 1));
+		final TableField frunner_params = this.getField(tableName, "runner_params");
+		this.insert(tableName, new ValuedField(fname, name), new ValuedField(ffirst, lnk.ID), new ValuedField(fprefix, prefix), new ValuedField(frunner_params, serializeParams(runnerParams)), new ValuedField(fvalid, 1));
 	}
 
-	private void createToolchainIfItDoesntExist(String name, String prefix, String... builders) throws DatabaseException {
+	private void createToolchainIfItDoesntExist(String name, String prefix, String[] runnerParams, String... builders) throws DatabaseException {
 		UniqueToolLink lnk = uniqueToolLinkExistsForBuilders(name, builders);
 		if (lnk != null) { // Link exists -> it must belong to us
 			List<String> usedInChains = getToolChainNamesByFirstTool(lnk.ID);
 			if (usedInChains.contains(name) && usedInChains.size() == 1) { // Links exist for us only
 				return;
 			} else { // Links exist but not for us
-				createToolchain(name, prefix, false, builders);
+				createToolchain(name, prefix, false, runnerParams, builders);
 			}
 		} else if (toolchainExists(name, builders)) { // No links exist -> toolchain exists
-			createToolchain(name, prefix, true, builders);
+			createToolchain(name, prefix, true, runnerParams, builders);
 		} else { // No toolchain
-			createToolchain(name, prefix, false, builders);
+			createToolchain(name, prefix, false, runnerParams, builders);
 		}
 	}
 
@@ -900,7 +885,8 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 			String executable = Settings.getGoLinkExecutableName();
 			this.addBuilder(goLinkName, path, executable, "", "", params, 0, timeout, new String[0], Settings.getExecutableFileName(), "", 0, new String[0], new String[0]);
 		}
-		createToolchainIfItDoesntExist("ISU", "nasm/", preprocessorName, nasmName, goLinkName);
+		String[] nasmParams = Settings.getAsmExecutableRunnerParams();
+		createToolchainIfItDoesntExist("ISU", "nasm/", nasmParams, preprocessorName, nasmName, goLinkName);
 	}
 
 	private void addGCCToolchain() throws DatabaseException {
@@ -922,12 +908,13 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 		{ // GCC
 			String path = Settings.getGCCPath();
 			int timeout = 1000;
-			String finalExecutable = "run.exe";
+			String finalExecutable = Settings.getGCCFilalExecutable();
 			String[] params = new String[] { "$CWD$/preprocessed.c", "-o", "$CWD$/" + finalExecutable };
 			String executable = Settings.getGCCExecutable();
 			this.addBuilder(GCCName, path, executable, "", "", params, 0, timeout, new String[0], finalExecutable, "preprocessed.c", 0, new String[0], new String[0]);
 		}
-		createToolchainIfItDoesntExist("IZP", "gcc/", GCCPreprocess, preprocessorName, GCCName);
+		String[] runnerParams = Settings.getGccExecutableRunnerParams();
+		createToolchainIfItDoesntExist("IZP", "gcc/", runnerParams, GCCPreprocess, preprocessorName, GCCName);
 	}
 
 	private void initDefaultToolchains() throws DatabaseException {

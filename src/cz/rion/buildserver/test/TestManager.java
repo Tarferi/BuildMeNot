@@ -20,6 +20,7 @@ import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonNumber;
 import cz.rion.buildserver.json.JsonValue.JsonString;
+import cz.rion.buildserver.utils.CachedData;
 import cz.rion.buildserver.wrappers.MyExec;
 import cz.rion.buildserver.wrappers.MyExec.MyExecResult;
 import cz.rion.buildserver.wrappers.MyExec.TestResultsExpectations;
@@ -116,8 +117,8 @@ public class TestManager {
 			this.exeName = exeName;
 		}
 
-		public MyExecResult execute(String stdin, String[] arguments, int timeout) throws CommandLineExecutionException {
-			String[] runArgs = Settings.getGExecutableParams();
+		public MyExecResult execute(String stdin, String[] arguments, int timeout, Toolchain toolchain) throws CommandLineExecutionException {
+			String[] runArgs = toolchain.runnerParams;
 			String[] nargs = new String[arguments.length + runArgs.length];
 			System.arraycopy(runArgs, 0, nargs, 0, runArgs.length);
 			System.arraycopy(arguments, 0, nargs, runArgs.length, arguments.length);
@@ -129,52 +130,65 @@ public class TestManager {
 		}
 	}
 
-	private final Map<String, List<GenericTest>> tests = new HashMap<>();
-	private Map<String, GenericTest> mtest = new HashMap<>();
+	private final class TestCollection {
+		private final Map<String, List<GenericTest>> tests = new HashMap<String, List<GenericTest>>();
+		private Map<String, GenericTest> mtest = new HashMap<String, GenericTest>();
+	}
+
+	private final class CachedTestCollection extends CachedData<TestCollection> {
+
+		private final TestCollection collection = new TestCollection();
+
+		public CachedTestCollection() {
+			super(60);
+		}
+
+		@Override
+		protected TestCollection update() {
+			synchronized (collection.tests) {
+				collection.tests.clear();
+				collection.mtest.clear();
+				List<GenericTest> jsonTests = JsonTestManager.load(sdb, testDirectory);
+				for (GenericTest test : jsonTests) {
+					String toolchain = test.getToolchain().toLowerCase();
+					if (!collection.tests.containsKey(toolchain)) {
+						collection.tests.put(toolchain, new ArrayList<GenericTest>());
+					}
+					collection.tests.get(toolchain).add(test);
+					collection.mtest.put(test.getToolchain().toUpperCase() + "/" + test.getID().toLowerCase(), test);
+				}
+				for (List<GenericTest> entry : collection.tests.values()) {
+					entry.sort(new Comparator<GenericTest>() {
+
+						@Override
+						public int compare(GenericTest o1, GenericTest o2) {
+							return o1.getID().compareTo(o2.getID());
+						}
+					});
+				}
+			}
+			return collection;
+		}
+
+	};
 
 	private final String testDirectory;
 	private final StaticDB sdb;
+	private final CachedTestCollection Tests = new CachedTestCollection();
 
 	public TestManager(StaticDB sdb, String testDirectory) {
 		this.testDirectory = testDirectory;
 		this.sdb = sdb;
-		reloadTests();
 	}
 
 	public void reloadTests() {
-		synchronized (tests) {
-			tests.clear();
-			mtest.clear();
-			List<GenericTest> jsonTests = JsonTestManager.load(sdb, testDirectory);
-			for (GenericTest test : jsonTests) {
-				String toolchain = test.getToolchain().toLowerCase();
-				if (!tests.containsKey(toolchain)) {
-					tests.put(toolchain, new ArrayList<GenericTest>());
-				}
-				tests.get(toolchain).add(test);
-				mtest.put(test.getToolchain().toUpperCase() + "/" + test.getID().toLowerCase(), test);
-			}
-			sortTests();
-		}
+
 	}
 
-	private static final List<GenericTest> emptyListOfTestes = new ArrayList<>();
+	private static final List<GenericTest> emptyListOfTests = new ArrayList<>();
 
 	public List<GenericTest> getAllTests(String toolchain) {
-		reloadTests();
-		return tests.containsKey(toolchain.toLowerCase()) ? tests.get(toolchain.toLowerCase()) : emptyListOfTestes;
-	}
-
-	private void sortTests() {
-		for (List<GenericTest> entry : tests.values()) {
-			entry.sort(new Comparator<GenericTest>() {
-
-				@Override
-				public int compare(GenericTest o1, GenericTest o2) {
-					return o1.getID().compareTo(o2.getID());
-				}
-			});
-		}
+		return Tests.get().tests.containsKey(toolchain.toLowerCase()) ? Tests.get().tests.get(toolchain.toLowerCase()) : emptyListOfTests;
 	}
 
 	private static final Object globalSyncer = new Object();
@@ -197,10 +211,10 @@ public class TestManager {
 
 	public JsonObject run(final BadResults badResults, int builderID, Toolchain toolchain, String test_id, String asm, String login) {
 		GenericTest test = null;
-		synchronized (tests) {
+		synchronized (Tests.get().tests) {
 			String testKey = toolchain.getName().toUpperCase() + "/" + test_id.toLowerCase();
-			if (mtest.containsKey(testKey)) {
-				test = mtest.get(testKey);
+			if (Tests.get().mtest.containsKey(testKey)) {
+				test = Tests.get().mtest.get(testKey);
 			}
 		}
 		int code = 1;

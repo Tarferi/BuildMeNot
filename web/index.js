@@ -43,10 +43,9 @@ var tester = function() {
 	
 	}
 	
-	// Decoded UTF-8
 	var decTable = {
 				
-					195: {
+				195: {
 					63: 193, // "??"
 					161: 225, // "á"
 					169: 233, // "é"
@@ -96,7 +95,6 @@ var tester = function() {
 					190: 382, // "ž"
 					184: 376 // "Ÿ"
 	
-	
 				}
 		};
 		
@@ -125,6 +123,9 @@ var tester = function() {
 	
 	self.dec = function(str) {
 		var res="";
+		// Decode UTF-8
+		
+	
 		for(var i = 0; i < str.length; i++) {
 			var x = str.charAt(i);
 			var c = str.charCodeAt(i);
@@ -257,7 +258,7 @@ var tester = function() {
 			            		"contents":[
 			            			{
 				            			"type":"Button",
-					            		"innerHTML":"SkrĂ˝t",
+					            		"innerHTML":"Skrýt",
 					            		"id":"btnHide"
 			            			}
 			            		]
@@ -285,7 +286,7 @@ var tester = function() {
 			                           {
 			                              "type":"button",
 			                              "id":"runtests",
-			                              "innerHTML":"Otestovat Ĺ™eĹˇenĂ­"
+			                              "innerHTML":"Otestovat řešení"
 			                           },
 			                           {
 			                        	   "type":"div",
@@ -302,7 +303,7 @@ var tester = function() {
 			                     {
 			                        "type":"div",
 			                        "class":"w121",
-			                        "innerHTML":"ZadĂˇnĂ­"
+			                        "innerHTML":"Zadání"
 			                     },
 			                     {
 			                        "type":"div",
@@ -318,7 +319,7 @@ var tester = function() {
 			                     {
 			                        "type":"div",
 			                        "class":"w131",
-			                        "innerHTML": "&#344;eĹˇenĂ­"
+			                        "innerHTML": "&#344;ešení"
 			                     },
 			                     {
 			                        "type":"div",
@@ -448,7 +449,7 @@ var tester = function() {
 		this.setCollapsed = function(collapsed) {
 			self.mainPnl.style.display = collapsed ?  "none" : "table";
 			if(self.btnHide){
-				self.btnHide.innerHTML = collapsed ? "Zobrazit" : "SkrĂ˝t";
+				self.btnHide.innerHTML = collapsed ? "Zobrazit" : "Skrýt";
 			}
 			if(self.nwBorder){
 				self.nwBorder.style.borderLeft = collapsed ? "1px solid black" : "";
@@ -461,11 +462,11 @@ var tester = function() {
 			var struct = tester.reconstructUI(UI);
 			var el = struct[0];
 			var ids = struct[1];
-			var solvStr = data.finished_date ? " (vyĹ™eĹˇeno "+data.finished_date+")" : "";
+			var solvStr = data.finished_date ? " (vyřešeno "+data.finished_date+")" : "";
 			ids.txtArea.innerHTML = data.finished_code ? data.finished_code :  data.init;
 			ids.txtBrief.innerHTML = data.title+solvStr;
 			ids.txtDescr.innerHTML = data.zadani;
-			ids.txtSolution.innerHTML = "Zde se objevĂ­ detaily testĹŻ tvĂ©ho Ĺ™eĹˇenĂ­";
+			ids.txtSolution.innerHTML = "Zde se objeví detaily testů tvého řešení";
 			
 			self.ta = ids.txtArea;
 			self.b1 = ids.runtests;
@@ -486,7 +487,7 @@ var tester = function() {
 			var el = document.createElement("div"); // Hlavni prvek
 			el.classList.add("txtTest");
 			
-			var solvStr = data.finished_date ? " (vyĹ™eĹˇeno "+data.finished_date+")" : "";
+			var solvStr = data.finished_date ? " (vyřešeno "+data.finished_date+")" : "";
 			
 			getNewElement2(el, "div", "txtTestLbl", data.title + solvStr);
 			
@@ -496,7 +497,7 @@ var tester = function() {
 			self.ta = getNewElement2(wr, "textarea", "txtAsm", data.init);
 			
 			var pc = getNewElement1(wr, "div", "pnlControls");
-			self.b1 = getNewElement2(pc, "button", false, "Otestovat Ĺ™eĹˇenĂ­");
+			self.b1 = getNewElement2(pc, "button", false, "Otestovat řešení");
 				
 	
 			// Zadani
@@ -506,8 +507,8 @@ var tester = function() {
 			
 			// Reseni
 			var sl = getNewElement1(el, "div", "txtDescr");
-			getNewElement2(sl, "div", ["txtDescrName", "txtDescrNameSolution"], "ďż˝?eĹˇenĂ­");
-			self.rs = getNewElement2(sl, "span", "txtDescrSolutionLog", "Zde se objevi detaily testĹŻ tvĂ©ho Ĺ™eĹˇenĂ­")
+			getNewElement2(sl, "div", ["txtDescrName", "txtDescrNameSolution"], "�?ešení");
+			self.rs = getNewElement2(sl, "span", "txtDescrSolutionLog", "Zde se objevi detaily testů tvého řešení")
 			setup();
 			return el;
 		};
@@ -573,13 +574,13 @@ var tester = function() {
 	
 	self.getErrorSolution = function(code) {
 		if(code == 0){
-			return self.dec("<span class=\"log_err\">NepodaĹ™ilo se kontaktovat sestavovacĂ­ server</span>");
+			return self.dec("<span class=\"log_err\">Nepodařilo se kontaktovat sestavovací server</span>");
 		} else if(code == 1){
-			return self.dec("<span class=\"log_err\">NepodaĹ™ilo se dekĂłdovat odpovÄ›ÄŹ sestavovacĂ­ho serveru</span>");
+			return self.dec("<span class=\"log_err\">Nepodařilo se dekódovat odpověď sestavovacího serveru</span>");
 		}else if(code == 53){
-			return self.dec("<span class=\"log_err\">Byl jsi odhlĂˇĹˇen. Pro pĹ™ihlĂˇĹˇenĂ­ si obnov strĂˇnku (nezapomeďż˝? si nÄ›kam bokem uloĹľit kĂłd, kterĂ˝ se prĂˇvÄ› snaĹľĂ­Ĺˇ pĹ™eloĹľi)</span>");
+			return self.dec("<span class=\"log_err\">Byl jsi odhlášen. Pro přihlášení si obnov stránku (nezapome�? si někam bokem uložit kód, který se právě snažíš přeloži)</span>");
 		} else {
-			return self.dec("<span class=\"log_err\">NeznĂˇmĂˇ chyba</span>");
+			return self.dec("<span class=\"log_err\">Neznámá chyba</span>");
 		}
 	}
 	
@@ -716,13 +717,13 @@ var tester = function() {
 						if(jsn.code == 53){
 							document.location.reload();
 						} else {
-							cbFail(self.dec("NepodaĹ™ilo se nahrĂˇt testy: <br />" + jsn.result));
+							cbFail(self.dec("Nepodařilo se nahrát testy: <br />" + jsn.result));
 						}
 					}
 					return;
 				}
 			}
-			cbFail(self.dec("NepodaĹ™ilo se dekĂłdovat testy"));
+			cbFail(self.dec("Nepodařilo se dekódovat testy"));
 		};
 		var data = {"action":"COLLECT"}
 		var txtEnc = "q=" + self.encode(JSON.stringify(data));
@@ -760,7 +761,7 @@ var tester = function() {
 			opts.title.text = graphData.Name;
 		}
 		if(graphData.Options && graphData.Options.Plag) {
-			graphData.Data.x.unshift("PlagiĂˇtorĹŻ");
+			graphData.Data.x.unshift("Plagiátorů");
 			graphData.Data.y[0].data.unshift(graphData.Options.Plag)
 		}
 		var chart = new Chart(ctx, {
@@ -843,7 +844,7 @@ var tester = function() {
 					}
 				}
 			}
-			cbFail(self.dec("NepodaĹ™ilo se dekĂłdovat statistiky"));
+			cbFail(self.dec("Nepodařilo se dekódovat statistiky"));
 		};
 		var data = {"action":"GRAPHS"}
 		var txtEnc = "q=" + self.encode(JSON.stringify(data));
