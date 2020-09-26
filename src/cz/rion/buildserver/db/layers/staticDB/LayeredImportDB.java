@@ -202,7 +202,7 @@ public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
 		}
 
 		public void updateName(String name) {
-			// this.name = name;
+			 this.name = name;
 		}
 
 		public void addGroup(String group) {

@@ -16,7 +16,6 @@ import cz.rion.buildserver.db.StaticDB;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.exceptions.HTTPClientException;
-import cz.rion.buildserver.exceptions.NoSuchToolchainException;
 import cz.rion.buildserver.exceptions.SwitchClientException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
@@ -60,7 +59,7 @@ public class HTTPTestClient extends HTTPGraphProviderClient {
 				return true;
 			}
 		}
-		return false;
+		return super.objectionsAgainstRedirection(request);
 	}
 
 	public JsonObject getReturnValue() {
@@ -161,14 +160,16 @@ public class HTTPTestClient extends HTTPGraphProviderClient {
 	}
 
 	@Override
+	protected void ToolChainKnown(Toolchain toolchain) {
+		super.ToolChainKnown(toolchain);
+		this.toolchain = toolchain;
+	}
+
+	@Override
 	protected HTTPResponse handle(HTTPRequest request) throws HTTPClientException {
-		String toolchain = sdb.getToolchainMapping(request.host);
-		try {
-			this.toolchain = sdb.getToolchain(toolchain == null ? "" : toolchain);
-		} catch (NoSuchToolchainException e) {
+		if (toolchain == null) {
 			return new HTTPResponse(request.protocol, 200, "OK", ("Invalid toolchain: " + toolchain).getBytes(), "text/html; charset=UTF-8", request.cookiesLines);
 		}
-
 		if (request.path.startsWith("/test?cache=") && request.method.equals("POST") && request.data.length > 0) {
 			byte[] data = handleTest(request.data, wantsToRedirect, request.authData);
 			return new HTTPResponse(request.protocol, 200, "OK", data, "multipart/form-data;", request.cookiesLines);
@@ -324,13 +325,16 @@ public class HTTPTestClient extends HTTPGraphProviderClient {
 								} else if (act.equals("ADMIN") && getPermissions().allowSeeWebAdmin()) {
 									handleAdminEvent(obj, returnValue);
 									this.setIntention(HTTPClientIntentType.COLLECT_TESTS);
+								} else if (act.equals("HANDLE_TERMS")) {
+									handleTermsEvent(obj, toolchain, returnValue, getPermissions());
+									this.setIntention(HTTPClientIntentType.COLLECT_TESTS);
 								}
 							}
 						}
 					} else { // Not authenticated
 						returnValue.add("code", new JsonNumber(53));
 						returnValue.add("result", new JsonString("Not logged in"));
-						returnValue.add("authUrl", new JsonString(Settings.getAuthURL(toolchain.getName())));
+						returnValue.add("authUrl", new JsonString(Settings.getAuthURL(toolchain.getName(), "")));
 					}
 				}
 			}

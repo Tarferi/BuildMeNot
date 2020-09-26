@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="content-type" content="text/html; charset=utf-8">
+<title>Dotazník $TOOLCHAIN$ cvičení</title>
+<link rel="stylesheet" type="text/css" href="index.css">
+<script src="index.js"></script>
+</head>
+<body onload="cviceni_load();">
+	<div class="txtHeader" id="txtHeader">
+		<span class="txtHeader1">
+			Přihlášený uživatel:
+			<span id="txtLogin"></span>
+		</span>
+		<button id="btnLogout">Odhlásit</button>
+	</div>
+	<span class="pnlWarn" id="pnlWarnID" style="display:none;cursor:pointer">
+		<b>Upozornění:</b> Testy pouze pro čtení!
+	</span>
+	<div id=id_indiv class="txtTest" style="display:none">
+		<div class="loader" id=id_loader>Nahrávám termíny...</div>
+	</div>
+	
+	<div id="term_table_root" style="display:none">
+	</div>
+</body>
+</html>

@@ -59,7 +59,7 @@ var Admin = function() {
 				"colSpan" : 2,
 				"contents" : [ {
 					"type" : "Button",
-					"innerHTML" : "Zavøít",
+					"innerHTML" : "ZavÅ™Ã­t",
 					"class" : "adm_td_main_header_closeButton",
 					"id" : "btnCloseAdmin"
 				} ]
@@ -173,7 +173,7 @@ var Admin = function() {
 	}
 
 	self.createUI = function() {
-		var struct = window.tester.reconstructUI(self.UI);
+		var struct = window.tester.common.reconstructUI(self.UI);
 		var el = struct[0];
 		var ids = struct[1];
 
@@ -322,10 +322,10 @@ var Admin = function() {
 			"action" : "ADMIN",
 			"admin_data" : data
 		};
-		var txtEnc = "q=" + window.tester.encode(JSON.stringify(data));
-		window.tester.async(txtEnc, function(response) {
+		var txtEnc = "q=" + window.tester.common.encode(JSON.stringify(data));
+		window.tester.common.async(txtEnc, function(response) {
 			self.setWaiterVisible(false);
-			var deco = window.tester.decode(response);
+			var deco = window.tester.common.decode(response);
 			if (deco !== false) {
 				var obj = JSON.parse(deco);
 				if (obj !== false) {
@@ -726,8 +726,8 @@ var AdminEditor = function(adminer) {
 			nt.push(code);
 			for (var ntI = nt.length - 1; ntI >= 0; ntI--) {
 				var code = nt[ntI];
-				var c1 = String.fromCharCode(window.tester.toHex(code >> 4));
-				var c2 = String.fromCharCode(window.tester.toHex(code & 15));
+				var c1 = String.fromCharCode(window.tester.common.toHex(code >> 4));
+				var c2 = String.fromCharCode(window.tester.common.toHex(code & 15));
 				res.push(c1);
 				res.push(c2);
 			}
@@ -1103,7 +1103,7 @@ var AdminEditor = function(adminer) {
 						cellObj = "";
 					}
 					var sz = cellObj.length;
-					var unit = "bajtù";
+					var unit = "bajtÅ¯";
 					if(sz < 5 * 1024) {
 					   // nothing
 					} else {

@@ -101,6 +101,9 @@ public class LayeredPermissionDB extends LayeredTestDB {
 				permissions = new Permission("");
 				primaries = new ArrayList<>();
 				db.getPermissionsFor(Login, permissions, primaries, Toolchain);
+				if (primaries.size() > 1 && primaries.contains("Everyone")) {
+					primaries.remove("Everyone");
+				}
 			}
 			if (fullName == null) {
 				Object[] parts = db.getFullNameAndGroup(Login, Toolchain);

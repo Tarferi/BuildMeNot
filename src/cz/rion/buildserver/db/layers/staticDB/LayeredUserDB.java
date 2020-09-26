@@ -2,8 +2,10 @@ package cz.rion.buildserver.db.layers.staticDB;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.layers.common.LayeredDBFileWrapperDB;
@@ -12,12 +14,15 @@ import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
+import cz.rion.buildserver.permissions.Permission;
+import cz.rion.buildserver.permissions.PermissionBranch;
 
 public abstract class LayeredUserDB extends LayeredDBFileWrapperDB {
 
 	private static class PermissionContext {
 		public final List<LocalUser> LoadedUsers = new ArrayList<>();
 		public final Map<String, LocalUser> LoadedUsersByLogin = new HashMap<>();
+		public final Map<Integer, LocalUser> LoadedUsersByID = new HashMap<>();
 
 		public final String toolchain;
 		private final LayeredUserDB sdb;
@@ -29,7 +34,7 @@ public abstract class LayeredUserDB extends LayeredDBFileWrapperDB {
 		}
 
 		public void reload() {
-			this.sdb.loadLocalUsers(toolchain, LoadedUsers, LoadedUsersByLogin);
+			this.sdb.loadLocalUsers(toolchain, LoadedUsers, LoadedUsersByLogin, LoadedUsersByID);
 		}
 	}
 
@@ -53,6 +58,18 @@ public abstract class LayeredUserDB extends LayeredDBFileWrapperDB {
 		}
 	}
 
+	public LocalUser getUser(String toolchain, int userID) {
+		if (!mappings.containsKey(toolchain)) {
+			mappings.put(toolchain, new PermissionContext(toolchain, this));
+		}
+		PermissionContext context = mappings.get(toolchain);
+		if (context.LoadedUsersByID.containsKey(userID)) {
+			return context.LoadedUsersByID.get(userID);
+		} else {
+			return null;
+		}
+	}
+
 	private final Map<String, PermissionContext> mappings = new HashMap<>();
 
 	public LayeredUserDB(String dbName) throws DatabaseException {
@@ -60,7 +77,7 @@ public abstract class LayeredUserDB extends LayeredDBFileWrapperDB {
 		this.makeTable("users", KEY("ID"), TEXT("name"), TEXT("usergroup"), TEXT("login"), BIGTEXT("permissions"), TEXT("toolchain"));
 	}
 
-	private static class RemoteUser {
+	public static class RemoteUser {
 		public final String Login;
 		public final String Group;
 		public final String FullName;
@@ -105,7 +122,7 @@ public abstract class LayeredUserDB extends LayeredDBFileWrapperDB {
 		return mp;
 	}
 
-	private final boolean loadLocalUsers(String toolchain, List<LocalUser> loadedUsers, Map<String, LocalUser> loadedUsersByLogin) {
+	private final boolean loadLocalUsers(String toolchain, List<LocalUser> loadedUsers, Map<String, LocalUser> loadedUsersByLogin, Map<Integer, LocalUser> loadedUsersByID) {
 		loadedUsers.clear();
 		loadedUsersByLogin.clear();
 
@@ -123,6 +140,7 @@ public abstract class LayeredUserDB extends LayeredDBFileWrapperDB {
 				LocalUser user = new LocalUser(id, login, usergroup, name, permGroup);
 				loadedUsers.add(user);
 				loadedUsersByLogin.put(login, user);
+				loadedUsersByID.put(user.ID, user);
 			}
 		} catch (DatabaseException e) {
 			e.printStackTrace();
@@ -159,6 +177,56 @@ public abstract class LayeredUserDB extends LayeredDBFileWrapperDB {
 			mappings.get(toolchain).reload();
 		}
 		return true;
+	}
+
+	public List<RemoteUser> getUserIDsWhoCanByGroup(String toolchain, PermissionBranch branch) throws DatabaseException {
+		List<RemoteUser> lst = new ArrayList<>();
+		final String usersTableName = "users";
+		final String groupsTableName = "groups";
+		final String userGroupsTableName = "users_group";
+
+		final Set<String> foundBadPermissions = new HashSet<>();
+		final Set<String> foundGoodPermissions = new HashSet<>();
+
+		TableField[] fields = new TableField[] { getField(groupsTableName, "toolchain"), getField(usersTableName, "name"), getField(usersTableName, "login"), getField(groupsTableName, "permissions"), getField(groupsTableName, "name").getRenamedInstance("group_name") };
+		ComparisionField[] comparators = new ComparisionField[] {};
+
+		TableJoin[] joins = new TableJoin[] { new TableJoin(getField(usersTableName, "ID"), getField(userGroupsTableName, "user_id")), new TableJoin(getField(groupsTableName, "ID"), getField(userGroupsTableName, "group_id")) };
+		JsonArray data = select(usersTableName, fields, comparators, joins, true);
+		for (JsonValue item : data.Value) {
+			String perm = item.asObject().getString("permissions").Value;
+			String ctoolchain = item.asObject().getString("toolchain").Value;
+			if (ctoolchain.equals(toolchain)) {
+				if (!foundBadPermissions.contains(perm)) {
+					String login = item.asObject().getString("login").Value;
+					String name = item.asObject().getString("name").Value;
+					String group_name = item.asObject().getString("group_name").Value;
+					boolean add = false;
+					if (!foundGoodPermissions.contains(perm)) {
+						JsonValue val = JsonValue.parse(perm);
+						if (val.isArray()) {
+							for (JsonValue v : val.asArray().Value) {
+								if (v.isString()) {
+									add |= new Permission(v.asString().Value).covers(branch);
+								}
+							}
+						}
+
+						if (add) {
+							foundGoodPermissions.add(perm);
+						}
+					} else { // it's in foundGoodPermissions
+						add = true;
+					}
+					if (add) {
+						lst.add(new RemoteUser(login, group_name, name));
+					} else {
+						foundBadPermissions.add(perm);
+					}
+				}
+			}
+		}
+		return lst;
 	}
 
 	@Override

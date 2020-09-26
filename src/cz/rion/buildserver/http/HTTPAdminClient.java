@@ -17,7 +17,7 @@ import cz.rion.buildserver.json.JsonValue.JsonNumber;
 import cz.rion.buildserver.json.JsonValue.JsonString;
 import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 
-public abstract class HTTPAdminClient extends HTTPParserClient {
+public abstract class HTTPAdminClient extends HTTPTermClient {
 
 	private final StaticDB sdb;
 	private final RuntimeDB db;

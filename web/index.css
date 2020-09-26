@@ -394,4 +394,128 @@ body {
 	display: block;
 }
 
+.term_table_w0 {
+	margin-top: 70px;
+	margin-left: 10%;
+	width: 80%;
+	display: inline-block;
+	border-left: 1px solid black;
+	border-right: 1px solid black;
+	border-bottom: 1px solid black;
+	min-width: 810px;
+}
+
+.term_table_w00 {
+	display: block;
+	left: 0px;
+	padding-top: 10px;
+	padding-bottom: 10px;
+	padding-left: 10px;
+	padding-right: 10px;
+	right: 0px;
+	border-top:1px solid black;
+	border-bottom:1px solid black;
+	background: #eeeeee;
+	font-family: tahoma;
+	font-size: 20pt;
+	text-align: left;
+}
+
+.term_table_w001 {
+	display: inline-block;
+}
+
+.term_table_w002 {
+	display: inline-block;
+	float:right;
+}
+
+.term_table_w002 > Button {
+	position: relative;
+	top: -2px;
+	vertical-align: middle;
+	width: 80px;
+	height: 30px;
+	line-height: normal;
+}
+
+.term_table_w1 {
+	display: table;
+	min-width: 100%;
+	font-family: tahoma 12pt;
+	min-height: 200px;
+}
+
+.term_table_w12 {
+	display: table-cell;
+	width:50%;
+	min-height: 200px;
+	border-right: 1px solid black;
+}
+
+.term_table_w121 {
+	background: #daffff;
+	border-bottom: 1px solid black;
+	text-align: center;
+	font-family: tahoma;
+	font-size: 20pt;
+	padding-top: 4px;
+	padding-bottom: 4px;
+	
+}
+
+.term_table_w122 {
+padding: 5px;
+}
+
+.term_table_w13 {
+	display: table-cell;
+	width: 50%;
+	min-width: 500px;
+}
+
+.term_table_w131 {
+	background: #ffddcc;
+	border-bottom: 1px solid black;
+	text-align: center;
+	font-family: tahoma;
+	font-size: 20pt;
+	padding-top: 4px;
+	padding-bottom: 4px;
+}
+
+.term_table_w132 {
+}
+
+.term_table {
+    border-collapse:collapse;
+    border: 1px solid black;
+    border-bottom: 2px solid black;
+    width: 100%;
+}
+
+.term_table tr > th {
+	font-size: 14pt;
+	font-family: Verdana;
+	padding-left: 10px;
+	padding-right: 10px;
+	border:2px solid black;
+}
+
+.term_table tr {
+	border-left: 2px solid black;
+	border-right: 2px solid black;
+}
+
+.term_table .term_table_logged {
+	display: block;
+	color: green;
+}
+
+.term_table tr > td {
+    text-align: center;
+    border: 1px solid black;
+	font-family: Tahoma;
+}
+
 $INJECT_ADMIN$

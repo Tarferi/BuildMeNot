@@ -1,19 +1,92 @@
 var confetti={maxCount:150,speed:2,frameInterval:15,alpha:1,gradient:!1,start:null,stop:null,toggle:null,pause:null,resume:null,togglePause:null,remove:null,isPaused:null,isRunning:null};!function(){confetti.start=s,confetti.stop=w,confetti.toggle=function(){e?w():s()},confetti.pause=u,confetti.resume=m,confetti.togglePause=function(){i?m():u()},confetti.isPaused=function(){return i},confetti.remove=function(){stop(),i=!1,a=[]},confetti.isRunning=function(){return e};var t=window.requestAnimationFrame||window.webkitRequestAnimationFrame||window.mozRequestAnimationFrame||window.oRequestAnimationFrame||window.msRequestAnimationFrame,n=["rgba(30,144,255,","rgba(107,142,35,","rgba(255,215,0,","rgba(255,192,203,","rgba(106,90,205,","rgba(173,216,230,","rgba(238,130,238,","rgba(152,251,152,","rgba(70,130,180,","rgba(244,164,96,","rgba(210,105,30,","rgba(220,20,60,"],e=!1,i=!1,o=Date.now(),a=[],r=0,l=null;function d(t,e,i){return t.color=n[Math.random()*n.length|0]+(confetti.alpha+")"),t.color2=n[Math.random()*n.length|0]+(confetti.alpha+")"),t.x=Math.random()*e,t.y=Math.random()*i-i,t.diameter=10*Math.random()+5,t.tilt=10*Math.random()-10,t.tiltAngleIncrement=.07*Math.random()+.05,t.tiltAngle=Math.random()*Math.PI,t}function u(){i=!0}function m(){i=!1,c()}function c(){if(!i)if(0===a.length)l.clearRect(0,0,window.innerWidth,window.innerHeight),null;else{var n=Date.now(),u=n-o;(!t||u>confetti.frameInterval)&&(l.clearRect(0,0,window.innerWidth,window.innerHeight),function(){var t,n=window.innerWidth,i=window.innerHeight;r+=.01;for(var o=0;o<a.length;o++)t=a[o],!e&&t.y<-15?t.y=i+100:(t.tiltAngle+=t.tiltAngleIncrement,t.x+=Math.sin(r)-.5,t.y+=.5*(Math.cos(r)+t.diameter+confetti.speed),t.tilt=15*Math.sin(t.tiltAngle)),(t.x>n+20||t.x<-20||t.y>i)&&(e&&a.length<=confetti.maxCount?d(t,n,i):(a.splice(o,1),o--))}(),function(t){for(var n,e,i,o,r=0;r<a.length;r++){if(n=a[r],t.beginPath(),t.lineWidth=n.diameter,i=n.x+n.tilt,e=i+n.diameter/2,o=n.y+n.tilt+n.diameter/2,confetti.gradient){var l=t.createLinearGradient(e,n.y,i,o);l.addColorStop("0",n.color),l.addColorStop("1.0",n.color2),t.strokeStyle=l}else t.strokeStyle=n.color;t.moveTo(e,n.y),t.lineTo(i,o),t.stroke()}}(l),o=n-u%confetti.frameInterval),requestAnimationFrame(c)}}function s(t,n,o){var r=window.innerWidth,u=window.innerHeight;window.requestAnimationFrame=window.requestAnimationFrame||window.webkitRequestAnimationFrame||window.mozRequestAnimationFrame||window.oRequestAnimationFrame||window.msRequestAnimationFrame||function(t){return window.setTimeout(t,confetti.frameInterval)};var m=document.getElementById("confetti-canvas");null===m?((m=document.createElement("canvas")).setAttribute("id","confetti-canvas"),m.setAttribute("style","display:block;z-index:999999;pointer-events:none;position:fixed;top:0"),document.body.prepend(m),m.width=r,m.height=u,window.addEventListener("resize",function(){m.width=window.innerWidth,m.height=window.innerHeight},!0),l=m.getContext("2d")):null===l&&(l=m.getContext("2d"));var s=confetti.maxCount;if(n)if(o)if(n==o)s=a.length+o;else{if(n>o){var f=n;n=o,o=f}s=a.length+(Math.random()*(o-n)+n|0)}else s=a.length+n;else o&&(s=a.length+o);for(;a.length<s;)a.push(d({},r,u));e=!0,i=!1,c(),t&&window.setTimeout(w,t)}function w(){e=!1}}();
 
-var tester = function() {
-	
+var common = function() {
+
 	var self = this;
-	
-	self.allTests = [];
-	self.mres = function() {
-		for(var i = 0; i < self.allTests.length; i++) {
-			self.allTests[i].handleResize();
-		}
-	}
 	
 	self.IDENTITY_TOKEN = $IDENTITY_TOKEN$;
 	self.TOOLCHAIN = "$TOOLCHAIN$";
+		
+	self.logout = function() {
+	    var cookies = document.cookie.split(";");
+	    for (var i = 0; i < cookies.length; i++) {
+	        var cookie = cookies[i];
+	        var eqPos = cookie.indexOf("=");
+	        var name = eqPos > -1 ? cookie.substr(0, eqPos) : cookie;
+	        document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT";
+	    }
+	    window.location.href="http://isu.rion.cz/logout"
+	}
+
 	
+	self.getErrorSolution = function(code) {
+		if(code == 0){
+			return self.dec("<span class=\"log_err\">Nepodařilo se kontaktovat server</span>");
+		} else if(code == 1){
+			return self.dec("<span class=\"log_err\">Nepodařilo se dekódovat odpověď serveru</span>");
+	 	} else if(code == 3) {
+	 		return self.dec("<span class=\"log_err\">Nepodařilo se kontaktovar server. Obnovte prosím stránku</span>");
+		} else if(code == 53){
+			return self.dec("<span class=\"log_err\">Byl jsi odhlášen. Pro přihlášení si obnov stránku (nezapomeň si někam bokem uložit kód, který se právě snažíš přeložit)</span>");
+		} else {
+			return self.dec("<span class=\"log_err\">Neznámá chyba</span>");
+		}
+	}
+		
+	self.generateRandomString = function(length) {
+		var result = "";
+		var characters  = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+		var charactersLength = characters.length;
+		for (var i = 0; i < length; i++ ) {
+			result += characters.charAt(Math.floor(Math.random() * charactersLength));
+		}
+		return result;
+	}
+	
+	self.async = function(data, callbackOK, callbackFail) {
+		var http = new XMLHttpRequest();
+		try {
+			var url = window.location.href+"test?cache="+self.generateRandomString(10);
+			http.onreadystatechange = function(e) {
+				if(e.target.readyState == 4) {
+					if(e.target.status == 200) {
+						callbackOK(http.responseText);
+					} else {
+						callbackFail(self.getErrorSolution(0));
+					}
+				}
+			};
+			http.onerror = function(e){
+			    callbackFail(self.getErrorSolution(0));
+			};
+			http.open("POST", url, true);
+			http.send(data);
+		} catch(e) {
+			callbackFail(self.getErrorSolution(0));
+		}
+	}
+	
+	self.sanitizeData = function(data) {
+		if(data instanceof Array) { 
+			var res = [];
+			for(var i = 0; i < data.length; i++) {
+				res[i] = self.sanitizeData(data[i]); 
+			}
+			return res;
+		} else if(data instanceof Object) { 
+			var res = {};
+			for(var item in data){
+				if(data.hasOwnProperty(item)){
+					res[self.sanitizeData(item)] = self.sanitizeData(data[item]);
+				}
+			}
+			return res;
+		} else if(typeof(data) === typeof("abc")){
+			return self.dec(data);
+		} else {
+			return data;
+		}
+	}
 	
 	self.toHex = function(c) {
 		if (c >= 0 && c <= 9) {
@@ -193,6 +266,7 @@ var tester = function() {
 		return sb;
 	}
 	
+
 	self.reconstructUI = function(data, ids) {
 		if(!ids){
 			ids = {};
@@ -230,10 +304,52 @@ var tester = function() {
 		return [el, ids];
 	}
 	
-	self.testI = function(data, tester) {
+	var getNewElement2 = function(parent, tagName, className, contents) {
+		var wr = document.createElement(tagName);
+		if (className !== false) {
+			if(typeof(className) == typeof("str")){
+				wr.classList.add(className);
+			} else if(typeof(className) == typeof([])){
+				for(var x = 0; x < className.length;x++) {
+					wr.classList.add(className[x]);
+				}
+			}
+		}
+		if(contents!==false){
+			wr.innerHTML = contents;
+		}
+		parent.appendChild(wr);
+		return wr;
+	}
+	
+	var getNewElement1 = function(parent, tagName, className) {
+		return getNewElement2(parent, tagName, className, false);
+	}
+	
+	var getNewElement0 = function(parent, tagName) {
+		return getNewElement1(parent, tagName, false);
+	}
+};
+
+
+var tester = function() {
+	
+	var self = this;
+	self.common = new common();
+	
+	self.allTests = [];
+	self.mres = function() {
+		for(var i = 0; i < self.allTests.length; i++) {
+			self.allTests[i].handleResize();
+		}
+	}
+	
+	
+	self.testI = function(data, tester, common) {
 		this.data = data;
 		var self = this;
 		var tester = tester;
+		var common = common;
 		
 		this.ta = null;
 		this.b1 = null;
@@ -375,31 +491,7 @@ var tester = function() {
 			this.rs.innerHTML = data;
 		}
 		
-		var getNewElement2 = function(parent, tagName, className, contents) {
-			var wr = document.createElement(tagName);
-			if (className !== false) {
-				if(typeof(className) == typeof("str")){
-					wr.classList.add(className);
-				} else if(typeof(className) == typeof([])){
-					for(var x = 0; x < className.length;x++) {
-						wr.classList.add(className[x]);
-					}
-				}
-			}
-			if(contents!==false){
-				wr.innerHTML = contents;
-			}
-			parent.appendChild(wr);
-			return wr;
-		}
-		
-		var getNewElement1 = function(parent, tagName, className) {
-			return getNewElement2(parent, tagName, className, false);
-		}
-		
-		var getNewElement0 = function(parent, tagName) {
-			return getNewElement1(parent, tagName, false);
-		}
+
 		
 		var setup = function() {
 			// Mame vytvorenu strukturu a ulozeny jednotlive komponenty, nasadime callbacky
@@ -459,7 +551,7 @@ var tester = function() {
 		}
 		
 		this.getElement = function() {
-			var struct = tester.reconstructUI(UI);
+			var struct = tester.common.reconstructUI(UI);
 			var el = struct[0];
 			var ids = struct[1];
 			var solvStr = data.finished_date ? " (vyřešeno "+data.finished_date+")" : "";
@@ -516,37 +608,13 @@ var tester = function() {
 		return this;
 	}
 	
-	self.generateRandomString = function(length) {
-		var result = "";
-		var characters  = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-		var charactersLength = characters.length;
-		for (var i = 0; i < length; i++ ) {
-			result += characters.charAt(Math.floor(Math.random() * charactersLength));
-		}
-		return result;
-	}
 	
-	self.async = function(data, callbackOK, callbackFail) {
-		var http = new XMLHttpRequest();
-		var url = window.location.href+"test?cache="+self.generateRandomString(10);
-		http.open("POST", url, true);
-		http.onreadystatechange = function(e) {
-			if(e.target.readyState == 4) {
-				if(e.target.status == 200) {
-					callbackOK(http.responseText);
-				} else {
-					callbackFail(self.getErrorSolution(0))
-				}
-			}
-		};
-		http.send(data);
-	}
 	
 	self.submit = function(id, asm, cbOK, cbFail) {
 		var data = {"asm":asm, "id": id}
-		var txtEnc = "q=" + self.encode(JSON.stringify(data));
-		self.async(txtEnc, function(response) {
-			var deco=self.decode(response);
+		var txtEnc = "q=" + self.common.encode(JSON.stringify(data));
+		self.common.async(txtEnc, function(response) {
+			var deco=self.common.decode(response);
 			if(deco!==false) {
 				var obj = JSON.parse(deco);
 				if(obj!==false){
@@ -573,15 +641,7 @@ var tester = function() {
 	}
 	
 	self.getErrorSolution = function(code) {
-		if(code == 0){
-			return self.dec("<span class=\"log_err\">Nepodařilo se kontaktovat sestavovací server</span>");
-		} else if(code == 1){
-			return self.dec("<span class=\"log_err\">Nepodařilo se dekódovat odpověď sestavovacího serveru</span>");
-		}else if(code == 53){
-			return self.dec("<span class=\"log_err\">Byl jsi odhlášen. Pro přihlášení si obnov stránku (nezapome�? si někam bokem uložit kód, který se právě snažíš přeloži)</span>");
-		} else {
-			return self.dec("<span class=\"log_err\">Neznámá chyba</span>");
-		}
+		return self.common.getErrorSolution(code);
 	}
 	
 	self.setAllTestsEnabled = function(enabled) {
@@ -647,7 +707,7 @@ var tester = function() {
 		};
 		
 		var cbFail = function(descr, waiter) {
-			descr = self.dec(descr);
+			descr = self.common.dec(descr);
 			tesx.setSolution(descr);
 			self.setAllTestsEnabled(true);
 			
@@ -658,7 +718,7 @@ var tester = function() {
 				self.setBlockTimeout(then);
 			}
 		}
-		tesx.setSolution(self.dec("Vyhodnocuji test..."));
+		tesx.setSolution(self.common.dec("Vyhodnocuji test..."));
 		self.submit(tesx.getID(), tesx.getASM(), cbOK, cbFail);
 	}
 	
@@ -667,11 +727,11 @@ var tester = function() {
 		id_indiv.innerHTML = "";
 		self.allTests = [];
 		for(var i = 0; i <data.length; i++) {
-			data[i].title = self.dec(data[i].title);
-			data[i].id = self.dec(data[i].id);
-			data[i].zadani = self.dec(data[i].zadani);
-			data[i].init = self.dec(data[i].init);
-			var dataI = new self.testI(data[i], self);
+			data[i].title = self.common.dec(data[i].title);
+			data[i].id = self.common.dec(data[i].id);
+			data[i].zadani = self.common.dec(data[i].zadani);
+			data[i].init = self.common.dec(data[i].init);
+			var dataI = new self.testI(data[i], self, self.common);
 			self.allTests[self.allTests.length] = dataI;
 			id_indiv.appendChild(self.use_old_ui ? dataI.getElementOld() : dataI.getElement());
 			if(data[i].finished_date){
@@ -701,12 +761,12 @@ var tester = function() {
 	
 	self.loadRemoteTests = function() {
 		var cbFail = function(data) {
-			id_loader.innerHTML = self.dec(data);
+			id_loader.innerHTML = self.common.dec(data);
 			id_loader.classList.remove("loader");
 			id_loader.classList.add("loader_error");
 		};
 		var cbOk = function(data) {
-			var deco = self.decode(data);
+			var deco = self.common.decode(data);
 			if(deco!==false){
 				var jsn = JSON.parse(deco);
 				if(jsn!==false){
@@ -717,43 +777,22 @@ var tester = function() {
 						if(jsn.code == 53){
 							document.location.reload();
 						} else {
-							cbFail(self.dec("Nepodařilo se nahrát testy: <br />" + jsn.result));
+							cbFail(self.common.dec("Nepodařilo se nahrát testy: <br />" + jsn.result));
 						}
 					}
 					return;
 				}
 			}
-			cbFail(self.dec("Nepodařilo se dekódovat testy"));
+			cbFail(self.common.dec("Nepodařilo se dekódovat testy"));
 		};
 		var data = {"action":"COLLECT"}
-		var txtEnc = "q=" + self.encode(JSON.stringify(data));
-		self.async(txtEnc, cbOk, cbFail);
+		var txtEnc = "q=" + self.common.encode(JSON.stringify(data));
+		self.common.async(txtEnc, cbOk, cbFail);
 	}
-	
-	self.sanitizeData = function(data) {
-		if(data instanceof Array) { 
-			var res = [];
-			for(var i = 0; i < data.length; i++) {
-				res[i] = self.sanitizeData(data[i]); 
-			}
-			return res;
-		} else if(data instanceof Object) { 
-			var res = {};
-			for(var item in data){
-				if(data.hasOwnProperty(item)){
-					res[self.sanitizeData(item)] = self.sanitizeData(data[item]);
-				}
-			}
-			return res;
-		} else if(typeof(data) === typeof("abc")){
-			return self.dec(data);
-		} else {
-			return data;
-		}
-	}
+
 	
 	self.createGraph = function(parent, graphData) {
-		graphData = self.sanitizeData(graphData);
+		graphData = self.common.sanitizeData(graphData);
 		var ctx = document.createElement("canvas");
 		var opts = graphData.LibOptions ? graphData.LibOptions : {};
 		var ftype = graphData.Options.Type ? graphData.Options.Type : "line";
@@ -834,7 +873,7 @@ var tester = function() {
 			self.hideStats();
 		};
 		var cbOk = function(data) {
-			var deco = self.decode(data);
+			var deco = self.common.decode(data);
 			if(deco!==false){
 				var jsn = JSON.parse(deco);
 				if(jsn!==false) { 
@@ -844,28 +883,18 @@ var tester = function() {
 					}
 				}
 			}
-			cbFail(self.dec("Nepodařilo se dekódovat statistiky"));
+			cbFail(self.common.dec("Nepodařilo se dekódovat statistiky"));
 		};
 		var data = {"action":"GRAPHS"}
-		var txtEnc = "q=" + self.encode(JSON.stringify(data));
-		self.async(txtEnc, cbOk, cbFail);
+		var txtEnc = "q=" + self.common.encode(JSON.stringify(data));
+		self.common.async(txtEnc, cbOk, cbFail);
 	}
-	
-	self.logout = function() {
-	    var cookies = document.cookie.split(";");
-	    for (var i = 0; i < cookies.length; i++) {
-	        var cookie = cookies[i];
-	        var eqPos = cookie.indexOf("=");
-	        var name = eqPos > -1 ? cookie.substr(0, eqPos) : cookie;
-	        document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT";
-	    }
-	    window.location.href="http://isu.rion.cz/logout"
-	}
+
 	
 	self.aload = function() {
 		window.addEventListener("resize", self.mres);
-		txtLogin.innerHTML = self.IDENTITY_TOKEN.name + " ("+self.IDENTITY_TOKEN.primary+"@"+self.IDENTITY_TOKEN.group+")";
-		btnLogout.addEventListener("click", function(){self.logout();});
+		txtLogin.innerHTML = self.common.IDENTITY_TOKEN.name + " ("+self.common.IDENTITY_TOKEN.primary+"@"+self.common.IDENTITY_TOKEN.group+")";
+		btnLogout.addEventListener("click", function(){self.common.logout();});
 		btnStats.addEventListener("click", function(){self.showStats();});
 		btnFaq.addEventListener("click", function(){self.showFaq();});
 		btnCloseStats.addEventListener("click", function() {self.hideStats();});
@@ -881,6 +910,10 @@ var tester = function() {
 		txtHeader.style.display="block";
 	}
 	
+	self.hideLoginPanel =  function() {
+		txtHeader.style.display="none";
+	}
+	
 	self.use_old_ui  = false;
 	
 	self.reloadNewUI  = function() {
@@ -894,9 +927,503 @@ var tester = function() {
 	}
 }
 
+var terminer = function() {
+    var self = this
+    self.common = new common();
+
+    self.materialize = function(data) {
+    	var available = data.Available;
+    	var my = data.MyData
+    	term_table_root.innerHTML = "";
+    	
+    	var newMy = {};
+    	for(var m in my) {
+    	   if(my.hasOwnProperty(m)) {
+    	      var d = my[m]
+    	      var cas = new Date(d.Time);
+    	      cas = cas.getDate() + "."+cas.getMonth() + "." + cas.getFullYear() + " " + cas.getHours() + ":" + cas.getMinutes();
+    	      d.Time = cas;
+    	      newMy[d.SlotID] = d;
+    	   }
+    	}
+    	
+    	var adm = {};
+    	var allowedLogins = {};
+    	if(data.Admin && data.AdminAll) {
+	    	for(var m in data.AdminAll) {
+	    		if(data.AdminAll.hasOwnProperty(m)) {
+	    			for(var i = 0; i < data.AdminAll[m].length; i++) {
+	    			    var am = data.AdminAll[m][i];
+	    			    allowedLogins[am.Login] = true;
+						if(am.SlotID in adm) {
+							adm[am.SlotID][am.Login] = am;
+						} else {
+							adm[am.SlotID] = {};
+				    		adm[am.SlotID][am.Login] = am;
+						}
+					}
+				}
+	    	}
+			for(var i = 0; i < data.Admin.length; i++) {
+				var am = data.Admin[i];
+				if(am.Login in allowedLogins) {
+					if(am.SlotID in adm) {
+						adm[am.SlotID][am.Login] = am;
+					} else {
+						adm[am.SlotID] = {};
+				    	adm[am.SlotID][am.Login] = am;
+					}
+				}
+			}    	
+    	} 
+    	var cdm = {}
+		for(var m in adm) {
+			if(adm.hasOwnProperty(m)) {
+				cdm[m] = [];
+				for(var mm in adm[m]) {
+					if(adm[m].hasOwnProperty(mm)) {
+						cdm[m].push(adm[m][mm]);
+					}	
+				}		
+			}
+		}
+		adm = cdm;
+    	
+    	for(var i = 0; i < available.length; i++) {
+    	   var av = available[i];
+    	   var el = self.constructTerm(av, newMy, adm);
+    	   term_table_root.appendChild(el);
+	   }
+	   term_table_root.style.display = "block";
+	   return;
+    }
+    
+    
+    self.changeOption = function(slotID, variantID) {
+    	var cbFail = function(data) {
+			var el = document.createElement("span");
+			el.innerHTML = data;
+			alert(el.innerText);
+		};
+		var cbOk = function(data) {
+			var deco = self.common.decode(data);
+			if(deco!==false){
+				var jsn = JSON.parse(deco);
+				if(jsn!==false){
+					if(jsn.code === 0 && jsn.result) {
+						var result = JSON.parse(jsn.result);
+						if(result && result.MyData && result.Available) {
+							self.materialize(result);
+							self.showLoginPanel();
+						} else {
+							cbFail(self.common.dec("Nepodařilo se nahrát termíny kvůli špatné struktuře ze serveru"));
+						}
+					} else {
+						if(jsn.code == 53){
+							document.location.reload();
+						} else {
+							cbFail(self.common.dec("Nepodařilo se nahrát termíny: <br />" + jsn.result));
+						}
+					}
+					return;
+				}
+			}
+			cbFail(self.common.dec("Nepodařilo se dekódovat testy"));
+		};
+		var data = {"action":"HANDLE_TERMS", "term_data": "subscribe", "slotID": slotID, "variantID": variantID};
+		var txtEnc = "q=" + self.common.encode(JSON.stringify(data));
+		self.common.async(txtEnc, cbOk, cbFail);
+    
+    }
+    
+    self.signUp = function(slotID, variantID) {
+    	self.changeOption(slotID, variantID);
+    }
+    
+    self.signOut = function(slotID) {
+    	self.changeOption(slotID, 0);
+    }
+    
+    self.btnHideCB = function(btn, el1, el2) {
+    	if(btn.innerHTML == "Skrýt") {
+    	   btn.innerHTML = "Zobrazit";
+    	   el2.style.display ="none";
+    	   el1.style.borderBottom="none";
+    	} else {
+    		btn.innerHTML = "Skrýt";
+    		el2.style.display ="";
+    		el1.style.borderBottom="";
+    	}
+    }
+    
+    self.constructTerm = function(data, my, adm) {
+       var UI = 
+       {
+              "type": "div",
+              "class": "term_table_w0",
+              "contents": [
+              		{
+              		   "type": "div",
+              		   "class": "term_table_w00",
+              		   "id": "nwBorder",
+              		   "contents": [
+              		   		{
+              		   		   "type": "div",
+              		   		   "class": "term_table_w001",
+              		   		   "id": "txtBrief"
+              		   		},
+              		   		{
+              		   		   "type": "div",
+              		   		   "class": "term_table_w002",
+              		   		   "contents": [
+              		   		   		{
+              		   		   		   "type": "button",
+              		   		   		   "id": "btnHide",
+              		   		   		   "innerHTML": "Skrýt"
+              		   		   		}
+              		   		   ]
+              		   		}
+              		   
+              		   ]
+              		},
+              		{
+              			"type": "div",
+              			"class": "term_table_w1",
+              			"id": "pnlMain",
+              			"contents": [
+              				{
+              					"type": "div",
+              					"class": "term_table_w12",
+              					"contents": [
+              						{
+	              						"type": "div",
+              							"class": "term_table_w121",
+              							"innerHTML": "Popis"
+              						}, {
+              						 	"type": "div",
+              						 	"class": "term_table_w122",
+              						 	"id": "txtDescr"
+              						}
+              					]
+              				},
+              				{
+              				   "type": "div",
+              				   "class": "term_table_w13",
+              				   "contents": [
+									{
+										"type": "div",
+										"class": "term_table_w131",
+										"innerHTML": "Přihlášení"
+									},
+									{
+										"type": "div",
+										"class": "term_table_w132",
+										"id": "pre_adm_appender",
+										"contents": [
+											{
+												"type": "table",
+												"class": "term_table",
+												"id": "term_loginTable",
+												"contents": [
+													{
+														"type": "tr",
+														"contents": [
+															{
+																"type": "th",
+																"innerHTML": "Varianta"
+															},
+															{
+																"type": "th",
+																"innerHTML": "Kapacita"
+															},
+															{
+																"type": "th",
+																"innerHTML": "Přihlášeno"
+															},
+															{
+																"type": "th",
+																"innerHTML": "Přihlášení"
+															}
+														]
+													}
+												
+												]
+											}
+										]
+									}              				   
+              				   ] 
+              				}
+              			]
+              		}
+              ]
+          }
+          
+          var admUITable = 
+				{
+					"type": "table",
+					"class": "term_table",
+					"id": "term_adm",
+					"contents": [
+						{
+							"type": "tr",
+							"contents": [
+								{
+									"type": "th",
+									"colSpan": 4,
+									"id": "term_adm_var",
+									"innerHTML": ""
+								}
+							
+							]
+						},
+						{
+							"type": "tr",
+							"contents": [
+								{
+									"type": "th",
+									"innerHTML": "#"
+								},
+								{
+									"type": "th",
+									"innerHTML": "Login"
+								},
+								{
+									"type": "th",
+									"innerHTML": "Jméno"
+								},
+								{
+									"type": "th",
+									"innerHTML": "Čas přihlášení"
+								}
+							]
+						}
+					]
+				};
+          
+          var admUI = {
+          		"type": "tr",
+          		"contents": [
+					{
+						"type": "td",
+						"id": "cellOrder"
+					},
+										{
+						"type": "td",
+						"id": "cellLogin"
+					},
+					{
+						"type": "td",
+						"id": "cellName"
+					},
+					{
+						"type": "td",
+						"id": "cellTime"
+					}        		
+          		
+          		]
+          };   
+           
+          var signUI = {
+          		"type": "tr",
+          		"contents": [
+					{
+						"type": "td",
+						"id": "cellName"
+					},
+										{
+						"type": "td",
+						"id": "cellCap"
+					},
+					{
+						"type": "td",
+						"id": "cellNow"
+					},
+					{
+						"type": "td",
+						"contents": [
+							 {
+							 	"type": "span",
+							 	"class": "term_table_logged",
+							 	"id": "term_table_logged"
+							 },
+							 {
+							 	"type": "button",
+							 	"id": "btnLog",
+							 	"innerHTML": "Odhlásit"
+							 }
+						
+						]
+					}        		
+          		
+          		]
+          }
+          
+       	var struct = self.common.reconstructUI(UI);
+		var el = struct[0];
+		var ids = struct[1];
+		
+		var loggedVariant = false;
+		
+		var constrF = function(st) {
+			var name = st.Name;
+		    var code = st.Code;
+		    var limit = st.Limit;
+		    var value = st.Value;
+		      
+		      
+		    var subStruct = self.common.reconstructUI(signUI);
+		    var subEls = subStruct[0];
+		    var subIds = subStruct[1];
+		      
+		    subIds.cellCap.innerHTML = limit;
+		    subIds.cellName.innerHTML = name;
+		    subIds.cellNow.innerHTML = value;
+		      
+		    if(data.ID in my && my[data.ID].Type == code) {
+		        var cas =  my[data.ID].Time;
+			    subIds.btnLog.addEventListener("click", function() {self.signOut(data.ID);});
+			    subIds.btnLog.innerHTML = "Odhlásit";
+			    subIds.term_table_logged.innerHTML = "Přihlášen: " +cas;
+		    } else {
+			    subIds.btnLog.addEventListener("click", function() {self.signUp(data.ID, code);});
+			    subIds.btnLog.innerHTML = "Přihlásit";
+			    subIds.term_table_logged.style.display = "none";
+            }
+            return subEls;
+		};
+		
+		if(data.ID in my && my[data.ID].Type > 0) {
+	    	loggedVariant = "Přihlášena varianta \""+my[data.ID].TypeName+"\"";
+	    	ids.nwBorder.style.background = "#68CD34";
+    	} 
+		
+		for(var d in data.Stats) {
+		   if(data.Stats.hasOwnProperty(d)) {
+		      var st = data.Stats[d];
+		      ids.term_loginTable.appendChild(constrF(st));
+		   }
+		}
+		if(data.ID in adm && adm[data.ID].length && adm[data.ID].length > 0) {
+			var admData = adm[data.ID];
+			// Resort by types
+			var newAdmData = {};
+			for(var i = 0; i < admData.length;i++) {
+				var type = admData[i].Type;
+				if(!(type in newAdmData)) {
+					newAdmData[type] = [];					
+				}
+				newAdmData[type].push(admData[i]);
+			}
+			admDataTotal = newAdmData;
+			
+			for(var admDataTotalKey in admDataTotal) {
+			   if(admDataTotal.hasOwnProperty(admDataTotalKey)) {
+				   var admData = admDataTotal[admDataTotalKey];
+				   if(admData.length > 0) {
+						
+				      	var admStruct = self.common.reconstructUI(admUITable);
+						var admEl = admStruct[0];
+						var admIds = admStruct[1];
+					
+					
+						admIds.term_adm_var.innerHTML = "Varianta \""+admData[0].TypeName+"\"";
+					
+						for(var i = 0; i < admData.length; i++) {
+						    var aData = admData[i];
+						   
+					      	var aDataStruct = self.common.reconstructUI(admUI);
+							var aDataEl = aDataStruct[0];
+							var aDataIds = aDataStruct[1];
+							var cas = "";
+							if(aData.Time && aData.Time > 0) {
+								cas = new Date(aData.Time);
+				    	      	cas = cas.getDate() + "."+cas.getMonth() + "." + cas.getFullYear() + " " + cas.getHours() + ":" + cas.getMinutes();
+			    	      	}
+							
+							aDataIds.cellOrder.innerHTML = (i+1)+"";
+							aDataIds.cellTime.innerHTML = cas;
+							aDataIds.cellName.innerHTML = aData.Name
+							aDataIds.cellLogin.innerHTML = aData.Login;
+							
+						    admEl.appendChild(aDataEl);
+						}
+						ids.pre_adm_appender.appendChild(document.createElement("br"));
+						ids.pre_adm_appender.appendChild(admEl);
+					}
+				}
+			}
+		}
+		
+		ids.txtBrief.innerHTML = data.Title;
+		ids.txtDescr.innerHTML = data.Description;
+		ids.btnHide.addEventListener("click", function() {self.btnHideCB(ids.btnHide, ids.nwBorder, ids.pnlMain);});
+		
+		if(loggedVariant !== false) {
+			ids.txtBrief.innerHTML += " ("+loggedVariant+")";		
+		}
+		
+		return el;
+    };
+	
+	self.showLoginPanel =  function() {
+		txtHeader.style.display="block";
+	}
+	
+    self.loadTerms = function() {
+    	id_indiv.style.display = "";
+    	term_table_root.innerHTML = "";
+   		var cbFail = function(data) {
+			id_loader.innerHTML = self.common.dec(data);
+			id_loader.classList.remove("loader");
+			id_loader.classList.add("loader_error");
+		};
+		var cbOk = function(data) {
+			id_indiv.style.display = "none";
+			var deco = self.common.decode(data);
+			if(deco!==false){
+				var jsn = JSON.parse(deco);
+				if(jsn!==false){
+					if(jsn.code === 0 && jsn.result) {
+						var result = JSON.parse(jsn.result);
+						if(result && result.MyData && result.Available) {
+							self.materialize(result);
+							self.showLoginPanel();
+						} else {
+							cbFail(self.common.dec("Nepodařilo se nahrát termíny kvůli špatné struktuře ze serveru"));
+						}
+					} else {
+						if(jsn.code == 53){
+							document.location.reload();
+						} else {
+							cbFail(self.common.dec("Nepodařilo se nahrát termíny: <br />" + jsn.result));
+						}
+					}
+					return;
+				}
+			}
+			cbFail(self.common.dec("Nepodařilo se dekódovat testy"));
+		};
+		var data = {"action":"HANDLE_TERMS", "term_data": "getTerms"};
+		var txtEnc = "q=" + self.common.encode(JSON.stringify(data));
+		self.common.async(txtEnc, cbOk, cbFail);
+    }
+
+	self.aload = function() {
+	   txtLogin.innerHTML = self.common.IDENTITY_TOKEN.name + " ("+self.common.IDENTITY_TOKEN.primary+"@"+self.common.IDENTITY_TOKEN.group+")";
+	   btnLogout.addEventListener("click", function(){self.common.logout();});
+	   self.loadTerms();
+	}
+
+}
+
 function aload() {
 	window.tester = new tester();
 	tester.aload();
+}
+
+function cviceni_load() {
+   window.terminer = new terminer();
+   terminer.aload();
 }
 
 $INJECT_ADMIN$

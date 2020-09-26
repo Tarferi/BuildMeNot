@@ -285,7 +285,7 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 		private final String name;
 		private final String pathPrefix;
 		public final String[] runnerParams;
-
+		
 		public ExecutionResult run(ToolchainLogger errors, GenericTest test, String workingDirectory, String inputString, String stdin, String login) {
 			MyFS.deleteFileSilent(workingDirectory);
 			boolean codeKnown = true;

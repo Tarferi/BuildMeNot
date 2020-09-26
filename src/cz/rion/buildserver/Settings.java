@@ -208,7 +208,11 @@ public class Settings {
 		return instance.authURL.asString() != null;
 	}
 
-	public static String getAuthURL(String toolchain) {
+	public static String getAuthURL(String toolchain, String host) {
+		int fi = host.toLowerCase().indexOf(toolchain.toLowerCase());
+		if (fi > 0) {
+			toolchain = toolchain + "/" + host.substring(0, fi - 1);
+		}
 		return instance.authURL.asString() + "/" + toolchain.toLowerCase();
 	}
 
