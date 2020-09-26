@@ -85,7 +85,7 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 	public LayeredPresenceDB(String dbName) throws DatabaseException {
 		super(dbName);
 		this.makeTable("presence_slots", KEY("ID"), TEXT("name"), BIGTEXT("description"), TEXT("title"), TEXT("settings"), NUMBER("valid"), TEXT("owner_login"), TEXT("toolchain"));
-		this.makeTable("presence_users", KEY("ID"), NUMBER("user_id"), NUMBER("slot_id"), NUMBER("valid"), NUMBER("type"), NUMBER("creation_time"));
+		this.makeTable("presence_users", KEY("ID"), NUMBER("user_id"), NUMBER("slot_id"), NUMBER("valid"), NUMBER("type"), DATE("creation_time"));
 
 		this.registerVirtualFile(new VirtualFile() {
 
