@@ -26,7 +26,7 @@ import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 
 	public static enum PresenceType {
-		Undefined(0, "Nedefinováno"), Present(1, "Prezenènì"), Remote(2, "Online");
+		Undefined(0, "Nepøihlášeno"), Present(1, "Prezenènì"), Remote(2, "Online");
 
 		public final int Code;
 		public final boolean Visible;
@@ -158,11 +158,11 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 		}
 
 		public boolean canSign(UsersPermission perm) {
-			return perm.can(new PermissionBranch(Toolchain + ".SIGN." + Name));
+			return perm.can(new PermissionBranch(Toolchain.getName() + ".SIGN." + Name));
 		}
 
 		public boolean canSee(UsersPermission perm) {
-			return perm.can(new PermissionBranch(Toolchain + ".SEE." + Name));
+			return perm.can(new PermissionBranch(Toolchain.getName() + ".SEE." + Name));
 		}
 	}
 
@@ -258,7 +258,7 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 		}
 
 		public List<PresentUserDetails> getAllUsers(UsersPermission perms) {
-			if (perms.can(new PermissionBranch(this.Toolchain + ".ADMIN"))) {
+			if (perms.can(new PermissionBranch(this.Toolchain.getName() + ".ADMIN"))) {
 				List<PresentUserDetails> lst = new ArrayList<>();
 				for (Entry<Integer, List<PresentUserDetails>> entry : presencesByUserID.entrySet()) {
 					for (PresentUserDetails user : entry.getValue()) {

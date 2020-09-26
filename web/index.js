@@ -1327,6 +1327,7 @@ var terminer = function() {
 					
 					
 						admIds.term_adm_var.innerHTML = "Varianta \""+admData[0].TypeName+"\"";
+						admData.sort(function(a, b) {return (a.Login > b.Login) ? 1 : -1;})
 					
 						for(var i = 0; i < admData.length; i++) {
 						    var aData = admData[i];
