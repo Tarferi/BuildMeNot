@@ -15,7 +15,7 @@ var common = function() {
 	        var name = eqPos > -1 ? cookie.substr(0, eqPos) : cookie;
 	        document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT";
 	    }
-	    window.location.href="http://isu.rion.cz/logout"
+	    window.location.href="http://" + self.TOOLCHAIN +".rion.cz/logout"
 	}
 
 	
@@ -991,8 +991,18 @@ var terminer = function() {
     	
     	for(var i = 0; i < available.length; i++) {
     	   var av = available[i];
-    	   var el = self.constructTerm(av, newMy, adm);
-    	   term_table_root.appendChild(el);
+    	   var show = (!data.Admin) || (!data.AdminAll); // Pokud nejsou admini
+    	   if(av.OwnerLogin == "") {
+    	   	   show = true;
+    	   } else if(av.OwnerLogin == self.common.IDENTITY_TOKEN.login) {
+    	   		show = true;
+    	   } else {
+    	   		show |= av.OwnerLogin.split(",").reduce(function(data, item) {return item==self.common.IDENTITY_TOKEN.login||data;}, false);
+    	   }
+    	   if(show) {
+    	   	   var el = self.constructTerm(av, newMy, adm);
+    	   	   term_table_root.appendChild(el);
+	   	   }
 	   }
 	   term_table_root.style.display = "block";
 	   return;

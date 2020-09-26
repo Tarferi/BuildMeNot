@@ -84,14 +84,14 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 
 	public LayeredPresenceDB(String dbName) throws DatabaseException {
 		super(dbName);
-		this.makeTable("presence_slots", KEY("ID"), TEXT("name"), BIGTEXT("description"), TEXT("title"), TEXT("settings"), NUMBER("valid"), TEXT("toolchain"));
+		this.makeTable("presence_slots", KEY("ID"), TEXT("name"), BIGTEXT("description"), TEXT("title"), TEXT("settings"), NUMBER("valid"), TEXT("owner_login"), TEXT("toolchain"));
 		this.makeTable("presence_users", KEY("ID"), NUMBER("user_id"), NUMBER("slot_id"), NUMBER("valid"), NUMBER("type"), NUMBER("creation_time"));
 
 		this.registerVirtualFile(new VirtualFile() {
 
 			@Override
 			public String read() throws DatabaseException {
-				return "# Tento soubor slouží pro založení slotu rezervace cvièení. \n" + "# Každý øádek = slot.\n" + "# Formát: <toolchain>|<nazev>|max_pritomnych:max_online|<popis>\n" + "# Název poslouží pro práva:\n" + "#\t \"<toolchain>.SEE.<nazev>\" = Každý s tímto právem uvidí záznam\n" + "#\t \"<toolchain>.SIGN.<nazev>\" = Každý s tímto právem se mùže pøihlásit\n" + "#\t \"<toolchain>.ADMIN\" = Každý s tímto právem uvidí seznam pøihlášených\n# Pokud zadané jméno existuje, tak se aktualizuje. Poté je potøeba ruènì editovat popis";
+				return "# Tento soubor slouží pro založení slotu rezervace cvièení. \n" + "# Každý øádek = slot.\n" + "# Formát: <toolchain>|<login>|<nazev>|max_pritomnych:max_online|<popis>\n" + "# Název poslouží pro práva:\n" + "#\t \"<toolchain>.SEE.<nazev>\" = Každý s tímto právem uvidí záznam\n" + "#\t \"<toolchain>.SIGN.<nazev>\" = Každý s tímto právem se mùže pøihlásit\n" + "#\t \"<toolchain>.ADMIN\" = Každý s tímto právem uvidí seznam pøihlášených\n# Pokud zadané jméno existuje, tak se aktualizuje. Poté je potøeba ruènì editovat popis\n# Pozn: \"login\" slouží k vymezení toho, kdo formuláø uvidí ze strany strany vyuèujících.\n# Pokud chcete nìkomu formuláø ukázat, pøidejte do do OwnerLogin (seznam oddìlený èárkami)\n# Pozn#2: Formuláøe jsou cachovány s minutovou prodlevou";
 			}
 
 			@Override
@@ -101,11 +101,12 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 					if (line.startsWith("#") || line.isEmpty()) {
 						continue;
 					}
-					String[] parts = line.split("\\|", 4);
-					if (parts.length == 4) {
+					String[] parts = line.split("\\|", 5);
+					if (parts.length == 5) {
 						String toolchain = parts[0].trim();
-						String name = parts[1].trim();
-						String[] limits = parts[2].trim().split(":");
+						String login = parts[1].trim();
+						String name = parts[2].trim();
+						String[] limits = parts[3].trim().split(":");
 						if (limits.length == 2) {
 							JsonObject lim = new JsonObject();
 							try {
@@ -116,7 +117,7 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 							} catch (Exception e) {
 								return;
 							}
-							String descr = parts[3].trim();
+							String descr = parts[4].trim();
 							StaticDB sdb = (StaticDB) LayeredPresenceDB.this;
 							Toolchain Toolchain = null;
 							try {
@@ -125,7 +126,7 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 								e.printStackTrace();
 							}
 							if (Toolchain != null) {
-								addSlot(Toolchain, name, descr, lim.getJsonString());
+								addSlot(Toolchain, name, descr, lim.getJsonString(), login);
 							}
 						}
 					}
@@ -145,16 +146,18 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 		public final String Name;
 		public final String Description;
 		public final String Title;
+		public final String OwnerLogin;
 		public final PresenceLimits Limits;
 		public final Toolchain Toolchain;
 
-		private PresenceSlot(int id, String name, String description, String title, PresenceLimits limits, Toolchain toolchain) {
+		private PresenceSlot(int id, String name, String description, String title, PresenceLimits limits, Toolchain toolchain, String ownerLogin) {
 			this.ID = id;
 			this.Name = name;
 			this.Description = description;
 			this.Title = title;
 			this.Limits = limits;
 			this.Toolchain = toolchain;
+			this.OwnerLogin = ownerLogin;
 		}
 
 		public boolean canSign(UsersPermission perm) {
@@ -295,7 +298,7 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 		List<PresenceSlot> lst = new ArrayList<PresenceSlot>();
 
 		final String tableName = "presence_slots";
-		TableField[] fields = new TableField[] { getField(tableName, "ID"), getField(tableName, "name"), getField(tableName, "description"), getField(tableName, "title"), getField(tableName, "settings") };
+		TableField[] fields = new TableField[] { getField(tableName, "ID"), getField(tableName, "name"), getField(tableName, "description"), getField(tableName, "owner_login"), getField(tableName, "title"), getField(tableName, "settings") };
 		JsonArray res = this.select(tableName, fields, true, new ComparisionField(getField(tableName, "toolchain"), toolchain.getName()), new ComparisionField(getField(tableName, "valid"), 1));
 
 		for (JsonValue val : res.Value) {
@@ -306,6 +309,7 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 				String description = obj.getString("description").Value;
 				String title = obj.getString("title").Value;
 				String settings = obj.getString("settings").Value;
+				String owner_login = obj.getString("owner_login").Value;
 				JsonValue p = JsonValue.parse(settings);
 				if (p != null) {
 					if (p.isObject()) {
@@ -320,7 +324,7 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 								limits.addLimit(type, 0);
 							}
 						}
-						lst.add(new PresenceSlot(ID, name, description, title, limits, toolchain));
+						lst.add(new PresenceSlot(ID, name, description, title, limits, toolchain, owner_login));
 					}
 
 				}
@@ -476,12 +480,12 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 		return false;
 	}
 
-	private void addSlot(Toolchain toolchain, String name, String description, String limits) {
+	private void addSlot(Toolchain toolchain, String name, String description, String limits, String owner_login) {
 		final String tableName = "presence_slots";
 		synchronized (presence) {
 			try {
 				String title = description;
-				ValuedField[] fields = new ValuedField[] { new ValuedField(getField(tableName, "toolchain"), toolchain), new ValuedField(getField(tableName, "name"), name), new ValuedField(getField(tableName, "description"), description), new ValuedField(getField(tableName, "title"), title), new ValuedField(getField(tableName, "settings"), limits), new ValuedField(getField(tableName, "valid"), 1) };
+				ValuedField[] fields = new ValuedField[] { new ValuedField(getField(tableName, "toolchain"), toolchain.getName()), new ValuedField(getField(tableName, "name"), name), new ValuedField(getField(tableName, "owner_login"), owner_login), new ValuedField(getField(tableName, "description"), description), new ValuedField(getField(tableName, "title"), title), new ValuedField(getField(tableName, "settings"), limits), new ValuedField(getField(tableName, "valid"), 1) };
 				if (presence.get(toolchain).slotsByName.containsKey(name)) {
 					int slotID = presence.get(toolchain).slotsByName.get(name).ID;
 					this.update(tableName, slotID, fields);

@@ -34,6 +34,7 @@ public class HTTPTermClient extends HTTPParserClient {
 			obj.add("Name", new JsonString(slot.Slot.Name));
 			obj.add("Description", new JsonString(slot.Slot.Description));
 			obj.add("Title", new JsonString(slot.Slot.Title));
+			obj.add("OwnerLogin", new JsonString(slot.Slot.OwnerLogin));
 			JsonObject presences = new JsonObject();
 			for (PresenceType type : PresenceType.values()) {
 				if (type.Visible) {
