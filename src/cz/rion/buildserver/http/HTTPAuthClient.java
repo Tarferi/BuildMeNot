@@ -187,6 +187,7 @@ public class HTTPAuthClient extends HTTPTestClient {
 			}
 		}
 
+		/*
 		boolean supportedClient = false;
 		if (request.headers.containsKey("user-agent")) {
 			String agent = request.headers.get("user-agent");
@@ -205,7 +206,8 @@ public class HTTPAuthClient extends HTTPTestClient {
 			String data = "Nepodporovany prohlizec! Pouzij Internet Explorer nebo Google Chrome!";
 			return new HTTPResponse(request.protocol, returnCode, returnCodeDescription, data, type, request.cookiesLines);
 		}
-
+		 */
+		
 		if (authRedirect != null && !objectionsAgainstRedirection(request)) {
 			return authRedirect;
 		}

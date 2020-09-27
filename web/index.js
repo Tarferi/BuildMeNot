@@ -936,6 +936,13 @@ var terminer = function() {
     	var my = data.MyData
     	term_table_root.innerHTML = "";
     	
+    	if(data.Now && data.NextEvent) {
+    		var diff = data.NextEvent - data.Now;
+    		if(diff > 0) {
+    		    setTimeout(function(){ self.loadTerms(true); }, diff+10000);
+    		}
+    	}
+    	
     	var newMy = {};
     	for(var m in my) {
     	   if(my.hasOwnProperty(m)) {
@@ -1010,12 +1017,15 @@ var terminer = function() {
     
     
     self.changeOption = function(slotID, variantID) {
+    	self.setWaiterVisible(true);
     	var cbFail = function(data) {
+    		self.setWaiterVisible(false);
 			var el = document.createElement("span");
 			el.innerHTML = data;
 			alert(el.innerText);
 		};
 		var cbOk = function(data) {
+			self.setWaiterVisible(false);
 			var deco = self.common.decode(data);
 			if(deco!==false){
 				var jsn = JSON.parse(deco);
@@ -1288,16 +1298,24 @@ var terminer = function() {
 		    subIds.cellCap.innerHTML = limit;
 		    subIds.cellName.innerHTML = name;
 		    subIds.cellNow.innerHTML = value;
-		      
-		    if(data.ID in my && my[data.ID].Type == code) {
-		        var cas =  my[data.ID].Time;
-			    subIds.btnLog.addEventListener("click", function() {self.signOut(data.ID);});
-			    subIds.btnLog.innerHTML = "Odhlásit";
-			    subIds.term_table_logged.innerHTML = "Přihlášen: " +cas;
-		    } else {
-			    subIds.btnLog.addEventListener("click", function() {self.signUp(data.ID, code);});
-			    subIds.btnLog.innerHTML = "Přihlásit";
-			    subIds.term_table_logged.style.display = "none";
+		    
+		    if(data.Available == 1) {
+			    if(data.ID in my && my[data.ID].Type == code) {
+			        var cas =  my[data.ID].Time;
+				    subIds.btnLog.addEventListener("click", function() {self.signOut(data.ID);});
+				    subIds.btnLog.innerHTML = "Odhlásit";
+				    subIds.term_table_logged.innerHTML = "Přihlášen: " +cas;
+			    } else {
+				    subIds.btnLog.addEventListener("click", function() {self.signUp(data.ID, code);});
+				    subIds.btnLog.innerHTML = "Přihlásit";
+				    subIds.term_table_logged.style.display = "none";
+	            }
+            } else {
+            	subIds.btnLog.style.display = "none";
+            	if(data.ID in my && my[data.ID].Type == code) {
+            		var cas =  my[data.ID].Time;
+            		subIds.term_table_logged.innerHTML = "Přihlášen: " +cas;
+        		}
             }
             return subEls;
 		};
@@ -1366,7 +1384,7 @@ var terminer = function() {
 		}
 		
 		ids.txtBrief.innerHTML = data.Title;
-		ids.txtDescr.innerHTML = data.Description;
+		ids.txtDescr.innerHTML = data.Description.split("\n").join("<br />");
 		ids.btnHide.addEventListener("click", function() {self.btnHideCB(ids.btnHide, ids.nwBorder, ids.pnlMain);});
 		
 		if(loggedVariant !== false) {
@@ -1380,15 +1398,24 @@ var terminer = function() {
 		txtHeader.style.display="block";
 	}
 	
-    self.loadTerms = function() {
+    self.loadTerms = function(useWaiter) {
+    	if(useWaiter) {
+    		self.setWaiterVisible(true);
+    	}
     	id_indiv.style.display = "";
     	term_table_root.innerHTML = "";
    		var cbFail = function(data) {
+   			if(useWaiter) {
+	    		self.setWaiterVisible(false);
+    		}
 			id_loader.innerHTML = self.common.dec(data);
 			id_loader.classList.remove("loader");
 			id_loader.classList.add("loader_error");
 		};
 		var cbOk = function(data) {
+   			if(useWaiter) {
+	    		self.setWaiterVisible(false);
+    		}
 			id_indiv.style.display = "none";
 			var deco = self.common.decode(data);
 			if(deco!==false){
@@ -1418,11 +1445,20 @@ var terminer = function() {
 		var txtEnc = "q=" + self.common.encode(JSON.stringify(data));
 		self.common.async(txtEnc, cbOk, cbFail);
     }
+    
+    self.setWaiterVisible = function(visible) {
+    	var waiterObj = document.getElementById("id_waiter");
+		if (visible) {
+			waiterObj.style.display = "block";
+		} else {
+			waiterObj.style.display = "none";
+		}
+    }
 
 	self.aload = function() {
 	   txtLogin.innerHTML = self.common.IDENTITY_TOKEN.name + " ("+self.common.IDENTITY_TOKEN.primary+"@"+self.common.IDENTITY_TOKEN.group+")";
 	   btnLogout.addEventListener("click", function(){self.common.logout();});
-	   self.loadTerms();
+	   self.loadTerms(false);
 	}
 
 }

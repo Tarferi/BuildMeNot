@@ -84,14 +84,26 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 
 	public LayeredPresenceDB(String dbName) throws DatabaseException {
 		super(dbName);
-		this.makeTable("presence_slots", KEY("ID"), TEXT("name"), BIGTEXT("description"), TEXT("title"), TEXT("settings"), NUMBER("valid"), TEXT("owner_login"), TEXT("toolchain"));
+		this.makeTable("presence_slots", KEY("ID"), TEXT("name"), BIGTEXT("description"), TEXT("title"), TEXT("settings"), NUMBER("valid"), TEXT("owner_login"), TEXT("toolchain"), DATE("odkdy_zobrazit"), DATE("odkdy_nezobrazit"), DATE("odkdy_prihlasovani"), DATE("dokdy_prihlasovani"));
 		this.makeTable("presence_users", KEY("ID"), NUMBER("user_id"), NUMBER("slot_id"), NUMBER("valid"), NUMBER("type"), DATE("creation_time"));
 
 		this.registerVirtualFile(new VirtualFile() {
 
 			@Override
 			public String read() throws DatabaseException {
-				return "# Tento soubor slouží pro založení slotu rezervace cvièení. \n" + "# Každý øádek = slot.\n" + "# Formát: <toolchain>|<login>|<nazev>|max_pritomnych:max_online|<popis>\n" + "# Název poslouží pro práva:\n" + "#\t \"<toolchain>.SEE.<nazev>\" = Každý s tímto právem uvidí záznam\n" + "#\t \"<toolchain>.SIGN.<nazev>\" = Každý s tímto právem se mùže pøihlásit\n" + "#\t \"<toolchain>.ADMIN\" = Každý s tímto právem uvidí seznam pøihlášených\n# Pokud zadané jméno existuje, tak se aktualizuje. Poté je potøeba ruènì editovat popis\n# Pozn: \"login\" slouží k vymezení toho, kdo formuláø uvidí ze strany strany vyuèujících.\n# Pokud chcete nìkomu formuláø ukázat, pøidejte do do OwnerLogin (seznam oddìlený èárkami)\n# Pozn#2: Formuláøe jsou cachovány s minutovou prodlevou";
+				StringBuilder sb = new StringBuilder();
+				sb.append("# Tento soubor slouží pro založení slotu rezervace cvièení. \n");
+				sb.append("# Každý øádek = slot.\n");
+				sb.append("# Formát: <toolchain>|<login>|<nazev>|max_pritomnych:max_online|<popis>\n");
+				sb.append("# Název poslouží pro práva:\n");
+				sb.append("#\t \"<toolchain>.SEE.<nazev>\" = Každý s tímto právem uvidí záznam\n");
+				sb.append("#\t \"<toolchain>.SIGN.<nazev>\" = Každý s tímto právem se mùže pøihlásit\n");
+				sb.append("#\t \"<toolchain>.ADMIN\" = Každý s tímto právem uvidí seznam pøihlášených\n");
+				sb.append("# Pokud zadané jméno existuje, tak se aktualizuje. Poté je potøeba ruènì editovat popis\n");
+				sb.append("# Pozn: \"login\" slouží k vymezení toho, kdo formuláø uvidí ze strany strany vyuèujících.\n");
+				sb.append("# Pokud chcete nìkomu formuláø ukázat, pøidejte do do OwnerLogin (seznam oddìlený èárkami)\n");
+				sb.append("# Pozn#2: Formuláøe jsou cachovány s minutovou prodlevou");
+				return sb.toString();
 			}
 
 			@Override
@@ -149,8 +161,12 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 		public final String OwnerLogin;
 		public final PresenceLimits Limits;
 		public final Toolchain Toolchain;
+		public final long OdkdyZobrazit;
+		public final long DokdyZobrazit;
+		public final long OdkdyPrihlasovat;
+		public final long DokdyPrihlasovat;
 
-		private PresenceSlot(int id, String name, String description, String title, PresenceLimits limits, Toolchain toolchain, String ownerLogin) {
+		private PresenceSlot(int id, String name, String description, String title, PresenceLimits limits, Toolchain toolchain, String ownerLogin, long odkdyZobrazit, long dokdyZobrazit, long odkdyPrihlasovat, long dokdyPrihlasovat) {
 			this.ID = id;
 			this.Name = name;
 			this.Description = description;
@@ -158,6 +174,10 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 			this.Limits = limits;
 			this.Toolchain = toolchain;
 			this.OwnerLogin = ownerLogin;
+			this.OdkdyZobrazit = odkdyZobrazit;
+			this.DokdyZobrazit = dokdyZobrazit;
+			this.OdkdyPrihlasovat = odkdyPrihlasovat;
+			this.DokdyPrihlasovat = dokdyPrihlasovat;
 		}
 
 		public boolean canSign(UsersPermission perm) {
@@ -296,9 +316,8 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 
 	private List<PresenceSlot> getAllSlots(Toolchain toolchain) throws DatabaseException {
 		List<PresenceSlot> lst = new ArrayList<PresenceSlot>();
-
 		final String tableName = "presence_slots";
-		TableField[] fields = new TableField[] { getField(tableName, "ID"), getField(tableName, "name"), getField(tableName, "description"), getField(tableName, "owner_login"), getField(tableName, "title"), getField(tableName, "settings") };
+		TableField[] fields = new TableField[] { getField(tableName, "ID"), getField(tableName, "name"), getField(tableName, "description"), getField(tableName, "owner_login"), getField(tableName, "title"), getField(tableName, "settings"), getField(tableName, "odkdy_zobrazit"), getField(tableName, "odkdy_nezobrazit"), getField(tableName, "odkdy_prihlasovani"), getField(tableName, "dokdy_prihlasovani"), };
 		JsonArray res = this.select(tableName, fields, true, new ComparisionField(getField(tableName, "toolchain"), toolchain.getName()), new ComparisionField(getField(tableName, "valid"), 1));
 
 		for (JsonValue val : res.Value) {
@@ -310,6 +329,10 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 				String title = obj.getString("title").Value;
 				String settings = obj.getString("settings").Value;
 				String owner_login = obj.getString("owner_login").Value;
+				long odkdy_zobrazit = obj.getNumber("odkdy_zobrazit").asLong();
+				long odkdy_nezobrazit = obj.getNumber("odkdy_nezobrazit").asLong();
+				long odkdy_prihlasovani = obj.getNumber("odkdy_prihlasovani").asLong();
+				long dokdy_prihlasovani = obj.getNumber("dokdy_prihlasovani").asLong();
 				JsonValue p = JsonValue.parse(settings);
 				if (p != null) {
 					if (p.isObject()) {
@@ -324,7 +347,7 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 								limits.addLimit(type, 0);
 							}
 						}
-						lst.add(new PresenceSlot(ID, name, description, title, limits, toolchain, owner_login));
+						lst.add(new PresenceSlot(ID, name, description, title, limits, toolchain, owner_login, odkdy_zobrazit, odkdy_nezobrazit, odkdy_prihlasovani, dokdy_prihlasovani));
 					}
 
 				}

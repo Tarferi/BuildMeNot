@@ -26,44 +26,12 @@ public class HTTPTermClient extends HTTPParserClient {
 	}
 
 	private JsonObject collectSlots(Toolchain toolchain, UsersPermission perms) {
-		JsonArray available = new JsonArray();
-		List<UserPresenceSlotView> availableSlots = sdb.getPresenceSlots(toolchain, perms);
-		for (UserPresenceSlotView slot : availableSlots) {
-			JsonObject obj = new JsonObject();
-			obj.add("ID", new JsonNumber(slot.Slot.ID));
-			obj.add("Name", new JsonString(slot.Slot.Name));
-			obj.add("Description", new JsonString(slot.Slot.Description));
-			obj.add("Title", new JsonString(slot.Slot.Title));
-			obj.add("OwnerLogin", new JsonString(slot.Slot.OwnerLogin));
-			JsonObject presences = new JsonObject();
-			for (PresenceType type : PresenceType.values()) {
-				if (type.Visible) {
-					JsonObject data = new JsonObject();
-					data.add("Code", new JsonNumber(type.Code));
-					data.add("Name", new JsonString(type.Name));
-					data.add("Limit", new JsonNumber(slot.Stats.getLimit(type)));
-					data.add("Value", new JsonNumber(slot.Stats.getPresent(type)));
-					presences.add(type.toString().toLowerCase(), data);
-				}
-			}
-			obj.add("Stats", presences);
-			available.add(obj);
-		}
 		JsonObject result = new JsonObject();
-		JsonArray my = new JsonArray();
-		for (PresenceForUser data : sdb.getPresenceForUser(perms.getStaticUserID(), toolchain)) {
-			JsonObject obj = new JsonObject();
-			obj.add("SlotID", new JsonNumber(data.SlotID));
-			obj.add("Time", new JsonNumber(0, data.ReservationTime + ""));
-			obj.add("Type", new JsonNumber(data.Type.Code));
-			obj.add("TypeName", new JsonString(data.Type.Name));
-			my.add(obj);
-		}
-		result.add("Available", available);
-		result.add("MyData", my);
+		long now = System.currentTimeMillis();
+		List<UserPresenceSlotView> availableSlots = sdb.getPresenceSlots(toolchain, perms);
 		List<PresentUserDetails> admin = sdb.getAllPresentUsers(toolchain, perms);
-
-		if (admin != null) { // Data available
+		long nextEvent = 0;
+		if (admin != null) { // Data available (has Admin)
 			JsonArray adm = new JsonArray();
 			for (PresentUserDetails data : admin) {
 				JsonObject obj = new JsonObject();
@@ -99,7 +67,68 @@ public class HTTPTermClient extends HTTPParserClient {
 
 			result.add("AdminAll", admAll);
 		}
+		JsonArray available = new JsonArray();
 
+		for (UserPresenceSlotView slot : availableSlots) {
+			boolean add = admin != null;
+			if (!add) { // Not admin, check date constrains
+				if ((nextEvent == 0 || slot.Slot.OdkdyPrihlasovat < nextEvent) && slot.Slot.OdkdyPrihlasovat > now) {
+					nextEvent = slot.Slot.OdkdyPrihlasovat;
+				}
+				if ((nextEvent == 0 || slot.Slot.DokdyPrihlasovat < nextEvent) && slot.Slot.DokdyPrihlasovat > now) {
+					nextEvent = slot.Slot.DokdyPrihlasovat;
+				}
+				if ((nextEvent == 0 || slot.Slot.OdkdyZobrazit < nextEvent) && slot.Slot.OdkdyZobrazit > now) {
+					nextEvent = slot.Slot.OdkdyZobrazit;
+				}
+				if ((nextEvent == 0 || slot.Slot.DokdyZobrazit < nextEvent) && slot.Slot.DokdyZobrazit > now) {
+					nextEvent = slot.Slot.DokdyZobrazit;
+				}
+
+				if (slot.Slot.OdkdyZobrazit < now && slot.Slot.DokdyZobrazit > now) {
+					add = true;
+				}
+			}
+			if (add) {
+				JsonObject obj = new JsonObject();
+				obj.add("ID", new JsonNumber(slot.Slot.ID));
+				obj.add("Name", new JsonString(slot.Slot.Name));
+				obj.add("Description", new JsonString(slot.Slot.Description));
+				obj.add("Title", new JsonString(slot.Slot.Title));
+				obj.add("OwnerLogin", new JsonString(slot.Slot.OwnerLogin));
+				obj.add("Available", new JsonNumber(slot.Slot.OdkdyPrihlasovat < now && slot.Slot.DokdyPrihlasovat > now ? 1 : 0));
+				JsonObject presences = new JsonObject();
+				for (PresenceType type : PresenceType.values()) {
+					if (type.Visible) {
+						JsonObject data = new JsonObject();
+						data.add("Code", new JsonNumber(type.Code));
+						data.add("Name", new JsonString(type.Name));
+						data.add("Limit", new JsonNumber(slot.Stats.getLimit(type)));
+						data.add("Value", new JsonNumber(slot.Stats.getPresent(type)));
+						presences.add(type.toString().toLowerCase(), data);
+					}
+				}
+				obj.add("Stats", presences);
+				available.add(obj);
+			}
+		}
+
+		JsonArray my = new JsonArray();
+		for (PresenceForUser data : sdb.getPresenceForUser(perms.getStaticUserID(), toolchain)) {
+			JsonObject obj = new JsonObject();
+			obj.add("SlotID", new JsonNumber(data.SlotID));
+			obj.add("Time", new JsonNumber(0, data.ReservationTime + ""));
+			obj.add("Type", new JsonNumber(data.Type.Code));
+			obj.add("TypeName", new JsonString(data.Type.Name));
+			my.add(obj);
+		}
+		if (nextEvent != 0 && nextEvent > now) {
+			result.add("Now", new JsonNumber(0, now + ""));
+			result.add("NextEvent", new JsonNumber(0, nextEvent + ""));
+
+		}
+		result.add("Available", available);
+		result.add("MyData", my);
 		return result;
 	}
 

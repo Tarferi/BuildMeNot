@@ -4,7 +4,7 @@ public class WebPermission {
 
 	private static final String base = "WEB.TESTS";
 	public static final PermissionBranch BypassTimeout = Permission.getBranch(base + ".NO_TIMEOUT");
-	public static final PermissionBranch SeeFireFox = Permission.getBranch(base + ".FIREFOX");
+	//public static final PermissionBranch SeeFireFox = Permission.getBranch(base + ".FIREFOX");
 	public static final PermissionBranch SeeSecretTests = Permission.getBranch(base + ".SECRET");
 	public static final PermissionBranch SeeAdminAdmin = Permission.getBranch("WEB.SEE_ADMIN");
 

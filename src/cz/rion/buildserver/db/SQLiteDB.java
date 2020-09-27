@@ -10,11 +10,13 @@ import java.sql.Types;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 import cz.rion.buildserver.compression.Compressor;
 import cz.rion.buildserver.compression.Decompressor;
+import cz.rion.buildserver.db.layers.common.LayeredMetaDB;
 import cz.rion.buildserver.exceptions.CompressionException;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.json.JsonValue;
@@ -123,10 +125,7 @@ public abstract class SQLiteDB {
 	}
 
 	public enum FieldComparator {
-		Equals("="),
-		NotEquals("!="),
-		Greater(">"),
-		Lesser("<");
+		Equals("="), NotEquals("!="), Greater(">"), Lesser("<");
 
 		private final String code;
 
@@ -405,6 +404,25 @@ public abstract class SQLiteDB {
 		}
 		sb.append("\r\n);");
 		execute_raw(sb.toString());
+
+		if (this instanceof LayeredMetaDB) {
+			List<TableField> oldFields = ((LayeredMetaDB) this).getFields(name);
+			Set<String> oldFieldsMap = new HashSet<>();
+			for (TableField oldField : oldFields) {
+				oldFieldsMap.add(oldField.field.name);
+			}
+			for (int i = 0; i < fields.length; i++) {
+				Field f = fields[i];
+				if (!oldFieldsMap.contains(f.name)) {
+					try {
+						execute_raw("ALTER TABLE " + name + " ADD " + f.toString());
+					} catch (Exception e) {
+						e.printStackTrace();
+					}
+				}
+			}
+		}
+
 	}
 
 	public final class DatabaseResult {

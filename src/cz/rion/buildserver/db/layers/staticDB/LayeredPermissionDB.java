@@ -88,7 +88,8 @@ public class LayeredPermissionDB extends LayeredTestDB {
 		}
 
 		public final boolean allowFireFox() {
-			return can(WebPermission.SeeFireFox);
+			//return can(WebPermission.SeeFireFox);
+			return true;
 		}
 
 		public int getStaticUserID() {
