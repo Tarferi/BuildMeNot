@@ -434,9 +434,30 @@ body {
 	position: relative;
 	top: -2px;
 	vertical-align: middle;
-	width: 80px;
+	min-width: 80px;
 	height: 30px;
 	line-height: normal;
+	margin-left: 10px;
+}
+
+.term_adm_var_title {
+	background: #ddffee;
+}
+
+.term_adm_var_tr:first-child {
+	background: #ffffff;
+}
+.term_adm_var_tr:nth-child(2n+3) {
+	background: #f4f4f4;
+}
+
+.term_table Button {
+	vertical-align: middle;
+	width: 120px;
+	height: 27px;
+	line-height: normal;
+	margin-top: 4px;
+	margin-bottom: 4px;
 }
 
 .term_table_w1 {

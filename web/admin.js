@@ -12,6 +12,7 @@ window.mobileAndTabletCheck = function() {
 var Admin = function() {
 
 	var self = this;
+	self.common = new common();
 
 	self.originalUIVisibilities = {};
 
@@ -173,7 +174,7 @@ var Admin = function() {
 	}
 
 	self.createUI = function() {
-		var struct = window.tester.common.reconstructUI(self.UI);
+		var struct = self.common.reconstructUI(self.UI);
 		var el = struct[0];
 		var ids = struct[1];
 
@@ -284,13 +285,17 @@ var Admin = function() {
 		self.originalUIVisibilities["txtHeader"] = txtHeader.style.display;
 		self.originalUIVisibilities["pnlWarnID"] = pnlWarnID.style.display;
 		self.originalUIVisibilities["id_indiv"] = id_indiv.style.display;
-		self.originalUIVisibilities["id_stats"] = id_stats.style.display;
-		self.originalUIVisibilities["id_faq"] = id_faq.style.display;
+		if(document.getElementById("id_stats")) {
+		    self.originalUIVisibilities["id_stats"] = id_stats.style.display;
+			id_stats.style.display = "none";
+		}
+		if(document.getElementById("id_faq")) {
+			self.originalUIVisibilities["id_faq"] = id_faq.style.display;
+			id_faq.style.display = "none";
+		}
 		txtHeader.style.display = "none";
 		pnlWarnID.style.display = "none";
 		id_indiv.style.display = "none";
-		id_stats.style.display = "none";
-		id_faq.style.display = "none";
 
 		self.mainUI.style.display = self.originalUIVisibilities["admin_mainUI"];
 		self.editor.hideEditors();
@@ -302,8 +307,12 @@ var Admin = function() {
 		txtHeader.style.display = self.originalUIVisibilities["txtHeader"];
 		pnlWarnID.style.display = self.originalUIVisibilities["pnlWarnID"];
 		id_indiv.style.display = self.originalUIVisibilities["id_indiv"];
-		id_stats.style.display = self.originalUIVisibilities["id_stats"];
-		id_faq.style.display = self.originalUIVisibilities["id_faq"];
+		if("id_stats" in self.originalUIVisibilities) {
+			id_stats.style.display = self.originalUIVisibilities["id_stats"];
+		}
+		if("id_faq" in self.originalUIVisibilities) {
+			id_faq.style.display = self.originalUIVisibilities["id_faq"];
+		}
 
 		self.mainUI.style.display = "none";
 	}
@@ -322,10 +331,10 @@ var Admin = function() {
 			"action" : "ADMIN",
 			"admin_data" : data
 		};
-		var txtEnc = "q=" + window.tester.common.encode(JSON.stringify(data));
-		window.tester.common.async(txtEnc, function(response) {
+		var txtEnc = "q=" + self.common.encode(JSON.stringify(data));
+		self.common.async(txtEnc, function(response) {
 			self.setWaiterVisible(false);
-			var deco = window.tester.common.decode(response);
+			var deco = self.common.decode(response);
 			if (deco !== false) {
 				var obj = JSON.parse(deco);
 				if (obj !== false) {
@@ -379,6 +388,7 @@ var Admin = function() {
 var AdminNavigator = function(adminer) {
 	var self = this;
 	var adminer = adminer;
+	self.common = adminer.common;
 
 	self.files = [];
 
@@ -521,6 +531,7 @@ var AdminNavigator = function(adminer) {
 var AdminEditor = function(adminer) {
 	var self = this;
 	var adminer = adminer;
+	self.common = adminer.common;
 
 	self.initEditor = function() {
 		self.editTable = adminer.editTable;
@@ -726,8 +737,8 @@ var AdminEditor = function(adminer) {
 			nt.push(code);
 			for (var ntI = nt.length - 1; ntI >= 0; ntI--) {
 				var code = nt[ntI];
-				var c1 = String.fromCharCode(window.tester.common.toHex(code >> 4));
-				var c2 = String.fromCharCode(window.tester.common.toHex(code & 15));
+				var c1 = String.fromCharCode(self.common.toHex(code >> 4));
+				var c2 = String.fromCharCode(self.common.toHex(code & 15));
 				res.push(c1);
 				res.push(c2);
 			}

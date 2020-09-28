@@ -930,6 +930,19 @@ var tester = function() {
 var terminer = function() {
     var self = this
     self.common = new common();
+    
+    self.getDate = function(stamp) {
+    	var dd = function(i) {
+    	   if(i < 9) {
+    	      return "0"+i
+    	   } else {
+    	      return "" + i;
+    	   }
+    	}
+		var cas = new Date(stamp);
+		cas = cas.getDate() + "." + (cas.getMonth()+1) + "." + cas.getFullYear() + " " + dd(cas.getHours()) + ":" + dd(cas.getMinutes());
+		return cas
+    }
 
     self.materialize = function(data) {
     	var available = data.Available;
@@ -939,7 +952,7 @@ var terminer = function() {
     	if(data.Now && data.NextEvent) {
     		var diff = data.NextEvent - data.Now;
     		if(diff > 0) {
-    		    setTimeout(function(){ self.loadTerms(true); }, diff+10000);
+    		    setTimeout(function(){ self.loadTerms(true, false); }, diff+10000);
     		}
     	}
     	
@@ -947,8 +960,7 @@ var terminer = function() {
     	for(var m in my) {
     	   if(my.hasOwnProperty(m)) {
     	      var d = my[m]
-    	      var cas = new Date(d.Time);
-    	      cas = cas.getDate() + "."+cas.getMonth() + "." + cas.getFullYear() + " " + cas.getHours() + ":" + cas.getMinutes();
+    	      var cas = self.getDate(d.Time);
     	      d.Time = cas;
     	      newMy[d.SlotID] = d;
     	   }
@@ -1064,15 +1076,17 @@ var terminer = function() {
     	self.changeOption(slotID, 0);
     }
     
-    self.btnHideCB = function(btn, el1, el2) {
+    self.btnHideCB = function(btn, btnRefresh, el1, el2) {
     	if(btn.innerHTML == "Skrýt") {
     	   btn.innerHTML = "Zobrazit";
     	   el2.style.display ="none";
     	   el1.style.borderBottom="none";
+    	   btnRefresh.style.display = "none";
     	} else {
-    		btn.innerHTML = "Skrýt";
-    		el2.style.display ="";
-    		el1.style.borderBottom="";
+    	   btn.innerHTML = "Skrýt";
+    	   el2.style.display ="";
+    	   el1.style.borderBottom="";
+    	   btnRefresh.style.display = "";
     	}
     }
     
@@ -1096,6 +1110,11 @@ var terminer = function() {
               		   		   "type": "div",
               		   		   "class": "term_table_w002",
               		   		   "contents": [
+              		   		   		{
+              		   		   		   "type": "button",
+              		   		   		   "id": "btnRefresh",
+              		   		   		   "innerHTML": "Aktualizovat"
+              		   		   		},
               		   		   		{
               		   		   		   "type": "button",
               		   		   		   "id": "btnHide",
@@ -1191,6 +1210,7 @@ var terminer = function() {
 									"type": "th",
 									"colSpan": 4,
 									"id": "term_adm_var",
+									"class": "term_adm_var_title",
 									"innerHTML": ""
 								}
 							
@@ -1198,6 +1218,7 @@ var terminer = function() {
 						},
 						{
 							"type": "tr",
+							"class": "term_adm_var_title",
 							"contents": [
 								{
 									"type": "th",
@@ -1222,6 +1243,7 @@ var terminer = function() {
           
           var admUI = {
           		"type": "tr",
+				"class": "term_adm_var_tr",
           		"contents": [
 					{
 						"type": "td",
@@ -1365,8 +1387,7 @@ var terminer = function() {
 							var aDataIds = aDataStruct[1];
 							var cas = "";
 							if(aData.Time && aData.Time > 0) {
-								cas = new Date(aData.Time);
-				    	      	cas = cas.getDate() + "."+cas.getMonth() + "." + cas.getFullYear() + " " + cas.getHours() + ":" + cas.getMinutes();
+								cas = self.getDate(aData.Time);
 			    	      	}
 							
 							aDataIds.cellOrder.innerHTML = (i+1)+"";
@@ -1385,7 +1406,8 @@ var terminer = function() {
 		
 		ids.txtBrief.innerHTML = data.Title;
 		ids.txtDescr.innerHTML = data.Description.split("\n").join("<br />");
-		ids.btnHide.addEventListener("click", function() {self.btnHideCB(ids.btnHide, ids.nwBorder, ids.pnlMain);});
+		ids.btnHide.addEventListener("click", function() {self.btnHideCB(ids.btnHide, ids.btnRefresh, ids.nwBorder, ids.pnlMain);});
+		ids.btnRefresh.addEventListener("click", function() {self.loadTerms(true, false);});
 		
 		if(loggedVariant !== false) {
 			ids.txtBrief.innerHTML += " ("+loggedVariant+")";		
@@ -1398,13 +1420,15 @@ var terminer = function() {
 		txtHeader.style.display="block";
 	}
 	
-    self.loadTerms = function(useWaiter) {
+    self.loadTerms = function(useWaiter, revealLoader) {
     	if(useWaiter) {
     		self.setWaiterVisible(true);
     	}
-    	id_indiv.style.display = "";
-    	term_table_root.innerHTML = "";
+    	if(revealLoader) {
+    		id_loader.style.display = "";
+    	}
    		var cbFail = function(data) {
+    		term_table_root.innerHTML = "";
    			if(useWaiter) {
 	    		self.setWaiterVisible(false);
     		}
@@ -1413,10 +1437,11 @@ var terminer = function() {
 			id_loader.classList.add("loader_error");
 		};
 		var cbOk = function(data) {
+			term_table_root.innerHTML = "";
    			if(useWaiter) {
 	    		self.setWaiterVisible(false);
     		}
-			id_indiv.style.display = "none";
+			id_loader.style.display = "none";
 			var deco = self.common.decode(data);
 			if(deco!==false){
 				var jsn = JSON.parse(deco);
@@ -1458,7 +1483,10 @@ var terminer = function() {
 	self.aload = function() {
 	   txtLogin.innerHTML = self.common.IDENTITY_TOKEN.name + " ("+self.common.IDENTITY_TOKEN.primary+"@"+self.common.IDENTITY_TOKEN.group+")";
 	   btnLogout.addEventListener("click", function(){self.common.logout();});
-	   self.loadTerms(false);
+	   self.loadTerms(false, true);
+	   if(window.pastAload){
+           window.pastAload();
+	   }
 	}
 
 }

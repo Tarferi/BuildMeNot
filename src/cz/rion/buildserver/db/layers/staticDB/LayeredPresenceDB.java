@@ -82,75 +82,138 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 		}
 	}
 
-	public LayeredPresenceDB(String dbName) throws DatabaseException {
-		super(dbName);
-		this.makeTable("presence_slots", KEY("ID"), TEXT("name"), BIGTEXT("description"), TEXT("title"), TEXT("settings"), NUMBER("valid"), TEXT("owner_login"), TEXT("toolchain"), DATE("odkdy_zobrazit"), DATE("odkdy_nezobrazit"), DATE("odkdy_prihlasovani"), DATE("dokdy_prihlasovani"));
-		this.makeTable("presence_users", KEY("ID"), NUMBER("user_id"), NUMBER("slot_id"), NUMBER("valid"), NUMBER("type"), DATE("creation_time"));
+	private final VirtualFile vfCreaterTerm = new VirtualFile() {
 
-		this.registerVirtualFile(new VirtualFile() {
+		@Override
+		public String read() throws DatabaseException {
+			StringBuilder sb = new StringBuilder();
+			sb.append("# Tento soubor slouží pro založení slotu rezervace cvièení. \n");
+			sb.append("# Každý øádek = slot.\n");
+			sb.append("# Formát: <toolchain>|<login>|<nazev>|max_pritomnych:max_online|<popis>\n");
+			sb.append("# Název poslouží pro práva:\n");
+			sb.append("#\t \"<toolchain>.SEE.<nazev>\" = Každý s tímto právem uvidí záznam\n");
+			sb.append("#\t \"<toolchain>.SIGN.<nazev>\" = Každý s tímto právem se mùže pøihlásit\n");
+			sb.append("#\t \"<toolchain>.ADMIN\" = Každý s tímto právem uvidí seznam pøihlášených\n");
+			sb.append("# Pokud zadané jméno existuje, tak se aktualizuje. Poté je potøeba ruènì editovat popis\n");
+			sb.append("# Pozn: \"login\" slouží k vymezení toho, kdo formuláø uvidí ze strany strany vyuèujících.\n");
+			sb.append("# Pokud chcete nìkomu formuláø ukázat, pøidejte do do OwnerLogin (seznam oddìlený èárkami)\n");
+			sb.append("# Pozn#2: Formuláøe jsou cachovány s minutovou prodlevou");
+			return sb.toString();
+		}
 
-			@Override
-			public String read() throws DatabaseException {
-				StringBuilder sb = new StringBuilder();
-				sb.append("# Tento soubor slouží pro založení slotu rezervace cvièení. \n");
-				sb.append("# Každý øádek = slot.\n");
-				sb.append("# Formát: <toolchain>|<login>|<nazev>|max_pritomnych:max_online|<popis>\n");
-				sb.append("# Název poslouží pro práva:\n");
-				sb.append("#\t \"<toolchain>.SEE.<nazev>\" = Každý s tímto právem uvidí záznam\n");
-				sb.append("#\t \"<toolchain>.SIGN.<nazev>\" = Každý s tímto právem se mùže pøihlásit\n");
-				sb.append("#\t \"<toolchain>.ADMIN\" = Každý s tímto právem uvidí seznam pøihlášených\n");
-				sb.append("# Pokud zadané jméno existuje, tak se aktualizuje. Poté je potøeba ruènì editovat popis\n");
-				sb.append("# Pozn: \"login\" slouží k vymezení toho, kdo formuláø uvidí ze strany strany vyuèujících.\n");
-				sb.append("# Pokud chcete nìkomu formuláø ukázat, pøidejte do do OwnerLogin (seznam oddìlený èárkami)\n");
-				sb.append("# Pozn#2: Formuláøe jsou cachovány s minutovou prodlevou");
-				return sb.toString();
-			}
-
-			@Override
-			public void write(String data) throws DatabaseException {
-				for (String line : data.split("\n")) {
-					line = line.trim();
-					if (line.startsWith("#") || line.isEmpty()) {
-						continue;
-					}
-					String[] parts = line.split("\\|", 5);
-					if (parts.length == 5) {
-						String toolchain = parts[0].trim();
-						String login = parts[1].trim();
-						String name = parts[2].trim();
-						String[] limits = parts[3].trim().split(":");
-						if (limits.length == 2) {
-							JsonObject lim = new JsonObject();
-							try {
-								int pres = Integer.parseInt(limits[0]);
-								int rem = Integer.parseInt(limits[1]);
-								lim.add("max_" + PresenceType.Present.toString().toLowerCase(), new JsonNumber(pres));
-								lim.add("max_" + PresenceType.Remote.toString().toLowerCase(), new JsonNumber(rem));
-							} catch (Exception e) {
-								return;
-							}
-							String descr = parts[4].trim();
-							StaticDB sdb = (StaticDB) LayeredPresenceDB.this;
-							Toolchain Toolchain = null;
-							try {
-								Toolchain = sdb.getToolchain(toolchain);
-							} catch (NoSuchToolchainException e) {
-								e.printStackTrace();
-							}
-							if (Toolchain != null) {
-								addSlot(Toolchain, name, descr, lim.getJsonString(), login);
-							}
+		@Override
+		public void write(String data) throws DatabaseException {
+			for (String line : data.split("\n")) {
+				line = line.trim();
+				if (line.startsWith("#") || line.isEmpty()) {
+					continue;
+				}
+				String[] parts = line.split("\\|", 5);
+				if (parts.length == 5) {
+					String toolchain = parts[0].trim();
+					String login = parts[1].trim();
+					String name = parts[2].trim();
+					String[] limits = parts[3].trim().split(":");
+					if (limits.length == 2) {
+						JsonObject lim = new JsonObject();
+						try {
+							int pres = Integer.parseInt(limits[0]);
+							int rem = Integer.parseInt(limits[1]);
+							lim.add("max_" + PresenceType.Present.toString().toLowerCase(), new JsonNumber(pres));
+							lim.add("max_" + PresenceType.Remote.toString().toLowerCase(), new JsonNumber(rem));
+						} catch (Exception e) {
+							return;
+						}
+						String descr = parts[4].trim();
+						StaticDB sdb = (StaticDB) LayeredPresenceDB.this;
+						Toolchain Toolchain = null;
+						try {
+							Toolchain = sdb.getToolchain(toolchain);
+						} catch (NoSuchToolchainException e) {
+							e.printStackTrace();
+						}
+						if (Toolchain != null) {
+							long now = System.currentTimeMillis();
+							addSlot(Toolchain, name, descr, descr, lim.getJsonString(), login, now, now, now, now);
 						}
 					}
 				}
 			}
+		}
 
-			@Override
-			public String getName() {
-				return "cvièení/vytvoøení_termínu.exe";
+		@Override
+		public String getName() {
+			return "cvièení/vytvoøení_termínu.exe";
+		}
+
+	};
+
+	private final VirtualFile vfDuplicateTerm = new VirtualFile() {
+
+		@Override
+		public String read() throws DatabaseException {
+			StringBuilder sb = new StringBuilder();
+			sb.append("# Tento soubor slouží pro duplikaci termínù. \n");
+			sb.append("# Každý øádek = duplikát.\n");
+			sb.append("# Formát: <ZDROJ_ID>|<NOVY_NAZEV>|<NOVY_POPIS>|<POSUN_TERMINU_VE_DNECH>\n");
+			sb.append("# <NOVY_NAZEV> poslouží pro práva, stejnì jako pøi vytvoøení termínù:\n");
+			sb.append("# Pozn#: Formuláøe jsou cachovány s minutovou prodlevou");
+			return sb.toString();
+		}
+
+		@Override
+		public void write(String data) throws DatabaseException {
+			for (String line : data.split("\n")) {
+				line = line.trim();
+				if (line.startsWith("#") || line.isEmpty()) {
+					continue;
+				}
+				String[] parts = line.split("\\|", 4);
+				if (parts.length == 4) {
+					try {
+						int id = Integer.parseInt(parts[0].trim());
+						String name = parts[1].trim();
+						String popis = parts[2].trim();
+						int posun = Integer.parseInt(parts[3].trim());
+						Toolchain t = getToolchainForSlotID(id);
+						if (t != null) {
+							PresenceData pres = presence.get(t);
+							PresenceSlot slot = pres.slotsByID.get(id);
+							if (slot != null) {
+								JsonObject lim = new JsonObject();
+								lim.add("max_" + PresenceType.Present.toString().toLowerCase(), new JsonNumber(slot.Limits.getLimit(PresenceType.Present)));
+								lim.add("max_" + PresenceType.Remote.toString().toLowerCase(), new JsonNumber(slot.Limits.getLimit(PresenceType.Remote)));
+								long offset = posun;
+								offset *= 24;
+								offset *= 60;
+								offset *= 60;
+								offset *= 1000;
+								addSlot(t, name, popis, slot.Description, lim.getJsonString(), slot.OwnerLogin, slot.OdkdyZobrazit + offset, slot.DokdyZobrazit + offset, slot.OdkdyPrihlasovat + offset, slot.DokdyPrihlasovat + offset);
+							}
+						}
+					} catch (Exception e) {
+						e.printStackTrace();
+						continue;
+					}
+
+				}
 			}
+		}
 
-		});
+		@Override
+		public String getName() {
+			return "cvièení/kopie_termínu.exe";
+		}
+
+	};
+
+	public LayeredPresenceDB(String dbName) throws DatabaseException {
+		super(dbName);
+		this.makeTable("presence_slots", KEY("ID"), TEXT("name"), BIGTEXT("description"), TEXT("title"), BIGTEXT("settings"), NUMBER("valid"), TEXT("owner_login"), TEXT("toolchain"), DATE("odkdy_zobrazit"), DATE("odkdy_nezobrazit"), DATE("odkdy_prihlasovani"), DATE("dokdy_prihlasovani"));
+		this.makeTable("presence_users", KEY("ID"), NUMBER("user_id"), NUMBER("slot_id"), NUMBER("valid"), NUMBER("type"), DATE("creation_time"));
+
+		this.registerVirtualFile(vfCreaterTerm);
+		this.registerVirtualFile(vfDuplicateTerm);
 	}
 
 	public static class PresenceSlot {
@@ -503,12 +566,11 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 		return false;
 	}
 
-	private void addSlot(Toolchain toolchain, String name, String description, String limits, String owner_login) {
+	private void addSlot(Toolchain toolchain, String name, String title, String description, String limits, String owner_login, long odkdy_zobrazit, long odkdy_nezobrazit, long odkdy_prihlasovani, long dokdy_prihlasovani) {
 		final String tableName = "presence_slots";
 		synchronized (presence) {
 			try {
-				String title = description;
-				ValuedField[] fields = new ValuedField[] { new ValuedField(getField(tableName, "toolchain"), toolchain.getName()), new ValuedField(getField(tableName, "name"), name), new ValuedField(getField(tableName, "owner_login"), owner_login), new ValuedField(getField(tableName, "description"), description), new ValuedField(getField(tableName, "title"), title), new ValuedField(getField(tableName, "settings"), limits), new ValuedField(getField(tableName, "valid"), 1) };
+				ValuedField[] fields = new ValuedField[] { new ValuedField(getField(tableName, "toolchain"), toolchain.getName()), new ValuedField(getField(tableName, "name"), name), new ValuedField(getField(tableName, "owner_login"), owner_login), new ValuedField(getField(tableName, "description"), description), new ValuedField(getField(tableName, "title"), title), new ValuedField(getField(tableName, "settings"), limits), new ValuedField(getField(tableName, "valid"), 1), new ValuedField(getField(tableName, "odkdy_zobrazit"), odkdy_zobrazit), new ValuedField(getField(tableName, "odkdy_nezobrazit"), odkdy_nezobrazit), new ValuedField(getField(tableName, "odkdy_prihlasovani"), odkdy_prihlasovani), new ValuedField(getField(tableName, "dokdy_prihlasovani"), dokdy_prihlasovani) };
 				if (presence.get(toolchain).slotsByName.containsKey(name)) {
 					int slotID = presence.get(toolchain).slotsByName.get(name).ID;
 					this.update(tableName, slotID, fields);
@@ -523,5 +585,31 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 			}
 
 		}
+	}
+
+	private Toolchain getToolchainForSlotID(int slotID) {
+		final String tableName = "presence_slots";
+		try {
+			JsonArray res = this.select(tableName, new TableField[] { getField(tableName, "toolchain") }, true, new ComparisionField(getField(tableName, "ID"), slotID));
+			for (JsonValue val : res.Value) {
+				if (val.isObject()) {
+					JsonObject obj = val.asObject();
+					if (obj.containsString("toolchain")) {
+						String toolchain = obj.getString("toolchain").Value;
+						if (this instanceof StaticDB) {
+							StaticDB sdb = (StaticDB) this;
+							try {
+								return sdb.getToolchain(toolchain);
+							} catch (NoSuchToolchainException e) {
+								e.printStackTrace();
+							}
+						}
+					}
+				}
+			}
+		} catch (DatabaseException e) {
+			e.printStackTrace();
+		}
+		return null;
 	}
 }
