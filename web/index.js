@@ -1076,17 +1076,19 @@ var terminer = function() {
     	self.changeOption(slotID, 0);
     }
     
-    self.btnHideCB = function(btn, btnRefresh, el1, el2) {
+    self.btnHideCB = function(btn, btnRefresh, el1, el2, spanner) {
     	if(btn.innerHTML == "Skrýt") {
     	   btn.innerHTML = "Zobrazit";
     	   el2.style.display ="none";
     	   el1.style.borderBottom="none";
     	   btnRefresh.style.display = "none";
+    	   spanner.style.marginBottom = "10px";
     	} else {
     	   btn.innerHTML = "Skrýt";
     	   el2.style.display ="";
     	   el1.style.borderBottom="";
     	   btnRefresh.style.display = "";
+			spanner.style.marginBottom = "70px";
     	}
     }
     
@@ -1095,6 +1097,7 @@ var terminer = function() {
        {
               "type": "div",
               "class": "term_table_w0",
+              "id": "term_table_bottom_spanner",
               "contents": [
               		{
               		   "type": "div",
@@ -1406,7 +1409,7 @@ var terminer = function() {
 		
 		ids.txtBrief.innerHTML = data.Title;
 		ids.txtDescr.innerHTML = data.Description.split("\n").join("<br />");
-		ids.btnHide.addEventListener("click", function() {self.btnHideCB(ids.btnHide, ids.btnRefresh, ids.nwBorder, ids.pnlMain);});
+		ids.btnHide.addEventListener("click", function() {self.btnHideCB(ids.btnHide, ids.btnRefresh, ids.nwBorder, ids.pnlMain, ids.term_table_bottom_spanner);});
 		ids.btnRefresh.addEventListener("click", function() {self.loadTerms(true, false);});
 		
 		if(loggedVariant !== false) {
