@@ -1076,14 +1076,16 @@ var terminer = function() {
     	self.changeOption(slotID, 0);
     }
     
-    self.btnHideCB = function(btn, btnRefresh, el1, el2, spanner) {
+    self.btnHideCB = function(id, btn, btnRefresh, el1, el2, spanner) {
     	if(btn.innerHTML == "Skrýt") {
+    	   self.setHidden(id, true);
     	   btn.innerHTML = "Zobrazit";
     	   el2.style.display ="none";
     	   el1.style.borderBottom="none";
     	   btnRefresh.style.display = "none";
     	   spanner.style.marginBottom = "10px";
     	} else {
+    	   self.setHidden(id, false);
     	   btn.innerHTML = "Skrýt";
     	   el2.style.display ="";
     	   el1.style.borderBottom="";
@@ -1409,7 +1411,12 @@ var terminer = function() {
 		
 		ids.txtBrief.innerHTML = data.Title;
 		ids.txtDescr.innerHTML = data.Description.split("\n").join("<br />");
-		ids.btnHide.addEventListener("click", function() {self.btnHideCB(ids.btnHide, ids.btnRefresh, ids.nwBorder, ids.pnlMain, ids.term_table_bottom_spanner);});
+		var hideCB =  function() {self.btnHideCB(data.ID, ids.btnHide, ids.btnRefresh, ids.nwBorder, ids.pnlMain, ids.term_table_bottom_spanner);}
+		ids.btnHide.addEventListener("click", hideCB);
+		if(self.wasHidden(data.ID)) {
+			hideCB();
+		}
+		
 		ids.btnRefresh.addEventListener("click", function() {self.loadTerms(true, false);});
 		
 		if(loggedVariant !== false) {
@@ -1418,6 +1425,40 @@ var terminer = function() {
 		
 		return el;
     };
+    
+    self.setHidden = function(slotID, collapsed) {
+    	slotID = "slot_"+slotID;
+  		if(window.location && window.location.href && window.localStorage && window.localStorage.getItem) {
+    		var key = window.location.href+":collapsed";
+    	   	var data = window.localStorage.getItem(key);
+    	   	var newData = {};
+    	   	if(data) {
+    	   		data = JSON.parse(data);
+    	   		if(data) {
+    	   			newData = data;
+    	   		}
+    	   	}
+    	   	newData[slotID] = collapsed;
+    	   	window.localStorage.setItem(key, JSON.stringify(newData));
+    	}
+    }
+    
+    self.wasHidden = function(slotID) {
+    	slotID = "slot_"+slotID;
+    	if(window.location && window.location.href && window.localStorage && window.localStorage.getItem) {
+    		var key = window.location.href+":collapsed";
+    	   	var data = window.localStorage.getItem(key);
+    	   	if(data) {
+    	   		data = JSON.parse(data);
+    	   		if(data) {
+    	   			if(slotID in data) {
+    	   				return data[slotID];
+    	   			}
+    	   		}
+    	   	}
+    	}
+    	return false;
+    }
 	
 	self.showLoginPanel =  function() {
 		txtHeader.style.display="block";
