@@ -24,6 +24,7 @@ public class IconManager {
 	public final static ImageIcon JSIcon = IconLoader.LoadIcon("js.png");
 	public final static ImageIcon CSSIcon = IconLoader.LoadIcon("css.png");
 	public final static ImageIcon HTMLIcon = IconLoader.LoadIcon("html.png");
+	public final static ImageIcon EXEIcon = IconLoader.LoadIcon("exe.png");
 
 	private static final Map<String, ImageIcon> icons = new HashMap<>();
 
@@ -54,6 +55,8 @@ public class IconManager {
 			return JSIcon;
 		} else if (path.endsWith(".html")) {
 			return HTMLIcon;
+		} else if (path.endsWith(".exe")) {
+			return EXEIcon;
 		} else { // Coult be a folder
 			int pos1 = path.lastIndexOf("/");
 			int pos2 = path.lastIndexOf(".");

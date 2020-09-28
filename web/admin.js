@@ -45,8 +45,11 @@ var Admin = function() {
 			return "css";
 		} else if (ext == "php") {
 			return "php";
-		} else
+		} else if (ext == "exe") {
+			return "exe";
+		} else { 
 			return "file";
+		}
 	}
 
 	self.UI = {
