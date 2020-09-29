@@ -20,22 +20,25 @@ import cz.rion.buildserver.utils.CachedDataWrapper;
 import cz.rion.buildserver.utils.CachedToolchainData2;
 import cz.rion.buildserver.utils.CachedToolchainDataGetter2;
 import cz.rion.buildserver.utils.CachedToolchainDataWrapper2;
+import cz.rion.buildserver.utils.Pair;
 import cz.rion.buildserver.db.StaticDB;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 
 public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 
 	public static enum PresenceType {
-		Undefined(0, "Nepøihlášeno"), Present(1, "Prezenènì"), Remote(2, "Online");
+		Undefined(0, "Nepøihlášeno", "nepr"), Present(1, "Prezenènì", "prezencne"), Remote(2, "Online", "online");
 
 		public final int Code;
 		public final boolean Visible;
 		public final String Name;
+		public final String KeyCode;
 
-		private PresenceType(int id, String name) {
+		private PresenceType(int id, String name, String key) {
 			this.Code = id;
 			this.Visible = id > 0;
 			this.Name = name;
+			this.KeyCode = key;
 		}
 	}
 
@@ -207,13 +210,164 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 
 	};
 
+	private final VirtualFile vfPresenceTypes = new VirtualFile() {
+
+		@Override
+		public String read() throws DatabaseException {
+			StringBuilder sb = new StringBuilder();
+			sb.append("# Tento soubor je urèen pro bezepèné editování záznamù typù variant\n");
+			sb.append("# Formát: <KOD_TYPU> = <NAZEV_TYPU>\n");
+			sb.append("# Pozn: KOD_TYPU je text\n\n");
+			final String tableName = "presence_types";
+			for (JsonValue val : select(tableName, new TableField[] { getField(tableName, "name"), getField(tableName, "title") }, true).Value) {
+				if (val.isObject()) {
+					JsonObject obj = val.asObject();
+					if (obj.containsString("name") && obj.containsString("title")) {
+						String name = obj.getString("name").Value;
+						String title = obj.getString("title").Value;
+						sb.append(name + " = " + title + "\n");
+					}
+				}
+			}
+			return sb.toString();
+		}
+
+		@Override
+		public void write(String data) throws DatabaseException {
+			Map<String, Pair<Integer, String>> typesByName = new HashMap<>();
+			final String tableName = "presence_types";
+			for (JsonValue val : select(tableName, new TableField[] { getField(tableName, "ID"), getField(tableName, "name"), getField(tableName, "title") }, true).Value) {
+				if (val.isObject()) {
+					JsonObject obj = val.asObject();
+					if (obj.containsString("name") && obj.containsString("title") && obj.containsNumber("ID")) {
+						String name = obj.getString("name").Value;
+						String title = obj.getString("title").Value;
+						int id = obj.getNumber("ID").Value;
+						typesByName.put(name, new Pair<>(id, title));
+					}
+				}
+			}
+
+			for (String line : data.split("\n")) {
+				line = line.trim();
+				if (line.isEmpty() || line.startsWith("#")) {
+					continue;
+				}
+				String[] parts = line.split("=", 2);
+				if (parts.length == 2) {
+					String name = parts[0].trim();
+					String title = parts[1].trim();
+					if (typesByName.containsKey(name)) {
+						int id = typesByName.get(name).Key;
+						String savedLabel = typesByName.get(name).Value;
+						if (!savedLabel.equals(title)) { // Update and remove -> no duplicates
+							update(tableName, id, new ValuedField[] { new ValuedField(getField(tableName, "title"), title) });
+						}
+						typesByName.remove(name);
+					} else {
+						insert(tableName, new ValuedField[] { new ValuedField(getField(tableName, "name"), name), new ValuedField(getField(tableName, "title"), title) });
+					}
+				}
+			}
+
+			for (Entry<String, Pair<Integer, String>> entry : typesByName.entrySet()) {
+				String nameToDelete = entry.getKey();
+				final String tableName2 = "presence_slots";
+				boolean skip = false;
+				for (JsonValue val : select(tableName2, new TableField[] { getField(tableName2, "settings") }, true).Value) {
+					if (val.isObject()) {
+						JsonObject obj = val.asObject();
+						if (obj.containsString("settings")) {
+							String settings = obj.getString("settings").Value;
+							JsonValue v = JsonValue.parse(settings);
+							if (v != null) {
+								if (v.isObject()) {
+									JsonObject o = v.asObject();
+									if (o.containsArray("variants")) {
+										for (JsonValue variant : o.getArray("variants").Value) {
+											if (variant.isString()) {
+												String va = variant.asString().Value;
+												if (va.equals(nameToDelete)) {
+													skip = true;
+													break;
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+				if (!skip) {
+					execute_raw("DELETE FROM presence_types WHERE name = ?", nameToDelete);
+				}
+			}
+		}
+
+		@Override
+		public String getName() {
+			return "cvièení/presence_types.ini";
+		}
+
+	};
+
+	private void convertPresenceTypes() throws DatabaseException {
+		List<List<Pair<String, Object>>> data = new ArrayList<>();
+
+		final String tableName = "presence_users";
+		try {
+			for (JsonValue val : this.select(tableName, new TableField[] { getField(tableName, "ID"), getField(tableName, "user_id"), getField(tableName, "slot_id"), getField(tableName, "valid"), getField(tableName, "type"), getField(tableName, "creation_time") }, true).Value) {
+				if (val.isObject()) {
+					JsonObject obj = val.asObject();
+					if (obj.containsNumber("ID") && obj.containsNumber("type") && obj.containsNumber("slot_id") && obj.containsNumber("user_id") && obj.containsNumber("valid") && obj.containsNumber("creation_time")) {
+						int id = obj.getNumber("ID").Value;
+						int type = obj.getNumber("type").Value;
+						int slot_id = obj.getNumber("slot_id").Value;
+						int user_id = obj.getNumber("user_id").Value;
+						int valid = obj.getNumber("valid").Value;
+						long creation_time = obj.getNumber("creation_time").asLong();
+						List<Pair<String, Object>> d = new ArrayList<>();
+						d.add(new Pair<String, Object>("ID", id));
+						d.add(new Pair<String, Object>("type", PresenceType.values()[type].KeyCode));
+						d.add(new Pair<String, Object>("slot_id", slot_id));
+						d.add(new Pair<String, Object>("user_id", user_id));
+						d.add(new Pair<String, Object>("valid", valid));
+						d.add(new Pair<String, Object>("creation_time", creation_time));
+					}
+				}
+			}
+		} catch (DatabaseException e) {
+			return;
+		}
+		if (!data.isEmpty()) {
+			this.dropTable("presence_users");
+			this.dropTable("presence_types");
+			this.makeTable("presence_users", KEY("ID"), NUMBER("user_id"), NUMBER("slot_id"), NUMBER("valid"), TEXT("type"), DATE("creation_time"));
+			for (List<Pair<String, Object>> item : data) {
+				ValuedField[] fields = new ValuedField[item.size()];
+				for (int i = 0; i < fields.length; i++) {
+					fields[i] = new ValuedField(getField(tableName, item.get(i).Key), item.get(i).Value);
+					this.insert(tableName, fields);
+				}
+			}
+			final String tableName2 = "presence_types";
+			for (PresenceType type : PresenceType.values()) {
+				this.insert(tableName2, new ValuedField(getField(tableName2, "name"), type.KeyCode), new ValuedField(getField(tableName2, "title"), type.Name));
+			}
+		}
+	}
+
 	public LayeredPresenceDB(String dbName) throws DatabaseException {
 		super(dbName);
 		this.makeTable("presence_slots", KEY("ID"), TEXT("name"), BIGTEXT("description"), TEXT("title"), BIGTEXT("settings"), NUMBER("valid"), TEXT("owner_login"), TEXT("toolchain"), DATE("odkdy_zobrazit"), DATE("odkdy_nezobrazit"), DATE("odkdy_prihlasovani"), DATE("dokdy_prihlasovani"));
-		this.makeTable("presence_users", KEY("ID"), NUMBER("user_id"), NUMBER("slot_id"), NUMBER("valid"), NUMBER("type"), DATE("creation_time"));
+		this.makeTable("presence_types", KEY("ID"), TEXT("name"), TEXT("title"));
+		convertPresenceTypes();
+		this.makeTable("presence_users", KEY("ID"), NUMBER("user_id"), NUMBER("slot_id"), NUMBER("valid"), TEXT("type"), DATE("creation_time"));
 
 		this.registerVirtualFile(vfCreaterTerm);
 		this.registerVirtualFile(vfDuplicateTerm);
+		this.registerVirtualFile(vfPresenceTypes);
 	}
 
 	public static class PresenceSlot {
