@@ -15,6 +15,7 @@ import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonNumber;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.json.JsonValue.JsonString;
+import cz.rion.buildserver.json.JsonValue.JsonBoolean;
 
 public class HTTPTermClient extends HTTPParserClient {
 
@@ -40,7 +41,7 @@ public class HTTPTermClient extends HTTPParserClient {
 				obj.add("Name", new JsonString(data.Name));
 				obj.add("SlotID", new JsonNumber(data.SlotID));
 				obj.add("Time", new JsonNumber(0, data.CreationTime + ""));
-				obj.add("Type", new JsonNumber(data.Type.Code));
+				obj.add("Type", new JsonString(data.Type.Code));
 				obj.add("TypeName", new JsonString(data.Type.Name));
 				adm.add(obj);
 			}
@@ -55,10 +56,10 @@ public class HTTPTermClient extends HTTPParserClient {
 					if (!user.Group.toLowerCase().contains("teacher")) {
 						obj.add("Login", new JsonString(user.Login));
 						obj.add("Name", new JsonString(user.FullName));
-						obj.add("Type", new JsonNumber(PresenceType.Undefined.Code));
+						obj.add("Type", new JsonString(slot.Slot.DefaultType.Code));
 						obj.add("Time", new JsonNumber(0));
 						obj.add("SlotID", new JsonNumber(slotID));
-						obj.add("TypeName", new JsonString(PresenceType.Undefined.Name));
+						obj.add("TypeName", new JsonString(slot.Slot.DefaultType.Name));
 						admAllX.add(obj);
 					}
 				}
@@ -96,17 +97,18 @@ public class HTTPTermClient extends HTTPParserClient {
 				obj.add("Description", new JsonString(slot.Slot.Description));
 				obj.add("Title", new JsonString(slot.Slot.Title));
 				obj.add("OwnerLogin", new JsonString(slot.Slot.OwnerLogin));
+				obj.add("Labels", slot.Slot.Labels.get());
 				obj.add("Available", new JsonNumber(slot.Slot.OdkdyPrihlasovat < now && slot.Slot.DokdyPrihlasovat > now ? 1 : 0));
+				obj.add("DefaultType", new JsonString(slot.Slot.DefaultType.Code));
 				JsonObject presences = new JsonObject();
-				for (PresenceType type : PresenceType.values()) {
-					if (type.Visible) {
-						JsonObject data = new JsonObject();
-						data.add("Code", new JsonNumber(type.Code));
-						data.add("Name", new JsonString(type.Name));
-						data.add("Limit", new JsonNumber(slot.Stats.getLimit(type)));
-						data.add("Value", new JsonNumber(slot.Stats.getPresent(type)));
-						presences.add(type.toString().toLowerCase(), data);
-					}
+				for (PresenceType type : slot.Stats.Limits.keySet()) {
+					JsonObject data = new JsonObject();
+					data.add("Code", new JsonString(type.Code));
+					data.add("Name", new JsonString(type.Name));
+					data.add("Limit", new JsonNumber(slot.Stats.getLimit(type)));
+					data.add("Value", new JsonNumber(slot.Stats.getPresent(type)));
+					data.add("Show", new JsonBoolean(type.Show));
+					presences.add(type.Code, data);
 				}
 				obj.add("Stats", presences);
 				available.add(obj);
@@ -118,7 +120,7 @@ public class HTTPTermClient extends HTTPParserClient {
 			JsonObject obj = new JsonObject();
 			obj.add("SlotID", new JsonNumber(data.SlotID));
 			obj.add("Time", new JsonNumber(0, data.ReservationTime + ""));
-			obj.add("Type", new JsonNumber(data.Type.Code));
+			obj.add("Type", new JsonString(data.Type.Code));
 			obj.add("TypeName", new JsonString(data.Type.Name));
 			my.add(obj);
 		}
@@ -141,10 +143,10 @@ public class HTTPTermClient extends HTTPParserClient {
 			if (term_data.equals("getTerms")) {
 				result.add("code", new JsonNumber(0));
 				result.add("result", new JsonString(collectSlots(toolchain, perms).getJsonString()));
-			} else if (term_data.equals("subscribe") && obj.containsNumber("slotID") && obj.containsNumber("variantID")) {
-				int slotID = obj.getNumber("slotID").Value;
-				int variantID = obj.getNumber("variantID").Value;
-				if (sdb.addUserPresence(toolchain, perms.getStaticUserID(), slotID, variantID, perms)) {
+			} else if (term_data.equals("subscribe") && obj.containsNumber("slotID") && obj.containsString("variantID")) {
+				int slotCode = obj.getNumber("slotID").Value;
+				String variantID = obj.getString("variantID").Value;
+				if (sdb.addUserPresence(toolchain, perms.getStaticUserID(), slotCode, variantID, perms)) {
 					result.add("code", new JsonNumber(0));
 					result.add("result", new JsonString(collectSlots(toolchain, perms).getJsonString()));
 				} else {

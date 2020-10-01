@@ -1072,10 +1072,6 @@ var terminer = function() {
     	self.changeOption(slotID, variantID);
     }
     
-    self.signOut = function(slotID) {
-    	self.changeOption(slotID, 0);
-    }
-    
     self.btnHideCB = function(id, btn, btnRefresh, el1, el2, spanner) {
     	if(btn.innerHTML == "Skrýt") {
     	   self.setHidden(id, true);
@@ -1157,7 +1153,8 @@ var terminer = function() {
 									{
 										"type": "div",
 										"class": "term_table_w131",
-										"innerHTML": "Přihlášení"
+										"innerHTML": "Přihlášení",
+										"id": "lbl_SignTitle"
 									},
 									{
 										"type": "div",
@@ -1174,19 +1171,23 @@ var terminer = function() {
 														"contents": [
 															{
 																"type": "th",
-																"innerHTML": "Varianta"
+																"innerHTML": "Varianta",
+																"id": "lbl_Variant"
 															},
 															{
 																"type": "th",
-																"innerHTML": "Kapacita"
+																"innerHTML": "Kapacita",
+																"id": "lbl_Capacity"
 															},
 															{
 																"type": "th",
-																"innerHTML": "Přihlášeno"
+																"innerHTML": "Přihlášeno",
+																"id": "lbl_SignedUp"
 															},
 															{
 																"type": "th",
-																"innerHTML": "Přihlášení"
+																"innerHTML": "Přihlášení",
+																"id": "lbl_SigningUp"
 															}
 														]
 													}
@@ -1311,7 +1312,7 @@ var terminer = function() {
 		
 		var loggedVariant = false;
 		
-		var constrF = function(st) {
+		var constrF = function(st, labels) {
 			var name = st.Name;
 		    var code = st.Code;
 		    var limit = st.Limit;
@@ -1326,28 +1327,40 @@ var terminer = function() {
 		    subIds.cellName.innerHTML = name;
 		    subIds.cellNow.innerHTML = value;
 		    
+		    var prihlasenLbl = labels.SelfSignedUp ? labels.SelfSignedUp : "Přihlášen";
+		    var prihlasitLbl = labels.SignUp ? labels.SignUp : "Přihlásit";
+ 		    var odhlasitLbl = labels.SignOut ? labels.SignOut : "Odhlásit";
+		    
 		    if(data.Available == 1) {
 			    if(data.ID in my && my[data.ID].Type == code) {
 			        var cas =  my[data.ID].Time;
-				    subIds.btnLog.addEventListener("click", function() {self.signOut(data.ID);});
-				    subIds.btnLog.innerHTML = "Odhlásit";
-				    subIds.term_table_logged.innerHTML = "Přihlášen: " +cas;
+				    subIds.btnLog.addEventListener("click", function() {self.signUp(data.ID, data.DefaultType);});
+				    subIds.btnLog.innerHTML = odhlasitLbl;
+				    subIds.term_table_logged.innerHTML = prihlasenLbl + ": " +cas;
 			    } else {
 				    subIds.btnLog.addEventListener("click", function() {self.signUp(data.ID, code);});
-				    subIds.btnLog.innerHTML = "Přihlásit";
+				    subIds.btnLog.innerHTML = prihlasitLbl;
 				    subIds.term_table_logged.style.display = "none";
 	            }
             } else {
             	subIds.btnLog.style.display = "none";
             	if(data.ID in my && my[data.ID].Type == code) {
             		var cas =  my[data.ID].Time;
-            		subIds.term_table_logged.innerHTML = "Přihlášen: " +cas;
+            		subIds.term_table_logged.innerHTML = prihlasenLbl + ": " +cas;
         		}
             }
+            
+            for(var lbl in labels) {
+                if(labels.hasOwnProperty(lbl) && ids.hasOwnProperty("lbl_"+lbl)) {
+                    var id = ids["lbl_"+lbl];
+                    id.innerHTML = labels[lbl];
+                }
+            }
+            
             return subEls;
 		};
 		
-		if(data.ID in my && my[data.ID].Type > 0) {
+		if(data.ID in my && my[data.ID].Show) {
 	    	loggedVariant = "Přihlášena varianta \""+my[data.ID].TypeName+"\"";
 	    	ids.nwBorder.style.background = "#68CD34";
     	} 
@@ -1355,7 +1368,9 @@ var terminer = function() {
 		for(var d in data.Stats) {
 		   if(data.Stats.hasOwnProperty(d)) {
 		      var st = data.Stats[d];
-		      ids.term_loginTable.appendChild(constrF(st));
+		      if(st.Show) {
+		         ids.term_loginTable.appendChild(constrF(st, data.Labels ? data.Labels : {}));
+		      }
 		   }
 		}
 		if(data.ID in adm && adm[data.ID].length && adm[data.ID].length > 0) {

@@ -407,17 +407,19 @@ public abstract class SQLiteDB {
 
 		if (this instanceof LayeredMetaDB) {
 			List<TableField> oldFields = ((LayeredMetaDB) this).getFields(name);
-			Set<String> oldFieldsMap = new HashSet<>();
-			for (TableField oldField : oldFields) {
-				oldFieldsMap.add(oldField.field.name);
-			}
-			for (int i = 0; i < fields.length; i++) {
-				Field f = fields[i];
-				if (!oldFieldsMap.contains(f.name)) {
-					try {
-						execute_raw("ALTER TABLE " + name + " ADD " + f.toString());
-					} catch (Exception e) {
-						e.printStackTrace();
+			if (oldFields != null) {
+				Set<String> oldFieldsMap = new HashSet<>();
+				for (TableField oldField : oldFields) {
+					oldFieldsMap.add(oldField.field.name);
+				}
+				for (int i = 0; i < fields.length; i++) {
+					Field f = fields[i];
+					if (!oldFieldsMap.contains(f.name)) {
+						try {
+							execute_raw("ALTER TABLE " + name + " ADD " + f.toString());
+						} catch (Exception e) {
+							e.printStackTrace();
+						}
 					}
 				}
 			}

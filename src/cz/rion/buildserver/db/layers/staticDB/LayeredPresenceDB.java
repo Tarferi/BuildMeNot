@@ -12,6 +12,7 @@ import cz.rion.buildserver.exceptions.NoSuchToolchainException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
+import cz.rion.buildserver.json.JsonValue.JsonString;
 import cz.rion.buildserver.json.JsonValue.JsonNumber;
 import cz.rion.buildserver.permissions.PermissionBranch;
 import cz.rion.buildserver.utils.CachedData;
@@ -26,23 +27,8 @@ import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 
 public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 
-	public static enum PresenceType {
-		Undefined(0, "Nepøihlášeno", "nepr"), Present(1, "Prezenènì", "prezencne"), Remote(2, "Online", "online");
-
-		public final int Code;
-		public final boolean Visible;
-		public final String Name;
-		public final String KeyCode;
-
-		private PresenceType(int id, String name, String key) {
-			this.Code = id;
-			this.Visible = id > 0;
-			this.Name = name;
-			this.KeyCode = key;
-		}
-	}
-
 	public static class PresenceLimits {
+
 		public final Map<PresenceType, Integer> Limits = new HashMap<>();
 
 		public void addLimit(PresenceType type, int limit) {
@@ -85,6 +71,76 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 		}
 	}
 
+	public static class FormLabels {
+		private final String SignTitle;
+		private final String Variant;
+		private final String Capacity;
+		private final String SignedUp;
+		private final String SigningUp;
+		private final String SelfSignedUp;
+		private final String SignUp;
+		private final String SignOut;
+		public final JsonObject original;
+		public final boolean isDefault;
+
+		private static String query(JsonObject obj, String key, String def) {
+			if (obj.containsString(key)) {
+				return obj.getString(key).Value;
+			}
+			return def;
+		}
+
+		public JsonObject get() {
+			JsonObject obj = new JsonObject();
+			if (SignTitle != null) {
+				obj.add("SignTitle", new JsonString(SignTitle));
+			}
+			if (Variant != null) {
+				obj.add("Variant", new JsonString(Variant));
+			}
+			if (Capacity != null) {
+				obj.add("Capacity", new JsonString(Capacity));
+			}
+			if (SignedUp != null) {
+				obj.add("SignedUp", new JsonString(SignedUp));
+			}
+			if (SigningUp != null) {
+				obj.add("SigningUp", new JsonString(SigningUp));
+			}
+			if (SelfSignedUp != null) {
+				obj.add("SelfSignedUp", new JsonString(SelfSignedUp));
+			}
+			if (SignUp != null) {
+				obj.add("SignUp", new JsonString(SignUp));
+			}
+			if (SignOut != null) {
+				obj.add("SignOut", new JsonString(SignOut));
+			}
+			return obj;
+		}
+
+		public FormLabels(JsonObject obj) {
+			this(obj, false);
+		}
+
+		private FormLabels(JsonObject obj, boolean isDef) {
+			this.SignTitle = query(obj, "SignTitle", null); // Pøihlášení
+			this.Variant = query(obj, "Variant", null); // Varianta
+			this.Capacity = query(obj, "Capacity", null); // Kapacita
+			this.SignedUp = query(obj, "SignedUp", null); // Pøihlášeno
+			this.SelfSignedUp = query(obj, "SelfSignedUp", null); // Pøihlášen
+			this.SigningUp = query(obj, "SigningUp", null); // Pøihlášení
+			this.SignUp = query(obj, "SignUp", null); // Pøihlásit
+			this.SignOut = query(obj, "SignOut", null); // Odhlásit
+			this.original = obj;
+			this.isDefault = isDef;
+		}
+
+		public FormLabels() {
+			this(new JsonObject(), true);
+		}
+	}
+
 	private final VirtualFile vfCreaterTerm = new VirtualFile() {
 
 		@Override
@@ -92,7 +148,9 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 			StringBuilder sb = new StringBuilder();
 			sb.append("# Tento soubor slouží pro založení slotu rezervace cvièení. \n");
 			sb.append("# Každý øádek = slot.\n");
-			sb.append("# Formát: <toolchain>|<login>|<nazev>|max_pritomnych:max_online|<popis>\n");
+			sb.append("# Formát: <toolchain>|<login>|<nazev>|<lst_pres>|<popis>\n");
+			sb.append("# <lst_pres> je èárkami oddìlený seznam prezencí, kde každý prvek je ve formátu <pres>:<limit>\n");
+			sb.append("# <pres> hodnoty jsou v souboru \"presence_types.ini\" a první zadaný typ je pro nepøíhlášení\n\n");
 			sb.append("# Název poslouží pro práva:\n");
 			sb.append("#\t \"<toolchain>.SEE.<nazev>\" = Každý s tímto právem uvidí záznam\n");
 			sb.append("#\t \"<toolchain>.SIGN.<nazev>\" = Každý s tímto právem se mùže pøihlásit\n");
@@ -114,30 +172,45 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 				String[] parts = line.split("\\|", 5);
 				if (parts.length == 5) {
 					String toolchain = parts[0].trim();
-					String login = parts[1].trim();
-					String name = parts[2].trim();
-					String[] limits = parts[3].trim().split(":");
-					if (limits.length == 2) {
-						JsonObject lim = new JsonObject();
-						try {
-							int pres = Integer.parseInt(limits[0]);
-							int rem = Integer.parseInt(limits[1]);
-							lim.add("max_" + PresenceType.Present.toString().toLowerCase(), new JsonNumber(pres));
-							lim.add("max_" + PresenceType.Remote.toString().toLowerCase(), new JsonNumber(rem));
-						} catch (Exception e) {
-							return;
-						}
+					StaticDB sdb = (StaticDB) LayeredPresenceDB.this;
+					Toolchain Toolchain = null;
+					try {
+						Toolchain = sdb.getToolchain(toolchain);
+					} catch (NoSuchToolchainException e) {
+						e.printStackTrace();
+					}
+
+					if (Toolchain != null) {
+						String login = parts[1].trim();
+						String name = parts[2].trim();
 						String descr = parts[4].trim();
-						StaticDB sdb = (StaticDB) LayeredPresenceDB.this;
-						Toolchain Toolchain = null;
-						try {
-							Toolchain = sdb.getToolchain(toolchain);
-						} catch (NoSuchToolchainException e) {
-							e.printStackTrace();
-						}
-						if (Toolchain != null) {
+
+						PresenceData pdata = presence.get(Toolchain);
+						String[] limitParts = parts[3].trim().split(",");
+						JsonObject lim = new JsonObject();
+						if (limitParts.length > 0) {
+							for (String limitPart : limitParts) {
+								String[] limits = limitPart.trim().split(":");
+								if (limits.length == 2) {
+									try {
+										String pres = limits[0];
+										int realLimit = Integer.parseInt(limits[1]);
+										if (pdata.typesByCode.containsKey(pres)) {
+											PresenceType type = pdata.typesByCode.get(pres);
+											JsonObject typeLim = new JsonObject();
+											typeLim.add("max", new JsonNumber(realLimit));
+											lim.add(type.Code, typeLim);
+
+										}
+									} catch (Exception e) {
+										return;
+									}
+								}
+							}
+							JsonObject settings = new JsonObject();
+							settings.add("limits", lim);
 							long now = System.currentTimeMillis();
-							addSlot(Toolchain, name, descr, descr, lim.getJsonString(), login, now, now, now, now);
+							addSlot(Toolchain, name, descr, descr, settings.getJsonString(), login, now, now, now, now);
 						}
 					}
 				}
@@ -183,15 +256,24 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 							PresenceData pres = presence.get(t);
 							PresenceSlot slot = pres.slotsByID.get(id);
 							if (slot != null) {
-								JsonObject lim = new JsonObject();
-								lim.add("max_" + PresenceType.Present.toString().toLowerCase(), new JsonNumber(slot.Limits.getLimit(PresenceType.Present)));
-								lim.add("max_" + PresenceType.Remote.toString().toLowerCase(), new JsonNumber(slot.Limits.getLimit(PresenceType.Remote)));
+								JsonObject limits = new JsonObject();
+								for (Entry<PresenceType, Integer> limit : slot.Limits.Limits.entrySet()) {
+									JsonObject typeLim = new JsonObject();
+									typeLim.add("max", new JsonNumber(limit.getValue()));
+									limits.add(limit.getKey().Code, typeLim);
+								}
+								JsonObject settings = new JsonObject();
+								settings.add("limits", limits);
+								FormLabels labels = slot.Labels;
+								if (!labels.isDefault) {
+									settings.add("labels", labels.original);
+								}
 								long offset = posun;
 								offset *= 24;
 								offset *= 60;
 								offset *= 60;
 								offset *= 1000;
-								addSlot(t, name, popis, slot.Description, lim.getJsonString(), slot.OwnerLogin, slot.OdkdyZobrazit + offset, slot.DokdyZobrazit + offset, slot.OdkdyPrihlasovat + offset, slot.DokdyPrihlasovat + offset);
+								addSlot(t, name, popis, slot.Description, settings.getJsonString(), slot.OwnerLogin, slot.OdkdyZobrazit + offset, slot.DokdyZobrazit + offset, slot.OdkdyPrihlasovat + offset, slot.DokdyPrihlasovat + offset);
 							}
 						}
 					} catch (Exception e) {
@@ -216,16 +298,18 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 		public String read() throws DatabaseException {
 			StringBuilder sb = new StringBuilder();
 			sb.append("# Tento soubor je urèen pro bezepèné editování záznamù typù variant\n");
-			sb.append("# Formát: <KOD_TYPU> = <NAZEV_TYPU>\n");
-			sb.append("# Pozn: KOD_TYPU je text\n\n");
+			sb.append("# Formát: <ZOBRAZIT>: <KOD_TYPU> = <NAZEV_TYPU>\n");
+			sb.append("# Pozn: ZOBRAZIT je buï \"true\" nebo \"false\"\n");
+			sb.append("# Pozn2: KOD_TYPU je text\n\n");
 			final String tableName = "presence_types";
-			for (JsonValue val : select(tableName, new TableField[] { getField(tableName, "name"), getField(tableName, "title") }, true).Value) {
+			for (JsonValue val : select(tableName, new TableField[] { getField(tableName, "name"), getField(tableName, "title"), getField(tableName, "show") }, true).Value) {
 				if (val.isObject()) {
 					JsonObject obj = val.asObject();
-					if (obj.containsString("name") && obj.containsString("title")) {
+					if (obj.containsString("name") && obj.containsString("title") && obj.containsNumber("show")) {
 						String name = obj.getString("name").Value;
 						String title = obj.getString("title").Value;
-						sb.append(name + " = " + title + "\n");
+						boolean show = obj.getNumber("show").Value == 1;
+						sb.append((show ? "true" : "false") + ": " + name + " = " + title + "\n");
 					}
 				}
 			}
@@ -234,16 +318,17 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 
 		@Override
 		public void write(String data) throws DatabaseException {
-			Map<String, Pair<Integer, String>> typesByName = new HashMap<>();
+			Map<String, Pair<Integer, Pair<String, Boolean>>> typesByName = new HashMap<>();
 			final String tableName = "presence_types";
-			for (JsonValue val : select(tableName, new TableField[] { getField(tableName, "ID"), getField(tableName, "name"), getField(tableName, "title") }, true).Value) {
+			for (JsonValue val : select(tableName, new TableField[] { getField(tableName, "ID"), getField(tableName, "name"), getField(tableName, "title"), getField(tableName, "show") }, true).Value) {
 				if (val.isObject()) {
 					JsonObject obj = val.asObject();
-					if (obj.containsString("name") && obj.containsString("title") && obj.containsNumber("ID")) {
+					if (obj.containsString("name") && obj.containsString("title") && obj.containsNumber("ID") && obj.containsNumber("show")) {
 						String name = obj.getString("name").Value;
 						String title = obj.getString("title").Value;
 						int id = obj.getNumber("ID").Value;
-						typesByName.put(name, new Pair<>(id, title));
+						boolean show = obj.getNumber("show").Value == 1;
+						typesByName.put(name, new Pair<>(id, new Pair<>(title, show)));
 					}
 				}
 			}
@@ -257,20 +342,25 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 				if (parts.length == 2) {
 					String name = parts[0].trim();
 					String title = parts[1].trim();
-					if (typesByName.containsKey(name)) {
-						int id = typesByName.get(name).Key;
-						String savedLabel = typesByName.get(name).Value;
-						if (!savedLabel.equals(title)) { // Update and remove -> no duplicates
-							update(tableName, id, new ValuedField[] { new ValuedField(getField(tableName, "title"), title) });
+					parts = name.split(":", 2);
+					if (parts.length == 2) {
+						name = parts[1].trim();
+						boolean show = parts[0].trim().equals("true");
+						if (typesByName.containsKey(name)) {
+							int id = typesByName.get(name).Key;
+							Pair<String, Boolean> savedLabelOpt = typesByName.get(name).Value;
+							if (!savedLabelOpt.Key.equals(title) || savedLabelOpt.Value != show) { // Update and remove -> no duplicates
+								update(tableName, id, new ValuedField[] { new ValuedField(getField(tableName, "title"), title), new ValuedField(getField(tableName, "show"), show ? 1 : 0) });
+							}
+							typesByName.remove(name);
+						} else {
+							insert(tableName, new ValuedField[] { new ValuedField(getField(tableName, "name"), name), new ValuedField(getField(tableName, "title"), title), new ValuedField(getField(tableName, "show"), show ? 1 : 0) });
 						}
-						typesByName.remove(name);
-					} else {
-						insert(tableName, new ValuedField[] { new ValuedField(getField(tableName, "name"), name), new ValuedField(getField(tableName, "title"), title) });
 					}
 				}
 			}
 
-			for (Entry<String, Pair<Integer, String>> entry : typesByName.entrySet()) {
+			for (Entry<String, Pair<Integer, Pair<String, Boolean>>> entry : typesByName.entrySet()) {
 				String nameToDelete = entry.getKey();
 				final String tableName2 = "presence_slots";
 				boolean skip = false;
@@ -303,6 +393,10 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 					execute_raw("DELETE FROM presence_types WHERE name = ?", nameToDelete);
 				}
 			}
+			presence.clear(); // Clear
+								// cache
+								// after
+								// saving
 		}
 
 		@Override
@@ -312,57 +406,10 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 
 	};
 
-	private void convertPresenceTypes() throws DatabaseException {
-		List<List<Pair<String, Object>>> data = new ArrayList<>();
-
-		final String tableName = "presence_users";
-		try {
-			for (JsonValue val : this.select(tableName, new TableField[] { getField(tableName, "ID"), getField(tableName, "user_id"), getField(tableName, "slot_id"), getField(tableName, "valid"), getField(tableName, "type"), getField(tableName, "creation_time") }, true).Value) {
-				if (val.isObject()) {
-					JsonObject obj = val.asObject();
-					if (obj.containsNumber("ID") && obj.containsNumber("type") && obj.containsNumber("slot_id") && obj.containsNumber("user_id") && obj.containsNumber("valid") && obj.containsNumber("creation_time")) {
-						int id = obj.getNumber("ID").Value;
-						int type = obj.getNumber("type").Value;
-						int slot_id = obj.getNumber("slot_id").Value;
-						int user_id = obj.getNumber("user_id").Value;
-						int valid = obj.getNumber("valid").Value;
-						long creation_time = obj.getNumber("creation_time").asLong();
-						List<Pair<String, Object>> d = new ArrayList<>();
-						d.add(new Pair<String, Object>("ID", id));
-						d.add(new Pair<String, Object>("type", PresenceType.values()[type].KeyCode));
-						d.add(new Pair<String, Object>("slot_id", slot_id));
-						d.add(new Pair<String, Object>("user_id", user_id));
-						d.add(new Pair<String, Object>("valid", valid));
-						d.add(new Pair<String, Object>("creation_time", creation_time));
-					}
-				}
-			}
-		} catch (DatabaseException e) {
-			return;
-		}
-		if (!data.isEmpty()) {
-			this.dropTable("presence_users");
-			this.dropTable("presence_types");
-			this.makeTable("presence_users", KEY("ID"), NUMBER("user_id"), NUMBER("slot_id"), NUMBER("valid"), TEXT("type"), DATE("creation_time"));
-			for (List<Pair<String, Object>> item : data) {
-				ValuedField[] fields = new ValuedField[item.size()];
-				for (int i = 0; i < fields.length; i++) {
-					fields[i] = new ValuedField(getField(tableName, item.get(i).Key), item.get(i).Value);
-					this.insert(tableName, fields);
-				}
-			}
-			final String tableName2 = "presence_types";
-			for (PresenceType type : PresenceType.values()) {
-				this.insert(tableName2, new ValuedField(getField(tableName2, "name"), type.KeyCode), new ValuedField(getField(tableName2, "title"), type.Name));
-			}
-		}
-	}
-
 	public LayeredPresenceDB(String dbName) throws DatabaseException {
 		super(dbName);
+		this.makeTable("presence_types", KEY("ID"), TEXT("name"), TEXT("title"), NUMBER("show"));
 		this.makeTable("presence_slots", KEY("ID"), TEXT("name"), BIGTEXT("description"), TEXT("title"), BIGTEXT("settings"), NUMBER("valid"), TEXT("owner_login"), TEXT("toolchain"), DATE("odkdy_zobrazit"), DATE("odkdy_nezobrazit"), DATE("odkdy_prihlasovani"), DATE("dokdy_prihlasovani"));
-		this.makeTable("presence_types", KEY("ID"), TEXT("name"), TEXT("title"));
-		convertPresenceTypes();
 		this.makeTable("presence_users", KEY("ID"), NUMBER("user_id"), NUMBER("slot_id"), NUMBER("valid"), TEXT("type"), DATE("creation_time"));
 
 		this.registerVirtualFile(vfCreaterTerm);
@@ -382,8 +429,10 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 		public final long DokdyZobrazit;
 		public final long OdkdyPrihlasovat;
 		public final long DokdyPrihlasovat;
+		public final PresenceType DefaultType;
+		public final FormLabels Labels;
 
-		private PresenceSlot(int id, String name, String description, String title, PresenceLimits limits, Toolchain toolchain, String ownerLogin, long odkdyZobrazit, long dokdyZobrazit, long odkdyPrihlasovat, long dokdyPrihlasovat) {
+		private PresenceSlot(int id, String name, String description, String title, PresenceLimits limits, PresenceType undef, Toolchain toolchain, String ownerLogin, long odkdyZobrazit, long dokdyZobrazit, long odkdyPrihlasovat, long dokdyPrihlasovat, FormLabels labels) {
 			this.ID = id;
 			this.Name = name;
 			this.Description = description;
@@ -395,6 +444,8 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 			this.DokdyZobrazit = dokdyZobrazit;
 			this.OdkdyPrihlasovat = odkdyPrihlasovat;
 			this.DokdyPrihlasovat = dokdyPrihlasovat;
+			this.DefaultType = undef;
+			this.Labels = labels;
 		}
 
 		public boolean canSign(UsersPermission perm) {
@@ -432,13 +483,40 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 		}
 	}
 
+	public static class PresenceType {
+		public final boolean Show;
+		public final String Name;
+		public final String Code;
+
+		private PresenceType(boolean show, String code, String name) {
+			this.Show = show;
+			this.Name = name;
+			this.Code = code;
+		}
+
+		@Override
+		public boolean equals(Object anothertype) {
+			if (anothertype instanceof PresenceType) {
+				return Code.equals(((PresenceType) anothertype).Code);
+			}
+			return super.equals(anothertype);
+		}
+	}
+
 	public static class PresenceData {
 		private final Map<String, PresenceSlot> slotsByName = new HashMap<>();
 		private final Map<Integer, PresenceSlot> slotsByID = new HashMap<>();
 
+		private final List<PresenceType> presenceTypes = new ArrayList<>();
+		private final Map<String, PresenceType> typesByCode = new HashMap<>();
+
 		private final Map<Integer, List<PresentUserDetails>> presencesByUserID = new HashMap<>();
 		private final Map<Integer, PresenceStats> statsBySlotID = new HashMap<>();
 		private final Toolchain Toolchain;
+
+		public List<PresenceType> getPresenceTypes() {
+			return presenceTypes;
+		}
 
 		public List<PresenceForUser> getForUser(int userID) {
 			List<PresenceForUser> lst = new ArrayList<PresenceForUser>();
@@ -472,13 +550,18 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 
 		private PresenceData(LayeredPresenceDB db, Toolchain toolchain) throws DatabaseException {
 			this.Toolchain = toolchain;
-			List<PresenceSlot> slots = db.getAllSlots(toolchain);
+			presenceTypes.addAll(db.getPresenceTypes());
+			for (PresenceType type : presenceTypes) {
+				typesByCode.put(type.Code, type);
+			}
+
+			List<PresenceSlot> slots = db.getAllSlots(toolchain, typesByCode);
 			for (PresenceSlot slot : slots) {
 				slotsByName.put(slot.Name, slot);
 				slotsByID.put(slot.ID, slot);
 				statsBySlotID.put(slot.ID, new PresenceStats(slot.Limits));
 			}
-			List<PresenceUser> users = db.getAllReservations(toolchain);
+			List<PresenceUser> users = db.getAllReservations(toolchain, typesByCode);
 			for (PresenceUser user : users) {
 				PresentUserDetails luser = get(db, user);
 				if (luser != null) {
@@ -531,7 +614,7 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 
 	});
 
-	private List<PresenceSlot> getAllSlots(Toolchain toolchain) throws DatabaseException {
+	private List<PresenceSlot> getAllSlots(Toolchain toolchain, Map<String, PresenceType> presenceTypes) throws DatabaseException {
 		List<PresenceSlot> lst = new ArrayList<PresenceSlot>();
 		final String tableName = "presence_slots";
 		TableField[] fields = new TableField[] { getField(tableName, "ID"), getField(tableName, "name"), getField(tableName, "description"), getField(tableName, "owner_login"), getField(tableName, "title"), getField(tableName, "settings"), getField(tableName, "odkdy_zobrazit"), getField(tableName, "odkdy_nezobrazit"), getField(tableName, "odkdy_prihlasovani"), getField(tableName, "dokdy_prihlasovani"), };
@@ -553,34 +636,49 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 				JsonValue p = JsonValue.parse(settings);
 				if (p != null) {
 					if (p.isObject()) {
-						JsonObject po = p.asObject();
+						JsonObject ppo = p.asObject();
 						PresenceLimits limits = new PresenceLimits();
-						for (PresenceType type : PresenceType.values()) {
-							String maxName = "max_" + type.toString().toLowerCase();
-							if (po.containsNumber(maxName)) {
-								int limit = po.getNumber(maxName).Value;
-								limits.addLimit(type, limit);
-							} else {
-								limits.addLimit(type, 0);
+						PresenceType first = null;
+						if (ppo.containsObject("limits")) {
+							JsonObject po = ppo.getObject("limits");
+							for (Entry<String, JsonValue> entry : po.getEntries()) {
+								String typeCode = entry.getKey();
+								JsonValue typeVal = entry.getValue();
+								if (typeVal.isObject()) {
+									if (typeVal.asObject().containsNumber("max")) {
+										int typeMax = typeVal.asObject().getNumber("max").Value;
+										if (presenceTypes.containsKey(typeCode)) {
+											if (first == null) {
+												first = presenceTypes.get(typeCode);
+											}
+											limits.addLimit(presenceTypes.get(typeCode), typeMax);
+										}
+									}
+								}
 							}
+							FormLabels labels;
+							if (ppo.containsObject("labels")) {
+								labels = new FormLabels(ppo.getObject("labels"));
+							} else {
+								labels = new FormLabels();
+							}
+							lst.add(new PresenceSlot(ID, name, description, title, limits, first, toolchain, owner_login, odkdy_zobrazit, odkdy_nezobrazit, odkdy_prihlasovani, dokdy_prihlasovani, labels));
 						}
-						lst.add(new PresenceSlot(ID, name, description, title, limits, toolchain, owner_login, odkdy_zobrazit, odkdy_nezobrazit, odkdy_prihlasovani, dokdy_prihlasovani));
-					}
 
+					}
 				}
 			}
 		}
 		return lst;
 	}
 
-	private List<PresenceUser> getAllReservations(Toolchain toolchain) throws DatabaseException {
+	private List<PresenceUser> getAllReservations(Toolchain toolchain, Map<String, PresenceType> presenceTypes) throws DatabaseException {
 		List<PresenceUser> lst = new ArrayList<PresenceUser>();
 
 		final String tableName = "presence_users";
 		TableField[] fields = new TableField[] { getField(tableName, "ID"), getField(tableName, "user_id"), getField(tableName, "slot_id"), getField(tableName, "type"), getField(tableName, "creation_time") };
 		JsonArray res = this.select(tableName, fields, true, new ComparisionField(getField(tableName, "valid"), 1));
 
-		PresenceType[] presenceTypes = PresenceType.values();
 		for (JsonValue val : res.Value) {
 			if (val.isObject()) {
 				JsonObject obj = val.asObject();
@@ -588,9 +686,27 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 				int user_id = obj.getNumber("user_id").Value;
 				int slot_id = obj.getNumber("slot_id").Value;
 				long creation = obj.getNumber("creation_time").asLong();
-				int type = obj.getNumber("type").Value;
-				if (type >= 0 && type < presenceTypes.length) {
-					lst.add(new PresenceUser(ID, user_id, slot_id, creation, presenceTypes[type]));
+				String type = obj.getString("type").Value;
+				if (presenceTypes.containsKey(type)) {
+					lst.add(new PresenceUser(ID, user_id, slot_id, creation, presenceTypes.get(type)));
+				}
+			}
+		}
+		return lst;
+	}
+
+	private List<PresenceType> getPresenceTypes() throws DatabaseException {
+		List<PresenceType> lst = new ArrayList<PresenceType>();
+
+		final String tableName = "presence_types";
+		for (JsonValue val : select(tableName, new TableField[] { getField(tableName, "ID"), getField(tableName, "name"), getField(tableName, "title"), getField(tableName, "show") }, true).Value) {
+			if (val.isObject()) {
+				JsonObject obj = val.asObject();
+				if (obj.containsString("name") && obj.containsString("title") && obj.containsNumber("ID") && obj.containsNumber("show")) {
+					String name = obj.getString("name").Value;
+					String title = obj.getString("title").Value;
+					boolean show = obj.getNumber("show").Value == 1;
+					lst.add(new PresenceType(show, name, title));
 				}
 			}
 		}
@@ -669,6 +785,15 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 		}
 	}
 
+	public List<PresenceType> getAllPresenceTypes(Toolchain toolchain) {
+		try {
+			return getPresence(toolchain).presenceTypes;
+		} catch (DatabaseException e) {
+			e.printStackTrace();
+			return null;
+		}
+	}
+
 	public List<UserPresenceSlotView> getPresenceSlots(Toolchain toolchain, UsersPermission perm) {
 		try {
 			return getPresence(toolchain).getAvailableViews(perm);
@@ -678,9 +803,10 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 		}
 	}
 
-	public boolean addUserPresence(Toolchain toolchain, int userID, int slotID, int presenceTypeID, UsersPermission perm) {
-		if (presenceTypeID >= 0 && presenceTypeID < PresenceType.values().length) {
-			synchronized (presence) {
+	public boolean addUserPresence(Toolchain toolchain, int userID, int slotID, String presenceTypeCode, UsersPermission perm) {
+		synchronized (presence) {
+			PresenceData pdata = presence.get(toolchain);
+			if (pdata.typesByCode.containsKey(presenceTypeCode)) {
 				boolean hasRecord = false;
 				int presenceRowID = 0;
 				for (PresenceForUser pres : presence.get(toolchain).getForUser(userID)) {
@@ -690,8 +816,7 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 						break;
 					}
 				}
-
-				if (presence.get(toolchain).slotsByID.containsKey(slotID)) {
+				if (pdata.slotsByID.containsKey(slotID)) {
 					PresenceSlot slot = presence.get(toolchain).slotsByID.get(slotID);
 					if (slot.canSign(perm)) {
 						try {
@@ -699,7 +824,7 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 							ValuedField vuid = new ValuedField(getField(tableName, "user_id"), userID);
 							ValuedField vsid = new ValuedField(getField(tableName, "slot_id"), slotID);
 							ValuedField vval = new ValuedField(getField(tableName, "valid"), 1);
-							ValuedField vpid = new ValuedField(getField(tableName, "type"), presenceTypeID);
+							ValuedField vpid = new ValuedField(getField(tableName, "type"), presenceTypeCode);
 							ValuedField vct = new ValuedField(getField(tableName, "creation_time"), System.currentTimeMillis());
 							ValuedField[] fields = new ValuedField[] { vuid, vsid, vpid, vct, vval };
 							if (hasRecord) {
