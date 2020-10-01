@@ -297,7 +297,7 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 		@Override
 		public String read() throws DatabaseException {
 			StringBuilder sb = new StringBuilder();
-			sb.append("# Tento soubor je urèen pro bezepèné editování záznamù typù variant\n");
+			sb.append("# Tento soubor je urèen pro bezpeèné editování záznamù typù variant\n");
 			sb.append("# Formát: <ZOBRAZIT>: <KOD_TYPU> = <NAZEV_TYPU>\n");
 			sb.append("# Pozn: ZOBRAZIT je buï \"true\" nebo \"false\"\n");
 			sb.append("# Pozn2: KOD_TYPU je text\n\n");
