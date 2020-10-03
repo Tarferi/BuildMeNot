@@ -209,7 +209,23 @@ public class TestManager {
 		}
 	}
 
-	public JsonObject run(final BadResults badResults, int builderID, Toolchain toolchain, String test_id, String asm, String login) {
+	public static final class TestResults {
+		public final int ResultCode;
+		public final int GoodTests;
+		public final int BadTests;
+		public final String ResultDescription;
+		public final String Details;
+
+		private TestResults(int result, int good, int bad, String descr, String details) {
+			this.ResultCode = result;
+			this.GoodTests = good;
+			this.BadTests = bad;
+			this.ResultDescription = descr;
+			this.Details = details;
+		}
+	}
+
+	public TestResults run(final BadResults badResults, int builderID, Toolchain toolchain, String test_id, String asm, String login) {
 		GenericTest test = null;
 		synchronized (Tests.get().tests) {
 			String testKey = toolchain.getName().toUpperCase() + "/" + test_id.toLowerCase();
@@ -271,17 +287,14 @@ public class TestManager {
 				}
 			}
 		}
-		JsonObject obj = new JsonObject();
-		obj.add("code", new JsonNumber(code));
-		obj.add("result", new JsonString(message.get()));
-		obj.add("good", new JsonNumber(good));
-		obj.add("bad", new JsonNumber(bad));
+		String details = null;
 		if (testResult != null) {
-			obj.add("details", testResult.getFailedDescriptionData());
+			details = testResult.getFailedDescriptionData().getJsonString();
 		} else if (!rawMessage.Value.isEmpty()) {
-			obj.add("details", rawMessage);
+			details = rawMessage.getJsonString();
 		}
-		return obj;
+		return new TestResults(code, good, bad, message.get(), details);
+
 	}
 
 }

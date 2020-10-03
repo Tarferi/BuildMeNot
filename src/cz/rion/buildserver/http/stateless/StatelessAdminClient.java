@@ -1,38 +1,32 @@
-package cz.rion.buildserver.http;
+package cz.rion.buildserver.http.stateless;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
 import cz.rion.buildserver.Settings;
-import cz.rion.buildserver.db.RuntimeDB;
 import cz.rion.buildserver.db.StaticDB;
 import cz.rion.buildserver.db.layers.common.LayeredDBFileWrapperDB;
 import cz.rion.buildserver.db.layers.staticDB.LayeredFilesDB.DatabaseFile;
 import cz.rion.buildserver.exceptions.DatabaseException;
-import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonNumber;
+import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.json.JsonValue.JsonString;
 import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 
-public abstract class HTTPAdminClient extends HTTPTermClient {
+public class StatelessAdminClient extends StatelessPermissionClient {
 
-	private final StaticDB sdb;
-	private final RuntimeDB db;
-
-	protected HTTPAdminClient(CompatibleSocketClient client, int BuilderID, RuntimeDB rdb, StaticDB sdb) {
-		super(client, BuilderID, rdb, sdb);
-		this.sdb = sdb;
-		this.db = rdb;
+	protected StatelessAdminClient(StatelessInitData data) {
+		super(data);
 	}
 
-	private JsonValue collectFiles() {
+	private JsonValue collectFiles(ProcessState state) {
 		JsonArray arr = new JsonArray(new ArrayList<JsonValue>());
 
-		List<DatabaseFile> lst = sdb.getFiles();
-		LayeredDBFileWrapperDB.loadDatabaseFiles(db, lst);
+		List<DatabaseFile> lst = state.Data.StaticDB.getFiles();
+		LayeredDBFileWrapperDB.loadDatabaseFiles(state.Data.RuntimeDB, lst);
 
 		for (DatabaseFile f : lst) {
 			JsonObject obj = new JsonObject();
@@ -43,16 +37,16 @@ public abstract class HTTPAdminClient extends HTTPTermClient {
 		return arr;
 	}
 
-	private FileInfo getFile(int fileID) {
+	private FileInfo getFile(ProcessState state, int fileID) {
 		FileInfo fo = null;
 		try {
-			fo = sdb.getFile(fileID, true);
+			fo = state.Data.StaticDB.getFile(fileID, true);
 		} catch (DatabaseException e1) {
 			e1.printStackTrace();
 		}
 		if (fo == null) {
 			try {
-				fo = LayeredDBFileWrapperDB.getFile(db, fileID, true);
+				fo = LayeredDBFileWrapperDB.getFile(state.Data.RuntimeDB, fileID, true);
 			} catch (DatabaseException e) {
 				e.printStackTrace();
 			}
@@ -60,12 +54,12 @@ public abstract class HTTPAdminClient extends HTTPTermClient {
 		return fo;
 	}
 
-	private JsonValue loadFile(int fileID, boolean log) {
-		FileInfo fo = LayeredDBFileWrapperDB.processPostLoadedFile(db, LayeredDBFileWrapperDB.processPostLoadedFile(sdb, getFile(fileID), true), true);
+	private JsonValue loadFile(ProcessState state, int fileID, boolean log) {
+		FileInfo fo = LayeredDBFileWrapperDB.processPostLoadedFile(state.Data.RuntimeDB, LayeredDBFileWrapperDB.processPostLoadedFile(state.Data.StaticDB, getFile(state, fileID), true), true);
 		JsonObject obj = new JsonObject();
 		if (fo == null) {
 			if (log) {
-				sdb.adminLog(getAddress(), getPermissions().Login, "load", "load:" + fileID);
+				state.Data.StaticDB.adminLog(state.Request.remoteAddress, state.getPermissions().Login, "load", "load:" + fileID);
 			}
 			obj.add("fo", new JsonNumber(1));
 			return obj;
@@ -75,7 +69,7 @@ public abstract class HTTPAdminClient extends HTTPTermClient {
 			obj.add("ID", new JsonNumber(fo.ID));
 			obj.add("contents", new JsonString(new String(fo.Contents.getBytes(Settings.getDefaultCharset()), StandardCharsets.UTF_8)));
 			if (log) {
-				sdb.adminLog(getAddress(), getPermissions().Login, "load", "load:" + fileID + ":" + fo.FileName);
+				state.Data.StaticDB.adminLog(state.Request.remoteAddress, state.getPermissions().Login, "load", "load:" + fileID + ":" + fo.FileName);
 			}
 			return obj;
 		}
@@ -116,25 +110,27 @@ public abstract class HTTPAdminClient extends HTTPTermClient {
 		return new String(utf.getBytes(StandardCharsets.UTF_8), Settings.getDefaultCharset());
 	}
 
-	protected void handleAdminEvent(JsonObject obj, JsonObject result) {
+	protected JsonObject handleAdminEvent(ProcessState state, JsonObject obj) {
+		JsonObject result = new JsonObject();
 		result.add("code", new JsonNumber(1));
 		result.add("result", new JsonString("Invalid admin command"));
+		StaticDB sdb = state.Data.StaticDB;
 
 		if (obj.containsString("admin_data")) {
 			String admin_data = obj.getString("admin_data").Value;
 			if (admin_data.equals("getFiles")) {
 				result.add("code", new JsonNumber(0));
-				result.add("result", new JsonString(collectFiles().getJsonString()));
-				sdb.adminLog(getAddress(), getPermissions().Login, "getFiles", admin_data);
+				result.add("result", new JsonString(collectFiles(state).getJsonString()));
+				sdb.adminLog(state.Request.remoteAddress, state.getPermissions().Login, "getFiles", admin_data);
 			} else if (admin_data.startsWith("load:")) {
 				int fileID;
 				try {
 					fileID = Integer.parseInt(admin_data.substring("load:".length()));
 				} catch (Exception e) {
-					return;
+					return result;
 				}
 				result.add("code", new JsonNumber(0));
-				result.add("result", new JsonString(loadFile(fileID, true).getJsonString()));
+				result.add("result", new JsonString(loadFile(state, fileID, true).getJsonString()));
 			} else if (admin_data.startsWith("save:") || admin_data.startsWith("tableEdit")) {
 				String[] parts = admin_data.split(":", 3);
 				if (parts.length == 3) {
@@ -142,14 +138,14 @@ public abstract class HTTPAdminClient extends HTTPTermClient {
 					try {
 						fileID = Integer.parseInt(parts[1]);
 					} catch (Exception e) {
-						return;
+						return result;
 					}
 					String newContents = specialDec(parts[2]);
 					boolean isSavingRawFile = admin_data.startsWith("save:");
 					boolean isEditingRow = admin_data.startsWith("tableEdit");
 
 					if (isSavingRawFile) { // Log handled internally
-						if (this.saveFile(fileID, newContents)) {
+						if (this.saveFile(state, fileID, newContents)) {
 							result.add("code", new JsonNumber(0));
 							result.add("result", new JsonString("File saved"));
 						} else {
@@ -157,7 +153,7 @@ public abstract class HTTPAdminClient extends HTTPTermClient {
 							result.add("result", new JsonString("Failed to save file"));
 						}
 					} else if (isEditingRow) { // Log handled internally
-						if (this.saveRow(fileID, newContents)) {
+						if (this.saveRow(state, fileID, newContents)) {
 							result.add("code", new JsonNumber(0));
 							result.add("result", new JsonString("Row saved"));
 						} else {
@@ -175,42 +171,42 @@ public abstract class HTTPAdminClient extends HTTPTermClient {
 							sdb.createFile(fileName, "", false);
 							result.add("code", new JsonNumber(0));
 							result.add("result", new JsonString("File created"));
-							sdb.adminLog(getAddress(), getPermissions().Login, "create", "create:0:" + fileName);
+							sdb.adminLog(state.Request.remoteAddress, state.getPermissions().Login, "create", "create:0:" + fileName);
 						} catch (DatabaseException e) {
 							e.printStackTrace();
 							result.add("code", new JsonNumber(1));
 							result.add("result", new JsonString("Failed to create new file: " + fileName));
-							sdb.adminLog(getAddress(), getPermissions().Login, "create", "create:1:" + fileName);
+							sdb.adminLog(state.Request.remoteAddress, state.getPermissions().Login, "create", "create:1:" + fileName);
 						}
 					} else {
 						result.add("code", new JsonNumber(1));
 						result.add("result", new JsonString("Cannot create new file: " + fileName));
-						sdb.adminLog(getAddress(), getPermissions().Login, "create", "create:1:" + fileName);
+						sdb.adminLog(state.Request.remoteAddress, state.getPermissions().Login, "create", "create:1:" + fileName);
 					}
 				}
 			}
 		}
-		return;
+		return result;
 	}
 
-	private boolean saveRow(int fileID, String jsn) { // Logs itself
+	private boolean saveRow(ProcessState state, int fileID, String jsn) { // Logs itself
 		JsonValue val = JsonValue.parse(jsn);
-		final String login = getPermissions().Login;
-		final String address = getAddress();
+		final String login = state.getPermissions().Login;
+		final String address = state.Request.remoteAddress;
 		if (val != null) {
 			if (val.isObject()) {
 				JsonObject obj = val.asObject();
 				FileInfo f;
 				try {
-					f = this.sdb.getFile(fileID, false);
+					f = state.Data.StaticDB.getFile(fileID, false);
 					if (f != null) { // SDB database
-						if (LayeredDBFileWrapperDB.editRow(sdb, login, address, sdb, f, obj)) {
+						if (LayeredDBFileWrapperDB.editRow(state.Data.StaticDB, login, address, state.Data.StaticDB, f, obj)) {
 							return true;
 						}
 					} else { // DB database ?
-						f = LayeredDBFileWrapperDB.getFile(db, fileID, false);
+						f = LayeredDBFileWrapperDB.getFile(state.Data.RuntimeDB, fileID, false);
 						if (f != null) {
-							if (LayeredDBFileWrapperDB.editRow(sdb, login, address, db, f, obj)) {
+							if (LayeredDBFileWrapperDB.editRow(state.Data.StaticDB, login, address, state.Data.RuntimeDB, f, obj)) {
 								return true;
 							}
 						}
@@ -223,13 +219,13 @@ public abstract class HTTPAdminClient extends HTTPTermClient {
 		return false;
 	}
 
-	private boolean saveFile(int fileID, String newContents) {
-		List<DatabaseFile> lst = sdb.getFiles();
+	private boolean saveFile(ProcessState state, int fileID, String newContents) {
+		List<DatabaseFile> lst = state.Data.StaticDB.getFiles();
 		for (DatabaseFile f : lst) {
 			if (f.ID == fileID) {
 				FileInfo fo = null;
 				try {
-					fo = sdb.getFile(fileID, true);
+					fo = state.Data.StaticDB.getFile(fileID, true);
 				} catch (DatabaseException e) {
 					e.printStackTrace();
 					return false;
@@ -238,15 +234,16 @@ public abstract class HTTPAdminClient extends HTTPTermClient {
 					JsonObject obj = new JsonObject();
 					obj.add("original", new JsonString(fo.Contents));
 					obj.add("new", new JsonString(newContents));
-					sdb.adminLog(getAddress(), getPermissions().Login, "saveFile:" + fileID + ":" + fo.FileName, obj.getJsonString());
+					state.Data.StaticDB.adminLog(state.Request.remoteAddress, state.getPermissions().Login, "saveFile:" + fileID + ":" + fo.FileName, obj.getJsonString());
 
-					sdb.storeFile(f, f.FileName, newContents);
+					state.Data.StaticDB.storeFile(f, f.FileName, newContents);
 					return true;
 				} else {
-					sdb.adminLog(getAddress(), getPermissions().Login, "saveFile:" + fileID, "saveFile:" + fileID);
+					state.Data.StaticDB.adminLog(state.Request.remoteAddress, state.getPermissions().Login, "saveFile:" + fileID, "saveFile:" + fileID);
 				}
 			}
 		}
 		return false;
 	}
+
 }

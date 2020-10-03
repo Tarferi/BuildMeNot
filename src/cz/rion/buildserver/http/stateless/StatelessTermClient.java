@@ -1,8 +1,7 @@
-package cz.rion.buildserver.http;
+package cz.rion.buildserver.http.stateless;
 
 import java.util.List;
 
-import cz.rion.buildserver.db.RuntimeDB;
 import cz.rion.buildserver.db.StaticDB;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.db.layers.staticDB.LayeredPermissionDB.UsersPermission;
@@ -12,21 +11,18 @@ import cz.rion.buildserver.db.layers.staticDB.LayeredPresenceDB.PresentUserDetai
 import cz.rion.buildserver.db.layers.staticDB.LayeredPresenceDB.UserPresenceSlotView;
 import cz.rion.buildserver.db.layers.staticDB.LayeredUserDB.RemoteUser;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
+import cz.rion.buildserver.json.JsonValue.JsonBoolean;
 import cz.rion.buildserver.json.JsonValue.JsonNumber;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.json.JsonValue.JsonString;
-import cz.rion.buildserver.json.JsonValue.JsonBoolean;
 
-public class HTTPTermClient extends HTTPParserClient {
+public class StatelessTermClient extends StatelessGraphProviderClient {
 
-	private final StaticDB sdb;
-
-	protected HTTPTermClient(CompatibleSocketClient client, int BuilderID, RuntimeDB rdb, StaticDB sdb) {
-		super(client, BuilderID, rdb, sdb);
-		this.sdb = sdb;
+	protected StatelessTermClient(StatelessInitData data) {
+		super(data);
 	}
 
-	private JsonObject collectSlots(Toolchain toolchain, UsersPermission perms) {
+	private JsonObject collectSlots(StaticDB sdb, Toolchain toolchain, UsersPermission perms) {
 		JsonObject result = new JsonObject();
 		long now = System.currentTimeMillis();
 		List<UserPresenceSlotView> availableSlots = sdb.getPresenceSlots(toolchain, perms);
@@ -134,7 +130,8 @@ public class HTTPTermClient extends HTTPParserClient {
 		return result;
 	}
 
-	protected void handleTermsEvent(JsonObject obj, Toolchain toolchain, JsonObject result, UsersPermission perms) {
+	protected JsonObject handleTermsEvent(ProcessState state, JsonObject obj) {
+		JsonObject result = new JsonObject();
 		result.add("code", new JsonNumber(1));
 		result.add("result", new JsonString("Invalid admin command"));
 
@@ -142,18 +139,20 @@ public class HTTPTermClient extends HTTPParserClient {
 			String term_data = obj.getString("term_data").Value;
 			if (term_data.equals("getTerms")) {
 				result.add("code", new JsonNumber(0));
-				result.add("result", new JsonString(collectSlots(toolchain, perms).getJsonString()));
+				result.add("result", new JsonString(collectSlots(state.Data.StaticDB, state.Toolchain, state.getPermissions()).getJsonString()));
 			} else if (term_data.equals("subscribe") && obj.containsNumber("slotID") && obj.containsString("variantID")) {
 				int slotCode = obj.getNumber("slotID").Value;
 				String variantID = obj.getString("variantID").Value;
-				if (sdb.addUserPresence(toolchain, perms.getStaticUserID(), slotCode, variantID, perms)) {
+				if (state.Data.StaticDB.addUserPresence(state.Toolchain, state.getPermissions().getStaticUserID(), slotCode, variantID, state.getPermissions())) {
 					result.add("code", new JsonNumber(0));
-					result.add("result", new JsonString(collectSlots(toolchain, perms).getJsonString()));
+					result.add("result", new JsonString(collectSlots(state.Data.StaticDB, state.Toolchain, state.getPermissions()).getJsonString()));
 				} else {
 					result.add("code", new JsonNumber(1));
 					result.add("result", new JsonString("Nepodaøilo se pøihlásit na daný termín"));
 				}
 			}
 		}
+		return result;
 	}
+
 }

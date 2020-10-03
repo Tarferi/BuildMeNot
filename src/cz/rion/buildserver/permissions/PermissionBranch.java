@@ -68,6 +68,7 @@ public class PermissionBranch {
 				return kws.get(kw);
 			} else {
 				kws.put(kw, kwSz);
+				kwIs.put(kwSz, kw);
 				kwSz++;
 				return kwSz - 1;
 			}

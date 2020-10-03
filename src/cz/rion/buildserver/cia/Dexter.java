@@ -1,13 +1,13 @@
 package cz.rion.buildserver.cia;
 
-import java.nio.channels.SocketChannel;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import cz.rion.buildserver.BuildThread;
-import cz.rion.buildserver.http.HTTPServer;
+import cz.rion.buildserver.http.server.HTTPClientFactory;
+import cz.rion.buildserver.http.server.HTTPServer;
 import cz.rion.buildserver.ui.provider.RemoteUIClient;
 import cz.rion.buildserver.wrappers.MyThread;
 
@@ -28,14 +28,13 @@ public class Dexter {
 
 	public Dexter(HTTPServer server) {
 		this.server = server;
-		_thread.start();
 	}
 
-	private Map<BuildThread, SocketChannel> builderClients = new HashMap<>();
+	private Map<BuildThread, HTTPClientFactory> builderClients = new HashMap<>();
 
-	private void killViolently(SocketChannel client) {
+	private void killViolently(HTTPClientFactory client) {
 		try {
-			System.out.println("Killing HTTP client: " + client.getRemoteAddress().toString());
+			System.out.println("Killing HTTP client: " + client.getRemoteAddress());
 			client.close();
 		} catch (Throwable t) { // No emotion shown
 		}
@@ -43,7 +42,7 @@ public class Dexter {
 
 	private void killViolently(RemoteUIClient client) {
 		try {
-			System.out.println("Killing Admin client: " + client.getRemoteAddress().toString());
+			System.out.println("Killing Admin client: " + client.getRemoteAddress());
 			client.close();
 			sendPing(client); // For faster removal
 		} catch (Throwable t) {
@@ -51,13 +50,13 @@ public class Dexter {
 	}
 
 	private void sweepBuilders() {
-		List<BuildThread> builders = server.builders;
+		List<BuildThread> builders = server.data.builders;
 		for (BuildThread builder : builders) {
-			SocketChannel client = builder.getClient();
+			HTTPClientFactory client = builder.getClient();
 			if (!builderClients.containsKey(builder)) {
 				builderClients.put(builder, client);
 			} else {
-				SocketChannel previousClient = builderClients.get(builder);
+				HTTPClientFactory previousClient = builderClients.get(builder);
 				if (previousClient == client && client != null) { // Stuck? Violence
 					killViolently(client);
 				}
@@ -67,14 +66,14 @@ public class Dexter {
 
 	private void sendPing(RemoteUIClient client) {
 		try {
-			server.remoteUI.writePing(client);
+			server.data.remoteUI.writePing(client);
 		} catch (Throwable t) {
 			t.printStackTrace();
 		}
 	}
 
 	private void sweepAdmins() {
-		List<RemoteUIClient> clients = server.remoteUI.getClients();
+		List<RemoteUIClient> clients = server.data.remoteUI.getClients();
 		Date now = new Date();
 		for (RemoteUIClient client : clients) {
 			Date last = client.getLastOperation();
@@ -102,6 +101,15 @@ public class Dexter {
 			} catch (Throwable t) {
 				t.printStackTrace();
 			}
+		}
+	}
+
+	private boolean started = false;
+
+	public void start() {
+		if (!started) {
+			started = true;
+			this._thread.start();
 		}
 	}
 

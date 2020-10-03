@@ -12,8 +12,9 @@ public final class HTTPRequest {
 	public final String authData;
 	public final Map<String, String> headers;
 	public final List<String> cookiesLines;
+	public final String remoteAddress;
 
-	public HTTPRequest(String method, String host, String protocol, String path, byte[] data, Map<String, String> headers, List<String> cookiesLines) {
+	public HTTPRequest(String method, String host, String protocol, String path, byte[] data, Map<String, String> headers, List<String> cookiesLines, String remoteAddress) {
 		String authData = null;
 		if (path.contains("/auth/")) {
 			String[] np = path.split("/auth/", 2);
@@ -33,5 +34,6 @@ public final class HTTPRequest {
 		this.headers = headers;
 		this.authData = authData;
 		this.cookiesLines = cookiesLines;
+		this.remoteAddress = remoteAddress;
 	}
 }

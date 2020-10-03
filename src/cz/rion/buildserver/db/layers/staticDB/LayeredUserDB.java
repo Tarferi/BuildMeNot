@@ -149,10 +149,10 @@ public abstract class LayeredUserDB extends LayeredDBFileWrapperDB {
 		return false;
 	}
 
-	public Object[] getFullNameAndGroup(String login, String toolchain) {
+	public Object[] getFullNameAndGroup(String login, Toolchain toolchain) {
 		try {
 			final String tableName = "users";
-			JsonArray res = this.select(tableName, new TableField[] { getField(tableName, "name"), getField(tableName, "usergroup"), getField(tableName, "ID") }, true, new ComparisionField(getField(tableName, "login"), login), new ComparisionField(getField(tableName, "toolchain"), toolchain));
+			JsonArray res = this.select(tableName, new TableField[] { getField(tableName, "name"), getField(tableName, "usergroup"), getField(tableName, "ID") }, true, new ComparisionField(getField(tableName, "login"), login), new ComparisionField(getField(tableName, "toolchain"), toolchain.getName()));
 			if (!res.Value.isEmpty()) {
 				String name = res.Value.get(0).asObject().getString("name").Value;
 				String grp = res.Value.get(0).asObject().getString("usergroup").Value;
@@ -166,9 +166,9 @@ public abstract class LayeredUserDB extends LayeredDBFileWrapperDB {
 	}
 
 	@Override
-	public boolean clearUsers(String toolchain) {
+	public boolean clearUsers(Toolchain toolchain) {
 		try {
-			this.execute_raw("DELETE FROM users WHERE toolchain = ?", toolchain);
+			this.execute_raw("DELETE FROM users WHERE toolchain = ?", toolchain.getName());
 		} catch (DatabaseException e) {
 			e.printStackTrace();
 			return false;
@@ -230,18 +230,18 @@ public abstract class LayeredUserDB extends LayeredDBFileWrapperDB {
 	}
 
 	@Override
-	public boolean createUser(String toolchain, String login, String origin, String fullName, List<String> permissionGroups, int rootPermissionGroupID) {
+	public boolean createUser(Toolchain toolchain, String login, String origin, String fullName, List<String> permissionGroups, int rootPermissionGroupID) {
 		final String tableName = "users";
 		JsonArray res;
 		try {
-			res = this.select(tableName, new TableField[] { getField(tableName, "ID") }, false, new ComparisionField(getField(tableName, "toolchain"), toolchain), new ComparisionField(getField(tableName, "login"), login));
+			res = this.select(tableName, new TableField[] { getField(tableName, "ID") }, false, new ComparisionField(getField(tableName, "toolchain"), toolchain.getName()), new ComparisionField(getField(tableName, "login"), login));
 			if (res.Value.size() == 0) {
-				return this.insert(tableName, new ValuedField(this.getField(tableName, "name"), fullName), new ValuedField(this.getField(tableName, "permissions"), "[]"), new ValuedField(this.getField(tableName, "usergroup"), origin), new ValuedField(this.getField(tableName, "login"), login), new ValuedField(this.getField(tableName, "toolchain"), toolchain));
+				return this.insert(tableName, new ValuedField(this.getField(tableName, "name"), fullName), new ValuedField(this.getField(tableName, "permissions"), "[]"), new ValuedField(this.getField(tableName, "usergroup"), origin), new ValuedField(this.getField(tableName, "login"), login), new ValuedField(this.getField(tableName, "toolchain"), toolchain.getName()));
 			} else if (res.Value.size() == 1) {
 				if (res.Value.get(0).isObject()) {
 					if (res.Value.get(0).asObject().containsNumber("ID")) {
 						int id = res.Value.get(0).asObject().getNumber("ID").Value;
-						return this.update(tableName, id, new ValuedField(this.getField(tableName, "name"), fullName), new ValuedField(this.getField(tableName, "permissions"), "[]"), new ValuedField(this.getField(tableName, "usergroup"), origin), new ValuedField(this.getField(tableName, "login"), login), new ValuedField(this.getField(tableName, "toolchain"), toolchain));
+						return this.update(tableName, id, new ValuedField(this.getField(tableName, "name"), fullName), new ValuedField(this.getField(tableName, "permissions"), "[]"), new ValuedField(this.getField(tableName, "usergroup"), origin), new ValuedField(this.getField(tableName, "login"), login), new ValuedField(this.getField(tableName, "toolchain"), toolchain.getName()));
 					}
 				}
 				return false;

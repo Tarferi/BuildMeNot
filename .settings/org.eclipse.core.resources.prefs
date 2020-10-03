@@ -1,5 +1,5 @@
 eclipse.preferences.version=1
-encoding//src/cz/rion/buildserver/http/HTTPAdminClient.java=UTF-8
+encoding//src/cz/rion/buildserver/http/stateless/StatelessAdminClient.java=UTF-8
 encoding//src/cz/rion/buildserver/json/JsonValue.java=UTF-8
 encoding//web/admin.js=UTF-8
 encoding//web/cviceni/index.html=UTF-8

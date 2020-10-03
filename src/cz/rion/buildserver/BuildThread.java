@@ -1,20 +1,17 @@
 package cz.rion.buildserver;
 
-import java.nio.channels.SocketChannel;
-
 import cz.rion.buildserver.exceptions.SwitchClientException;
-import cz.rion.buildserver.http.AbstractHTTPClient.HTTPClientIntentType;
-import cz.rion.buildserver.http.HTTPClient;
-import cz.rion.buildserver.http.HTTPServer;
-import cz.rion.buildserver.json.JsonValue.JsonObject;
-import cz.rion.buildserver.ui.provider.RemoteUIProviderServer;
+import cz.rion.buildserver.http.server.HTTPClientFactory;
+import cz.rion.buildserver.http.server.HTTPServer;
+import cz.rion.buildserver.http.stateless.StatelessClient;
 import cz.rion.buildserver.ui.provider.RemoteUIProviderServer.BuilderStatus;
 import cz.rion.buildserver.wrappers.MyThread;
+import cz.rion.buildserver.http.*;
 
 public class BuildThread {
 
 	public interface ClientAccepter {
-		public SocketChannel accept();
+		public HTTPClientFactory accept();
 
 		public int getQueueSize();
 	}
@@ -79,56 +76,24 @@ public class BuildThread {
 			async();
 		}
 	};
-	private ClientAccepter accepter;
 
-	public BuildThread(HTTPServer server, int myID, ClientAccepter accepter) {
+	private final ClientAccepter accepter;
+	private final StatelessClient processor;
+
+	public BuildThread(HTTPServer server, int myID, ClientAccepter accepter, StatelessClient processor) {
 		this.ID = myID;
 		this.server = server;
 		this.accepter = accepter;
-		thread.start();
+		this.processor = processor;
 	}
 
-	private void account(boolean ok, RemoteUIProviderServer remoteAdmin, HTTPClientIntentType type, String address, String login, int code, String codeDescription, String path, String asm, String testResult, String test_id) {
-		switch (type) {
-		case ADMIN:
-			stats.totalAdminJobs++;
-			break;
-		case GET_HTML:
-			stats.totalHTMLJobs++;
-			remoteAdmin.writeGetHTML(address, login, code, codeDescription, path);
-			break;
-		case GET_RESOURCE:
-			stats.totalResourceJobs++;
-			remoteAdmin.writeGetResource(address, login, code, codeDescription, path);
-			break;
-		case HACK:
-			stats.totalHackJobs++;
-			break;
-		case COLLECT_TESTS:
-			remoteAdmin.writeTestCollect(address, login);
-			break;
-
-		case UNKNOWN:
-			break;
-
-		case PERFORM_TEST:
-			if (ok) {
-				stats.totalJobsPassed++;
-			}
-			stats.totalJobsFinished++;
-			remoteAdmin.writeTestResult(address, login, code, codeDescription, asm, test_id);
-			remoteAdmin.writeBuilderDataUpdate(this.ID, this);
-			break;
-		}
-	}
-
-	private SocketChannel currentClient;
+	private HTTPClientFactory currentClient;
 
 	private void async() {
 		thread.setName("Worker " + ID);
 		while (true) {
 			try {
-				server.remoteUI.writeBuilderDataUpdate(ID, this);
+				server.data.remoteUI.writeBuilderDataUpdate(ID, this);
 				waiting = true;
 				currentClient = null;
 				while (currentClient == null) {
@@ -140,29 +105,23 @@ public class BuildThread {
 					}
 				}
 				waiting = false;
-				server.remoteUI.writeBuilderDataUpdate(ID, this);
-				HTTPClient client = new HTTPClient(currentClient, ID, server.db, server.sdb, server.tests, server.remoteUI);
+				server.data.remoteUI.writeBuilderDataUpdate(ID, this);
+
 				try {
-					client.run();
+					HTTPRequest req = currentClient.getRequest();
+					HTTPResponse resp = processor.getResponse(req);
+					currentClient.writeResponse(resp);
 				} catch (SwitchClientException e) {
 					server.addRemoteUIClient(e.socket);
-				} catch (Exception | Error e) {
-					e.printStackTrace();
-				} finally {
-					JsonObject result = client.getReturnValue();
-					int code = result == null ? 1 : (result.containsNumber("code") ? result.getNumber("code").Value : 1);
-					String codeDescription = result == null ? null : result.containsString("result") ? result.getString("result").Value : null;
-					String path = client.getDownloadedDocumentPath();
-					String runtimeResult = result == null ? null : result.getJsonString();
-					String test_id = client.getTestID();
-					String asm = client.getASM();
-					account(client.haveTestsPassed(), this.server.remoteUI, client.getIntention(), client.getAddress(), client.getLogin(), code, codeDescription, path, asm, runtimeResult, test_id);
+				} catch (Exception e) {
+					currentClient.close();
 				}
+
 			} catch (Throwable t) { // Ultimate catcher
 				t.printStackTrace();
 			} finally {
 				waiting = true;
-				server.remoteUI.writeBuilderDataUpdate(ID, this);
+				server.data.remoteUI.writeBuilderDataUpdate(ID, this);
 			}
 		}
 	}
@@ -187,7 +146,16 @@ public class BuildThread {
 		}
 	}
 
-	public SocketChannel getClient() {
+	public HTTPClientFactory getClient() {
 		return currentClient;
+	}
+
+	private boolean started = false;
+
+	public void start() {
+		if (!started) {
+			started = true;
+			thread.start();
+		}
 	}
 }

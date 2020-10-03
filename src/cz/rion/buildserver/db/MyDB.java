@@ -16,6 +16,7 @@ import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.test.GenericTest;
 import cz.rion.buildserver.test.TestManager;
+import cz.rion.buildserver.test.TestManager.TestResults;
 import cz.rion.buildserver.utils.Pair;
 import cz.rion.buildserver.wrappers.MyThread;
 
@@ -163,8 +164,8 @@ public class MyDB {
 			for (Pair<Toolchain, String> test_data : tests) {
 				String test_id = test_data.Value;
 				Toolchain toolchain = test_data.Key;
-				JsonObject res = tm.run(br, builderID, toolchain, test_id, d.code, null);
-				if (res.getNumber("code").Value == 0) {
+				TestResults res = tm.run(br, builderID, toolchain, test_id, d.code, null);
+				if (res.ResultCode == 0) {
 					if (test_id.contains("debug")) {
 						deb_id = test_id;
 						continue;

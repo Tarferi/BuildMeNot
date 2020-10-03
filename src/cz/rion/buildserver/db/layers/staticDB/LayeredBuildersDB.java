@@ -285,7 +285,7 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 		private final String name;
 		private final String pathPrefix;
 		public final String[] runnerParams;
-		
+
 		public ExecutionResult run(ToolchainLogger errors, GenericTest test, String workingDirectory, String inputString, String stdin, String login) {
 			MyFS.deleteFileSilent(workingDirectory);
 			boolean codeKnown = true;
@@ -352,6 +352,14 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 
 		public String getName() {
 			return name;
+		}
+
+		@Override
+		public boolean equals(Object another) {
+			if (another instanceof Toolchain) {
+				return name.equals(((Toolchain) another).name);
+			}
+			return super.equals(another);
 		}
 	}
 

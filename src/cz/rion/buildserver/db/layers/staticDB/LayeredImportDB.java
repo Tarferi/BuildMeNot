@@ -9,8 +9,11 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import cz.rion.buildserver.Settings;
+import cz.rion.buildserver.db.StaticDB;
+import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.exceptions.FileWriteException;
+import cz.rion.buildserver.exceptions.NoSuchToolchainException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
@@ -202,7 +205,7 @@ public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
 		}
 
 		public void updateName(String name) {
-			 this.name = name;
+			this.name = name;
 		}
 
 		public void addGroup(String group) {
@@ -233,11 +236,9 @@ public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
 		}
 
 		private class InternalVariant {
-			public final int ID;
 			public final String name;
 
 			private InternalVariant(int id, String name) {
-				this.ID = id;
 				this.name = name;
 			}
 		}
@@ -276,11 +277,9 @@ public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
 
 		private class InternalTeam {
 
-			public final int TeamID;
 			public final InternalTeamMember[] MemberLoginsAndNames;
 
 			private InternalTeam(int teamID, InternalTeamMember[] memberLogins) {
-				this.TeamID = teamID;
 				this.MemberLoginsAndNames = memberLogins;
 			}
 		}
@@ -565,15 +564,23 @@ public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
 					String CourseYear = map.get("CourseYear".toLowerCase());
 					String StudentsGroupPrefix = map.get("StudentsGroupPrefix".toLowerCase());
 					String TeachersGroupPrefix = map.get("TeachersGroupPrefix".toLowerCase());
-					String Toolchain = map.get("Toolchain".toLowerCase());
+					String toolchain = map.get("Toolchain".toLowerCase());
 
-					StringBuilder processLog = new StringBuilder();
-					List<InternalResultUser> loadedUsers = process(data, CourseName, CourseYear, RegexGroupSearch, RegexGroupReplace, StudentsGroupPrefix, TeachersGroupPrefix, processLog);
-					List<InternalDefaultPermission> defPerms = this.loadDefaultPermissions();
-					if (loadedUsers == null || defPerms == null) {
-						super.write("# Import failed\n\n\n" + processLog + "\n\n========= Original Data ===========" + data);
-					} else {
-						super.write(replaceUsers(loadedUsers, Toolchain, Settings.GetDefaultGroup(), defPerms) + "\n\n\n ====== Protocol =======\n" + processLog.toString());
+					Toolchain Toolchain = null;
+					StaticDB sdb = (StaticDB) LayeredImportDB.this;
+					try {
+						Toolchain = sdb.getToolchain(toolchain);
+					} catch (NoSuchToolchainException e) {
+					}
+					if (Toolchain != null) {
+						StringBuilder processLog = new StringBuilder();
+						List<InternalResultUser> loadedUsers = process(data, CourseName, CourseYear, RegexGroupSearch, RegexGroupReplace, StudentsGroupPrefix, TeachersGroupPrefix, processLog);
+						List<InternalDefaultPermission> defPerms = this.loadDefaultPermissions();
+						if (loadedUsers == null || defPerms == null) {
+							super.write("# Import failed\n\n\n" + processLog + "\n\n========= Original Data ===========" + data);
+						} else {
+							super.write(replaceUsers(loadedUsers, Toolchain, Settings.GetDefaultGroup(), defPerms) + "\n\n\n ====== Protocol =======\n" + processLog.toString());
+						}
 					}
 				} else {
 					super.write("# Missing some mandatory fields. Save as empty file to reset\n" + data);
@@ -697,15 +704,15 @@ public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
 		return fo;
 	}
 
-	public abstract boolean clearUsers(String toolchain);
+	public abstract boolean clearUsers(Toolchain toolchain);
 
-	public abstract Integer getRootPermissionGroup(String toolchain, String name);
+	public abstract Integer getRootPermissionGroup(Toolchain toolchain, String name);
 
-	public abstract boolean createUser(String toolchain, String login, String origin, String fullName, List<String> permissionGroups, int rootPermissionGroupID);
+	public abstract boolean createUser(Toolchain toolchain, String login, String origin, String fullName, List<String> permissionGroups, int rootPermissionGroupID);
 
-	public abstract boolean addPermission(String toolchain, String group, String permission);
+	public abstract boolean addPermission(Toolchain toolchain, String group, String permission);
 
-	private String replaceUsers(List<InternalResultUser> users, String toolchain, String rootPermissionGroupName, List<ImportMetaFunctioningFile.InternalDefaultPermission> defPerms) {
+	private String replaceUsers(List<InternalResultUser> users, Toolchain toolchain, String rootPermissionGroupName, List<ImportMetaFunctioningFile.InternalDefaultPermission> defPerms) {
 		if (!clearUsers(toolchain)) {
 			return "Failed to purge user database";
 		}

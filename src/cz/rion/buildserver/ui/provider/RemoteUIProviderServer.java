@@ -19,8 +19,8 @@ import cz.rion.buildserver.db.layers.staticDB.LayeredUserDB.LocalUser;
 import cz.rion.buildserver.db.StaticDB;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.BuildThread.BuilderStats;
-import cz.rion.buildserver.http.HTTPServer;
 import cz.rion.buildserver.http.CompatibleSocketClient;
+import cz.rion.buildserver.http.server.HTTPServer;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonNumber;
@@ -56,7 +56,6 @@ public class RemoteUIProviderServer {
 	private final List<RemoteUIClient> clients = new ArrayList<>();
 	private final List<RemoteUIClient> unregisteredClients = new ArrayList<>();
 	private final Selector selector;
-	private final HTTPServer server;
 	private final StaticDB sdb;
 	private final RuntimeDB db;
 
@@ -67,13 +66,13 @@ public class RemoteUIProviderServer {
 			async();
 		}
 	};
+	private final List<BuildThread> builders;
 
-	public RemoteUIProviderServer(HTTPServer server) throws IOException {
+	public RemoteUIProviderServer(RuntimeDB db, StaticDB sdb, List<BuildThread> builders) throws IOException {
 		selector = Selector.open();
-		this.server = server;
-		this.db = server.db;
-		this.sdb = server.sdb;
-		thread.start();
+		this.db = db;
+		this.sdb = sdb;
+		this.builders = builders;
 	}
 
 	public void addClient(CompatibleSocketClient socket) {
@@ -105,10 +104,10 @@ public class RemoteUIProviderServer {
 
 	private boolean handle(RemoteUIClient sender, int code, InputPacketRequest inBuffer, MemoryBuffer outBuffer) throws IOException {
 		if (code == BuildersLoadedEvent.ID) {
-			int totalBuilders = server.builders.size();
+			int totalBuilders = builders.size();
 			outBuffer.writeInt(BuildersLoadedEvent.ID);
 			outBuffer.writeInt(totalBuilders);
-			for (BuildThread builder : server.builders) {
+			for (BuildThread builder : builders) {
 				writeBuilder(builder, outBuffer);
 			}
 			return true;
@@ -492,5 +491,14 @@ public class RemoteUIProviderServer {
 			lst.addAll(clients);
 		}
 		return lst;
+	}
+
+	private boolean started = false;
+
+	public void start() {
+		if (!started) {
+			started = true;
+			this.thread.start();
+		}
 	}
 }

@@ -14,5 +14,4 @@ public class HTTPClientException extends Exception {
 		super(description, exception);
 		this.description = description;
 	}
-
 }

@@ -14,7 +14,7 @@ import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.exceptions.CompressionException;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.exceptions.HTTPServerException;
-import cz.rion.buildserver.http.HTTPServer;
+import cz.rion.buildserver.http.server.HTTPServer;
 import cz.rion.buildserver.ui.MainWindow;
 
 public class MAIN {
