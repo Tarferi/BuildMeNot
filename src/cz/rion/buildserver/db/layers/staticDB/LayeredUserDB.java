@@ -18,7 +18,7 @@ import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.permissions.Permission;
 import cz.rion.buildserver.permissions.PermissionBranch;
 
-public abstract class LayeredUserDB extends LayeredDBFileWrapperDB {
+public abstract class LayeredUserDB extends LayeredSSLDB {
 
 	private static class PermissionContext {
 		public final List<LocalUser> LoadedUsers = new ArrayList<>();

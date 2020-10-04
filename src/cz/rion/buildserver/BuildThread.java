@@ -114,6 +114,7 @@ public class BuildThread {
 				} catch (SwitchClientException e) {
 					server.addRemoteUIClient(e.socket);
 				} catch (Exception e) {
+					e.printStackTrace();
 					currentClient.close();
 				}
 

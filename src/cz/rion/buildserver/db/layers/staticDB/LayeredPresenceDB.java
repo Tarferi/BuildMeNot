@@ -908,7 +908,9 @@ public abstract class LayeredPresenceDB extends LayeredStaticEndpointDB {
 	@Override
 	public void clearCache() {
 		super.clearCache();
-		presence.clear();
+		if (presence != null) {
+			presence.clear();
+		}
 	}
 
 }

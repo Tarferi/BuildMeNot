@@ -49,6 +49,9 @@ public class Settings {
 	private final SettingsValue fontSize = new SettingsValue("FontSize", ValueType.INTEGER, 17);
 	private final SettingsValue remoteAuthAPIEndpoint = new SettingsValue("RemoteAuthAPIEndpoint", ValueType.STRING, "");
 
+	private final SettingsValue SSLRequiresRemotePartX = new SettingsValue("SSLRequiresRemotePart", ValueType.BOOLEAN, 0);
+	private final SettingsValue SSLEmail = new SettingsValue("SSLEmail", ValueType.STRING, "");
+
 	private List<SettingsValue> settings;
 
 	private Settings() {
@@ -311,5 +314,13 @@ public class Settings {
 
 	public static String getGCCFilalExecutable() {
 		return instance.GCCFinalExecutable.asString();
+	}
+
+	public static boolean SSLRequiresRemotePart() {
+		return instance.SSLRequiresRemotePartX.asBoolean();
+	}
+
+	public static String getSSLEmail() {
+		return instance.SSLEmail.asString();
 	}
 }

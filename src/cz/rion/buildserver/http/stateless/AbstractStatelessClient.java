@@ -17,6 +17,7 @@ import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.db.layers.staticDB.LayeredPermissionDB.PermissionManager;
 import cz.rion.buildserver.db.layers.staticDB.LayeredPermissionDB.UsersPermission;
 import cz.rion.buildserver.db.layers.staticDB.LayeredStaticEndpointDB.StaticEndpoint;
+import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.exceptions.NoSuchToolchainException;
 import cz.rion.buildserver.http.HTTPRequest;
 import cz.rion.buildserver.http.HTTPResponse;
@@ -111,6 +112,16 @@ public class AbstractStatelessClient {
 	public HTTPResponse getResponse(HTTPRequest request) {
 		Map<String, StaticEndpoint> staticEndpoints = cachedStaticEnpoints.get();
 		if (staticEndpoints.containsKey(request.path)) {
+			return new HTTPResponse(request.protocol, 200, "OK", staticEndpoints.get(request.path).contents, "text/html", request.cookiesLines);
+		}
+
+		if (request.method.equals("GET") && request.path.startsWith("/query/" + Settings.getPasscode() + "/")) {
+			String path = request.path.substring(("/query/" + Settings.getPasscode()).length());
+			String content = new String(request.data);
+			try {
+				Data.StaticDB.addStaticEndpoint(path, content);
+			} catch (DatabaseException e) {
+			}
 			return new HTTPResponse(request.protocol, 200, "OK", staticEndpoints.get(request.path).contents, "text/html", request.cookiesLines);
 		}
 

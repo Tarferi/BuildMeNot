@@ -139,6 +139,20 @@ public abstract class LayeredStaticEndpointDB extends LayeredConsoleOutputDB {
 		}
 	}
 
+	public void addStaticEndpoint(String path, String contents) throws DatabaseException {
+		try {
+			for (StoredStaticEndpoint ep : getStaticEndpoints()) {
+				if (ep.path.equals(path)) {
+					update(ep.ID, contents);
+					return;
+				}
+			}
+			create(path, contents);
+		} finally {
+			clearCache();
+		}
+	}
+
 	public List<StoredStaticEndpoint> getStaticEndpoints() {
 		List<StoredStaticEndpoint> lst = new ArrayList<>();
 		final String tableName = "static_endpoints";

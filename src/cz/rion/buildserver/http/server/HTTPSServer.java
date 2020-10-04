@@ -1,28 +1,28 @@
 package cz.rion.buildserver.http.server;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.channels.ServerSocketChannel;
-import java.nio.channels.SocketChannel;
 import java.security.KeyManagementException;
 import java.security.KeyStore;
+import java.security.KeyStore.PasswordProtection;
+import java.security.KeyStore.PrivateKeyEntry;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
-import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
+import java.util.List;
+import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLServerSocket;
+import javax.net.ssl.SSLSocket;
 import javax.net.ssl.TrustManagerFactory;
 
-import cz.rion.buildserver.Settings;
+import cz.rion.buildserver.db.layers.staticDB.LayeredSSLDB.StoredCertificate;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.exceptions.HTTPServerException;
 import cz.rion.buildserver.http.CompatibleSocketClient;
 import cz.rion.buildserver.http.sync.HTTPSyncClientFactory;
-import cz.rion.buildserver.https.SSLServerSocketChannel;
 import cz.rion.buildserver.wrappers.MyThread;
 
 public class HTTPSServer extends HTTPServer {
@@ -34,7 +34,11 @@ public class HTTPSServer extends HTTPServer {
 		@Override
 		protected void runAsync() {
 			this.setName("HTTPS server");
-			HTTPSServer.this.runAsync();
+			try {
+				HTTPSServer.this.runAsync();
+			} catch (HTTPServerException e) {
+				e.printStackTrace();
+			}
 		}
 
 	};
@@ -52,58 +56,40 @@ public class HTTPSServer extends HTTPServer {
 		return data;
 	}
 
-	private InputStream fromBytes(final byte[] data) {
-		return new InputStream() {
-
-			int position = 0;
-			int length = data.length;
-
-			@Override
-			public int read() throws IOException {
-				if (position == length) {
-					return -1;
-				} else {
-					position++;
-					return data[position - 1];
-
-				}
-			}
-
-		};
-	}
-
 	private SSLContext getContext() {
 		try {
-			CertificateFactory cf = CertificateFactory.getInstance("X.509");
-			InputStream finStream = fromBytes("this is a cert".getBytes(Settings.getDefaultCharset()));
+			List<StoredCertificate> certs = data.sdb.getCertificates();
+			if (certs.isEmpty()) {
+				System.err.println("SSL Certificate not found");
+				return null;
+			}
+			StoredCertificate cert = certs.get(0);
 
-			X509Certificate x509Certificate = (X509Certificate) cf.generateCertificate(finStream);
+			X509Certificate xcert = cert.getCertificate();
+			if (xcert == null) {
+				System.err.println("SSL Certificate corrupted or not present");
+				return null;
+			}
 
 			KeyStore keyStore = KeyStore.getInstance(KeyStore.getDefaultType());
-			keyStore.load(null);
-			keyStore.setCertificateEntry("someAlias", x509Certificate);
+			keyStore.load(null, null);
 
-			TrustManagerFactory instance;
-			instance = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+			KeyStore.PrivateKeyEntry privateKeyEntry = new PrivateKeyEntry(cert.getKeyPair().getPrivate(), new Certificate[] { xcert });
+			keyStore.setEntry("rion", privateKeyEntry, new PasswordProtection("password".toCharArray()));
+
+			TrustManagerFactory instance = TrustManagerFactory.getInstance("SunX509");
 			instance.init(keyStore);
 
+			KeyManagerFactory km = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+			km.init(keyStore, "password".toCharArray());
+
 			SSLContext sslContext = SSLContext.getInstance("TLS");
-			sslContext.init(null, instance.getTrustManagers(), null);
+			sslContext.init(km.getKeyManagers(), instance.getTrustManagers(), new SecureRandom());
 			return sslContext;
-		} catch (NoSuchAlgorithmException | KeyManagementException | KeyStoreException | CertificateException | IOException e) {
+		} catch (NoSuchAlgorithmException | KeyStoreException | CertificateException | IOException | KeyManagementException e) {
 			e.printStackTrace();
-			return null;
-		}
-	}
-
-	private ExecutorService getExecutor() {
-		return Executors.newSingleThreadExecutor();
-	}
-
-	private ServerSocketChannel createHTTPSServerSocket() throws HTTPServerException {
-		SSLContext context = getContext();
-		if (context != null) {
-			return new SSLServerSocketChannel(super.createServerSocket(port), context, getExecutor());
+		} catch (Exception e) {
+			e.printStackTrace();
 		}
 		return null;
 	}
@@ -113,35 +99,34 @@ public class HTTPSServer extends HTTPServer {
 		thread.start();
 	}
 
-	private void runAsync() {
-		ServerSocketChannel server;
-		try {
-			server = createHTTPSServerSocket();
-			if (server == null) {
-				System.err.println("Failed to create SSL server socket, exiting");
-				return;
-			}
-
-			while (true) {
-				SocketChannel client;
-				try {
-					client = server.accept();
-				} catch (IOException e) {
-					throw new HTTPServerException("Failed to accept client on port " + port, e);
-				}
-				try {
-					data.clients.put(new HTTPSyncClientFactory(new CompatibleSocketClient(client)));
-				} catch (InterruptedException e) {
-					e.printStackTrace();
+	private void runAsync() throws HTTPServerException {
+		SSLContext context = getContext();
+		if (context != null) {
+			try {
+				SSLServerSocket server = (SSLServerSocket) context.getServerSocketFactory().createServerSocket(port);
+				server.setUseClientMode(false);
+				server.setWantClientAuth(false);
+				while (true) {
+					SSLSocket client;
 					try {
-						client.close();
-					} catch (IOException e1) {
+						client = (SSLSocket) server.accept();
+					} catch (IOException e) {
+						throw new HTTPServerException("Failed to accept client on port " + port, e);
+					}
+					try {
+						data.clients.put(new HTTPSyncClientFactory(new CompatibleSocketClient(client)));
+					} catch (InterruptedException e) {
+						e.printStackTrace();
+						try {
+							client.close();
+						} catch (IOException e1) {
+						}
 					}
 				}
+			} catch (IOException e) {
+				e.printStackTrace();
 			}
-		} catch (HTTPServerException e2) {
-			e2.printStackTrace();
-			return;
 		}
 	}
+
 }
