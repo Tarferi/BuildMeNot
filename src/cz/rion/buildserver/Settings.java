@@ -24,6 +24,7 @@ public class Settings {
 	private final SettingsValue golinkPath = new SettingsValue("GoLinkPath", ValueType.STRING, "");
 	private final SettingsValue showUI = new SettingsValue("UI", ValueType.BOOLEAN, 1);
 	private final SettingsValue httpPort = new SettingsValue("port", ValueType.INTEGER, 8000);
+	private final SettingsValue httpsPort = new SettingsValue("portHTTPS", ValueType.INTEGER, 0);
 	private final SettingsValue passcode = new SettingsValue("passcode", ValueType.STRING, "abc");
 	private final SettingsValue buildThreads = new SettingsValue("buildThreads", ValueType.INTEGER, 8);
 	private final SettingsValue authURL = new SettingsValue("authURL", ValueType.STRING, null);
@@ -194,6 +195,10 @@ public class Settings {
 
 	public static int GetHTTPServerPort() {
 		return instance.httpPort.asInt();
+	}
+
+	public static int GetHTTPSServerPort() {
+		return instance.httpsPort.asInt();
 	}
 
 	public static String getPasscode() {

@@ -56,6 +56,73 @@ public abstract class JsonValue {
 
 	public abstract String getJsonString();
 
+	private static List<String> print(String currentPadding, String singlePadding, JsonValue val) {
+		List<String> lines = new ArrayList<>();
+		if (val.isArray()) {
+			if (val.asArray().Value.isEmpty()) {
+				lines.add(currentPadding + "[]");
+			} else {
+				lines.add(currentPadding + "[");
+				int valuesLeft = val.asArray().Value.size();
+				for (JsonValue v : val.asArray().Value) {
+					List<String> nestedLines = print(currentPadding + singlePadding, singlePadding, v);
+					if (valuesLeft > 1) {
+						String lastLine = nestedLines.remove(nestedLines.size() - 1);
+						nestedLines.add(lastLine + ",");
+						valuesLeft--;
+					}
+					lines.addAll(nestedLines);
+				}
+				lines.add(currentPadding + "]");
+			}
+		} else if (val.isObject()) {
+			if (val.asObject().getEntries().isEmpty()) {
+				lines.add(currentPadding + "{}");
+			} else {
+				lines.add(currentPadding + "{");
+				int valuesLeft = val.asObject().getEntries().size();
+				for (Entry<String, JsonValue> x : val.asObject().getEntries()) {
+					List<String> nestedLines = print(currentPadding + singlePadding, singlePadding, x.getValue());
+					if (valuesLeft > 1) {
+						String lastLine = nestedLines.remove(nestedLines.size() - 1);
+						nestedLines.add(lastLine + ",");
+						valuesLeft--;
+					}
+					String firstLine = nestedLines.remove(0);
+					firstLine = currentPadding + singlePadding + "\"" + x.getKey() + "\": " + firstLine.trim();
+					nestedLines.add(0, firstLine);
+					lines.addAll(nestedLines);
+				}
+				lines.add(currentPadding + "}");
+			}
+		} else {
+			lines.add(currentPadding + val.getJsonString());
+		}
+		return lines;
+	}
+
+	public static String getPrettyJsonString(String data) {
+		JsonValue val = JsonValue.parse(data);
+		if (val != null) {
+			return getPrettyJsonString(val);
+		}
+		return data;
+	}
+
+	public static String getPrettyJsonString(JsonValue val) {
+		List<String> lines = print("", "    ", val);
+		boolean first = true;
+		StringBuilder sb = new StringBuilder();
+		for (String l : lines) {
+			if (!first) {
+				sb.append("\n");
+			}
+			sb.append(l);
+			first = false;
+		}
+		return sb.toString();
+	}
+
 	private static class JsonParser {
 
 		private String data;

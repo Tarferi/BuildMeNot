@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 
 import cz.rion.buildserver.Settings;
+import cz.rion.buildserver.db.DatabaseInitData;
 import cz.rion.buildserver.db.RuntimeDB;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.json.JsonValue;
@@ -336,7 +337,7 @@ public abstract class LayeredPermissionDB extends LayeredTestDB {
 		return null;
 	}
 
-	protected LayeredPermissionDB(String dbName) throws DatabaseException {
+	protected LayeredPermissionDB(DatabaseInitData dbName) throws DatabaseException {
 		super(dbName);
 		this.makeTable("groups", KEY("ID"), NUMBER("parent_group_id"), TEXT("name"), BIGTEXT("permissions"), TEXT("toolchain"));
 		this.makeTable("users_group", KEY("ID"), NUMBER("user_id"), NUMBER("group_id"), NUMBER("primary_group"), TEXT("toolchain"));

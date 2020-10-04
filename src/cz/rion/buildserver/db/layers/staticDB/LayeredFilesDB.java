@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import cz.rion.buildserver.Settings;
+import cz.rion.buildserver.db.DatabaseInitData;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
@@ -14,7 +15,7 @@ public abstract class LayeredFilesDB extends LayeredStaticDB {
 
 	private final Object fileTable = new Object();
 
-	public LayeredFilesDB(String fileName) throws DatabaseException {
+	public LayeredFilesDB(DatabaseInitData fileName) throws DatabaseException {
 		super(fileName);
 		this.makeTable("files", KEY("ID"), TEXT("name"), BIGTEXT("contents"), NUMBER("deleted"));
 	}

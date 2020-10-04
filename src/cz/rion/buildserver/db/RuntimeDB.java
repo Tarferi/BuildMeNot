@@ -36,7 +36,7 @@ public class RuntimeDB extends LayeredMetaDB {
 	private final Object syncer_compilation_stats = new Object();
 	private final Object syncer_user_timeouts = new Object();
 
-	public RuntimeDB(String fileName, StaticDB sdb) throws DatabaseException {
+	public RuntimeDB(DatabaseInitData fileName, StaticDB sdb) throws DatabaseException {
 		super(fileName, "RuntimeDB");
 		crypto = CryptoManager.getCrypto(sdb);
 		CachedBypassedClientData = new CachedBypassedClientDataCls(sdb);

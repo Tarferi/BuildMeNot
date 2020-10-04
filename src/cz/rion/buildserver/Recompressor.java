@@ -4,6 +4,7 @@ import java.util.List;
 
 import cz.rion.buildserver.compression.Compressor;
 import cz.rion.buildserver.compression.Decompressor;
+import cz.rion.buildserver.db.DatabaseInitData;
 import cz.rion.buildserver.db.RuntimeDB;
 import cz.rion.buildserver.db.SQLiteDB.FieldType;
 import cz.rion.buildserver.db.SQLiteDB.TableField;
@@ -20,8 +21,8 @@ public class Recompressor {
 	private StaticDB sdb;
 
 	public Recompressor() throws DatabaseException {
-		this.sdb = new StaticDB(Settings.getStaticDB());
-		this.db = new RuntimeDB(Settings.getMainDB(), sdb);
+		this.sdb = new StaticDB(new DatabaseInitData(Settings.getStaticDB()));
+		this.db = new RuntimeDB(new DatabaseInitData(Settings.getMainDB()), sdb);
 	}
 
 	private TableField[] getFields(LayeredMetaDB db, String tableName) {

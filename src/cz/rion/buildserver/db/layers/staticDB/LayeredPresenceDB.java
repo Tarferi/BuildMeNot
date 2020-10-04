@@ -22,10 +22,11 @@ import cz.rion.buildserver.utils.CachedToolchainData2;
 import cz.rion.buildserver.utils.CachedToolchainDataGetter2;
 import cz.rion.buildserver.utils.CachedToolchainDataWrapper2;
 import cz.rion.buildserver.utils.Pair;
+import cz.rion.buildserver.db.DatabaseInitData;
 import cz.rion.buildserver.db.StaticDB;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 
-public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
+public abstract class LayeredPresenceDB extends LayeredStaticEndpointDB {
 
 	public static class PresenceLimits {
 
@@ -164,56 +165,60 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 
 		@Override
 		public void write(String data) throws DatabaseException {
-			for (String line : data.split("\n")) {
-				line = line.trim();
-				if (line.startsWith("#") || line.isEmpty()) {
-					continue;
-				}
-				String[] parts = line.split("\\|", 5);
-				if (parts.length == 5) {
-					String toolchain = parts[0].trim();
-					StaticDB sdb = (StaticDB) LayeredPresenceDB.this;
-					Toolchain Toolchain = null;
-					try {
-						Toolchain = sdb.getToolchain(toolchain);
-					} catch (NoSuchToolchainException e) {
-						e.printStackTrace();
+			try {
+				for (String line : data.split("\n")) {
+					line = line.trim();
+					if (line.startsWith("#") || line.isEmpty()) {
+						continue;
 					}
+					String[] parts = line.split("\\|", 5);
+					if (parts.length == 5) {
+						String toolchain = parts[0].trim();
+						StaticDB sdb = (StaticDB) LayeredPresenceDB.this;
+						Toolchain Toolchain = null;
+						try {
+							Toolchain = sdb.getToolchain(toolchain);
+						} catch (NoSuchToolchainException e) {
+							e.printStackTrace();
+						}
 
-					if (Toolchain != null) {
-						String login = parts[1].trim();
-						String name = parts[2].trim();
-						String descr = parts[4].trim();
+						if (Toolchain != null) {
+							String login = parts[1].trim();
+							String name = parts[2].trim();
+							String descr = parts[4].trim();
 
-						PresenceData pdata = presence.get(Toolchain);
-						String[] limitParts = parts[3].trim().split(",");
-						JsonObject lim = new JsonObject();
-						if (limitParts.length > 0) {
-							for (String limitPart : limitParts) {
-								String[] limits = limitPart.trim().split(":");
-								if (limits.length == 2) {
-									try {
-										String pres = limits[0];
-										int realLimit = Integer.parseInt(limits[1]);
-										if (pdata.typesByCode.containsKey(pres)) {
-											PresenceType type = pdata.typesByCode.get(pres);
-											JsonObject typeLim = new JsonObject();
-											typeLim.add("max", new JsonNumber(realLimit));
-											lim.add(type.Code, typeLim);
+							PresenceData pdata = presence.get(Toolchain);
+							String[] limitParts = parts[3].trim().split(",");
+							JsonObject lim = new JsonObject();
+							if (limitParts.length > 0) {
+								for (String limitPart : limitParts) {
+									String[] limits = limitPart.trim().split(":");
+									if (limits.length == 2) {
+										try {
+											String pres = limits[0];
+											int realLimit = Integer.parseInt(limits[1]);
+											if (pdata.typesByCode.containsKey(pres)) {
+												PresenceType type = pdata.typesByCode.get(pres);
+												JsonObject typeLim = new JsonObject();
+												typeLim.add("max", new JsonNumber(realLimit));
+												lim.add(type.Code, typeLim);
 
+											}
+										} catch (Exception e) {
+											return;
 										}
-									} catch (Exception e) {
-										return;
 									}
 								}
+								JsonObject settings = new JsonObject();
+								settings.add("limits", lim);
+								long now = System.currentTimeMillis();
+								addSlot(Toolchain, name, descr, descr, settings.getJsonString(), login, now, now, now, now);
 							}
-							JsonObject settings = new JsonObject();
-							settings.add("limits", lim);
-							long now = System.currentTimeMillis();
-							addSlot(Toolchain, name, descr, descr, settings.getJsonString(), login, now, now, now, now);
 						}
 					}
 				}
+			} finally {
+				clearCache();
 			}
 		}
 
@@ -239,49 +244,53 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 
 		@Override
 		public void write(String data) throws DatabaseException {
-			for (String line : data.split("\n")) {
-				line = line.trim();
-				if (line.startsWith("#") || line.isEmpty()) {
-					continue;
-				}
-				String[] parts = line.split("\\|", 4);
-				if (parts.length == 4) {
-					try {
-						int id = Integer.parseInt(parts[0].trim());
-						String name = parts[1].trim();
-						String popis = parts[2].trim();
-						int posun = Integer.parseInt(parts[3].trim());
-						Toolchain t = getToolchainForSlotID(id);
-						if (t != null) {
-							PresenceData pres = presence.get(t);
-							PresenceSlot slot = pres.slotsByID.get(id);
-							if (slot != null) {
-								JsonObject limits = new JsonObject();
-								for (Entry<PresenceType, Integer> limit : slot.Limits.Limits.entrySet()) {
-									JsonObject typeLim = new JsonObject();
-									typeLim.add("max", new JsonNumber(limit.getValue()));
-									limits.add(limit.getKey().Code, typeLim);
-								}
-								JsonObject settings = new JsonObject();
-								settings.add("limits", limits);
-								FormLabels labels = slot.Labels;
-								if (!labels.isDefault) {
-									settings.add("labels", labels.original);
-								}
-								long offset = posun;
-								offset *= 24;
-								offset *= 60;
-								offset *= 60;
-								offset *= 1000;
-								addSlot(t, name, popis, slot.Description, settings.getJsonString(), slot.OwnerLogin, slot.OdkdyZobrazit + offset, slot.DokdyZobrazit + offset, slot.OdkdyPrihlasovat + offset, slot.DokdyPrihlasovat + offset);
-							}
-						}
-					} catch (Exception e) {
-						e.printStackTrace();
+			try {
+				for (String line : data.split("\n")) {
+					line = line.trim();
+					if (line.startsWith("#") || line.isEmpty()) {
 						continue;
 					}
+					String[] parts = line.split("\\|", 4);
+					if (parts.length == 4) {
+						try {
+							int id = Integer.parseInt(parts[0].trim());
+							String name = parts[1].trim();
+							String popis = parts[2].trim();
+							int posun = Integer.parseInt(parts[3].trim());
+							Toolchain t = getToolchainForSlotID(id);
+							if (t != null) {
+								PresenceData pres = presence.get(t);
+								PresenceSlot slot = pres.slotsByID.get(id);
+								if (slot != null) {
+									JsonObject limits = new JsonObject();
+									for (Entry<PresenceType, Integer> limit : slot.Limits.Limits.entrySet()) {
+										JsonObject typeLim = new JsonObject();
+										typeLim.add("max", new JsonNumber(limit.getValue()));
+										limits.add(limit.getKey().Code, typeLim);
+									}
+									JsonObject settings = new JsonObject();
+									settings.add("limits", limits);
+									FormLabels labels = slot.Labels;
+									if (!labels.isDefault) {
+										settings.add("labels", labels.original);
+									}
+									long offset = posun;
+									offset *= 24;
+									offset *= 60;
+									offset *= 60;
+									offset *= 1000;
+									addSlot(t, name, popis, slot.Description, settings.getJsonString(), slot.OwnerLogin, slot.OdkdyZobrazit + offset, slot.DokdyZobrazit + offset, slot.OdkdyPrihlasovat + offset, slot.DokdyPrihlasovat + offset);
+								}
+							}
+						} catch (Exception e) {
+							e.printStackTrace();
+							continue;
+						}
 
+					}
 				}
+			} finally {
+				clearCache();
 			}
 		}
 
@@ -318,68 +327,70 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 
 		@Override
 		public void write(String data) throws DatabaseException {
-			Map<String, Pair<Integer, Pair<String, Boolean>>> typesByName = new HashMap<>();
-			final String tableName = "presence_types";
-			for (JsonValue val : select(tableName, new TableField[] { getField(tableName, "ID"), getField(tableName, "name"), getField(tableName, "title"), getField(tableName, "show") }, true).Value) {
-				if (val.isObject()) {
-					JsonObject obj = val.asObject();
-					if (obj.containsString("name") && obj.containsString("title") && obj.containsNumber("ID") && obj.containsNumber("show")) {
-						String name = obj.getString("name").Value;
-						String title = obj.getString("title").Value;
-						int id = obj.getNumber("ID").Value;
-						boolean show = obj.getNumber("show").Value == 1;
-						typesByName.put(name, new Pair<>(id, new Pair<>(title, show)));
-					}
-				}
-			}
-
-			for (String line : data.split("\n")) {
-				line = line.trim();
-				if (line.isEmpty() || line.startsWith("#")) {
-					continue;
-				}
-				String[] parts = line.split("=", 2);
-				if (parts.length == 2) {
-					String name = parts[0].trim();
-					String title = parts[1].trim();
-					parts = name.split(":", 2);
-					if (parts.length == 2) {
-						name = parts[1].trim();
-						boolean show = parts[0].trim().equals("true");
-						if (typesByName.containsKey(name)) {
-							int id = typesByName.get(name).Key;
-							Pair<String, Boolean> savedLabelOpt = typesByName.get(name).Value;
-							if (!savedLabelOpt.Key.equals(title) || savedLabelOpt.Value != show) { // Update and remove -> no duplicates
-								update(tableName, id, new ValuedField[] { new ValuedField(getField(tableName, "title"), title), new ValuedField(getField(tableName, "show"), show ? 1 : 0) });
-							}
-							typesByName.remove(name);
-						} else {
-							insert(tableName, new ValuedField[] { new ValuedField(getField(tableName, "name"), name), new ValuedField(getField(tableName, "title"), title), new ValuedField(getField(tableName, "show"), show ? 1 : 0) });
+			try {
+				Map<String, Pair<Integer, Pair<String, Boolean>>> typesByName = new HashMap<>();
+				final String tableName = "presence_types";
+				for (JsonValue val : select(tableName, new TableField[] { getField(tableName, "ID"), getField(tableName, "name"), getField(tableName, "title"), getField(tableName, "show") }, true).Value) {
+					if (val.isObject()) {
+						JsonObject obj = val.asObject();
+						if (obj.containsString("name") && obj.containsString("title") && obj.containsNumber("ID") && obj.containsNumber("show")) {
+							String name = obj.getString("name").Value;
+							String title = obj.getString("title").Value;
+							int id = obj.getNumber("ID").Value;
+							boolean show = obj.getNumber("show").Value == 1;
+							typesByName.put(name, new Pair<>(id, new Pair<>(title, show)));
 						}
 					}
 				}
-			}
 
-			for (Entry<String, Pair<Integer, Pair<String, Boolean>>> entry : typesByName.entrySet()) {
-				String nameToDelete = entry.getKey();
-				final String tableName2 = "presence_slots";
-				boolean skip = false;
-				for (JsonValue val : select(tableName2, new TableField[] { getField(tableName2, "settings") }, true).Value) {
-					if (val.isObject()) {
-						JsonObject obj = val.asObject();
-						if (obj.containsString("settings")) {
-							String settings = obj.getString("settings").Value;
-							JsonValue v = JsonValue.parse(settings);
-							if (v != null) {
-								if (v.isObject()) {
-									JsonObject o = v.asObject();
-									if (o.containsArray("variants")) {
-										for (JsonValue variant : o.getArray("variants").Value) {
-											if (variant.isString()) {
-												String va = variant.asString().Value;
-												if (va.equals(nameToDelete)) {
-													skip = true;
-													break;
+				for (String line : data.split("\n")) {
+					line = line.trim();
+					if (line.isEmpty() || line.startsWith("#")) {
+						continue;
+					}
+					String[] parts = line.split("=", 2);
+					if (parts.length == 2) {
+						String name = parts[0].trim();
+						String title = parts[1].trim();
+						parts = name.split(":", 2);
+						if (parts.length == 2) {
+							name = parts[1].trim();
+							boolean show = parts[0].trim().equals("true");
+							if (typesByName.containsKey(name)) {
+								int id = typesByName.get(name).Key;
+								Pair<String, Boolean> savedLabelOpt = typesByName.get(name).Value;
+								if (!savedLabelOpt.Key.equals(title) || savedLabelOpt.Value != show) { // Update and remove -> no duplicates
+									update(tableName, id, new ValuedField[] { new ValuedField(getField(tableName, "title"), title), new ValuedField(getField(tableName, "show"), show ? 1 : 0) });
+								}
+								typesByName.remove(name);
+							} else {
+								insert(tableName, new ValuedField[] { new ValuedField(getField(tableName, "name"), name), new ValuedField(getField(tableName, "title"), title), new ValuedField(getField(tableName, "show"), show ? 1 : 0) });
+							}
+						}
+					}
+				}
+
+				for (Entry<String, Pair<Integer, Pair<String, Boolean>>> entry : typesByName.entrySet()) {
+					String nameToDelete = entry.getKey();
+					final String tableName2 = "presence_slots";
+					boolean skip = false;
+					for (JsonValue val : select(tableName2, new TableField[] { getField(tableName2, "settings") }, true).Value) {
+						if (val.isObject()) {
+							JsonObject obj = val.asObject();
+							if (obj.containsString("settings")) {
+								String settings = obj.getString("settings").Value;
+								JsonValue v = JsonValue.parse(settings);
+								if (v != null) {
+									if (v.isObject()) {
+										JsonObject o = v.asObject();
+										if (o.containsArray("variants")) {
+											for (JsonValue variant : o.getArray("variants").Value) {
+												if (variant.isString()) {
+													String va = variant.asString().Value;
+													if (va.equals(nameToDelete)) {
+														skip = true;
+														break;
+													}
 												}
 											}
 										}
@@ -388,15 +399,17 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 							}
 						}
 					}
+					if (!skip) {
+						execute_raw("DELETE FROM presence_types WHERE name = ?", nameToDelete);
+					}
 				}
-				if (!skip) {
-					execute_raw("DELETE FROM presence_types WHERE name = ?", nameToDelete);
-				}
+				presence.clear(); // Clear
+									// cache
+									// after
+									// saving
+			} finally {
+				clearCache();
 			}
-			presence.clear(); // Clear
-								// cache
-								// after
-								// saving
 		}
 
 		@Override
@@ -406,7 +419,7 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 
 	};
 
-	public LayeredPresenceDB(String dbName) throws DatabaseException {
+	public LayeredPresenceDB(DatabaseInitData dbName) throws DatabaseException {
 		super(dbName);
 		this.makeTable("presence_types", KEY("ID"), TEXT("name"), TEXT("title"), NUMBER("show"));
 		this.makeTable("presence_slots", KEY("ID"), TEXT("name"), BIGTEXT("description"), TEXT("title"), BIGTEXT("settings"), NUMBER("valid"), TEXT("owner_login"), TEXT("toolchain"), DATE("odkdy_zobrazit"), DATE("odkdy_nezobrazit"), DATE("odkdy_prihlasovani"), DATE("dokdy_prihlasovani"));
@@ -891,4 +904,11 @@ public abstract class LayeredPresenceDB extends LayeredConsoleOutputDB {
 		}
 		return null;
 	}
+
+	@Override
+	public void clearCache() {
+		super.clearCache();
+		presence.clear();
+	}
+
 }

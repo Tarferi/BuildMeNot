@@ -28,6 +28,7 @@ import cz.rion.buildserver.json.JsonValue.JsonString;
 public abstract class SQLiteDB {
 
 	private final Connection conn;
+	private final DatabaseInitData initData;
 
 	public static enum FieldType {
 		INT(0, false), STRING(1, true), BIGSTRING(2, true), DATE(3, false);
@@ -177,13 +178,14 @@ public abstract class SQLiteDB {
 		return new Field(name, "INTEGER", FieldType.DATE);
 	}
 
-	protected SQLiteDB(String fileName) throws DatabaseException {
+	protected SQLiteDB(DatabaseInitData initData) throws DatabaseException {
 		Connection c = null;
+		this.initData = initData;
 		try {
-			String url = "jdbc:sqlite:" + fileName;
+			String url = "jdbc:sqlite:" + initData.DatabaseName;
 			c = DriverManager.getConnection(url);
 		} catch (SQLException e) {
-			throw new DatabaseException("Failed to open database file: " + fileName, e);
+			throw new DatabaseException("Failed to open database file: " + initData.DatabaseName, e);
 		}
 		conn = c;
 
@@ -495,6 +497,10 @@ public abstract class SQLiteDB {
 			this.rs = rs;
 		}
 
+	}
+
+	public void clearCache() {
+		initData.clearCache();
 	}
 
 }

@@ -3,6 +3,7 @@ package cz.rion.buildserver.db.layers.staticDB;
 import java.util.HashMap;
 import java.util.Map;
 
+import cz.rion.buildserver.db.DatabaseInitData;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
@@ -39,7 +40,7 @@ public abstract class LayeredToolchainMappingDB extends LayeredPHPAuthDB {
 		return null;
 	}
 
-	public LayeredToolchainMappingDB(String dbName) throws DatabaseException {
+	public LayeredToolchainMappingDB(DatabaseInitData dbName) throws DatabaseException {
 		super(dbName);
 		this.makeTable("hostname_mapping", KEY("ID"), TEXT("host"), TEXT("toolchain"), NUMBER("valid"));
 		refresh();

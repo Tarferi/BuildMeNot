@@ -1,5 +1,6 @@
 package cz.rion.buildserver.db.layers.staticDB;
 
+import cz.rion.buildserver.db.DatabaseInitData;
 import cz.rion.buildserver.db.layers.common.LayeredMetaDB;
 import cz.rion.buildserver.exceptions.DatabaseException;
 
@@ -19,7 +20,7 @@ public abstract class LayeredStaticDB extends LayeredMetaDB {
 		}
 	}
 
-	public LayeredStaticDB(String fileName) throws DatabaseException {
+	public LayeredStaticDB(DatabaseInitData fileName) throws DatabaseException {
 		super(fileName, "StaticDB");
 	}
 }

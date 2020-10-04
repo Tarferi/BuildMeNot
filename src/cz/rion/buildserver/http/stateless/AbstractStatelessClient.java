@@ -1,5 +1,8 @@
 package cz.rion.buildserver.http.stateless;
 
+import java.util.HashMap;
+import java.util.Map;
+
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.RuntimeDB;
 import cz.rion.buildserver.db.StaticDB;
@@ -13,6 +16,7 @@ import cz.rion.buildserver.utils.CachedToolchainDataWrapper2;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.db.layers.staticDB.LayeredPermissionDB.PermissionManager;
 import cz.rion.buildserver.db.layers.staticDB.LayeredPermissionDB.UsersPermission;
+import cz.rion.buildserver.db.layers.staticDB.LayeredStaticEndpointDB.StaticEndpoint;
 import cz.rion.buildserver.exceptions.NoSuchToolchainException;
 import cz.rion.buildserver.http.HTTPRequest;
 import cz.rion.buildserver.http.HTTPResponse;
@@ -91,7 +95,25 @@ public class AbstractStatelessClient {
 		}
 	});
 
+	private final CachedData<Map<String, StaticEndpoint>> cachedStaticEnpoints = new CachedData<Map<String, StaticEndpoint>>(60) {
+
+		@Override
+		public Map<String, StaticEndpoint> update() {
+			Map<String, StaticEndpoint> map = new HashMap<>();
+			for (StaticEndpoint ep : Data.StaticDB.getStaticEndpoints()) {
+				map.put(ep.path, ep);
+			}
+			return map;
+		}
+
+	};
+
 	public HTTPResponse getResponse(HTTPRequest request) {
+		Map<String, StaticEndpoint> staticEndpoints = cachedStaticEnpoints.get();
+		if (staticEndpoints.containsKey(request.path)) {
+			return new HTTPResponse(request.protocol, 200, "OK", staticEndpoints.get(request.path).contents, "text/html", request.cookiesLines);
+		}
+
 		String toolchainStr = Data.StaticDB.getToolchainMapping(request.host);
 		if (toolchainStr != null) {
 			Toolchain t = null;
@@ -123,5 +145,6 @@ public class AbstractStatelessClient {
 
 	public void clearCache() {
 		cachedDefaultPermissions.clear();
+		cachedStaticEnpoints.clear();
 	}
 }

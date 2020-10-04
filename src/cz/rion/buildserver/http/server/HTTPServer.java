@@ -11,6 +11,7 @@ import cz.rion.buildserver.BuildThread;
 import cz.rion.buildserver.BuildThread.ClientAccepter;
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.cia.Dexter;
+import cz.rion.buildserver.db.DatabaseInitData;
 import cz.rion.buildserver.db.RuntimeDB;
 import cz.rion.buildserver.db.StaticDB;
 import cz.rion.buildserver.exceptions.DatabaseException;
@@ -21,10 +22,11 @@ import cz.rion.buildserver.http.sync.HTTPSyncClientFactory;
 import cz.rion.buildserver.test.TestManager;
 import cz.rion.buildserver.ui.provider.RemoteUIProviderServer;
 
-public class HTTPServer {
+public class HTTPServer implements DatabaseInitData.CacheClearer {
 
 	private final int port;
 	public final ServerData data;
+	private final HTTPSServer https;
 
 	private final ClientAccepter acc = new ClientAccepter() {
 
@@ -45,12 +47,14 @@ public class HTTPServer {
 
 	};
 
+	private StatelessClient processor = null;
+
 	protected ServerData createData() {
 		StaticDB sdb;
-		StatelessClient processor;
+
 		try {
-			sdb = new StaticDB(Settings.getStaticDB());
-			RuntimeDB db = new RuntimeDB(Settings.getMainDB(), sdb);
+			sdb = new StaticDB(new DatabaseInitData(Settings.getStaticDB(), this));
+			RuntimeDB db = new RuntimeDB(new DatabaseInitData(Settings.getMainDB(), this), sdb);
 			TestManager tests = new TestManager(sdb, "./web/tests");
 			List<BuildThread> builders = new ArrayList<>();
 			RemoteUIProviderServer remoteUI = new RemoteUIProviderServer(db, sdb, builders);
@@ -71,8 +75,17 @@ public class HTTPServer {
 	}
 
 	public HTTPServer(int port) throws DatabaseException, IOException {
+		this(port, 0);
+	}
+
+	public HTTPServer(int port, int portHTTPS) throws DatabaseException, IOException {
 		this.port = port;
 		data = createData();
+		if (portHTTPS > 0) {
+			https = new HTTPSServer(Settings.GetHTTPSServerPort(), data);
+		} else {
+			https = null;
+		}
 	}
 
 	public void addRemoteUIClient(CompatibleSocketClient socket) {
@@ -81,7 +94,7 @@ public class HTTPServer {
 		}
 	}
 
-	protected ServerSocketChannel createServerSocket() throws HTTPServerException {
+	protected ServerSocketChannel createServerSocket(int port) throws HTTPServerException {
 		ServerSocketChannel server = null;
 		try {
 			server = ServerSocketChannel.open();
@@ -94,7 +107,7 @@ public class HTTPServer {
 	}
 
 	public void run() throws HTTPServerException {
-		if (data == null) {
+		if (data == null || port == 0) {
 			return;
 		}
 		for (BuildThread builder : data.builders) {
@@ -102,7 +115,10 @@ public class HTTPServer {
 		}
 		data.remoteUI.start();
 		data.dexter.start();
-		ServerSocketChannel server = createServerSocket();
+		if (https != null) {
+			https.run();
+		}
+		ServerSocketChannel server = createServerSocket(port);
 		while (true) {
 			SocketChannel client;
 			try {
@@ -119,6 +135,13 @@ public class HTTPServer {
 				} catch (IOException e1) {
 				}
 			}
+		}
+	}
+
+	@Override
+	public void clearCache() {
+		if (processor != null) {
+			processor.clearCache();
 		}
 	}
 }

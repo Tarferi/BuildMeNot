@@ -3,6 +3,7 @@ package cz.rion.buildserver.db.layers.staticDB;
 import java.util.ArrayList;
 import java.util.List;
 
+import cz.rion.buildserver.db.DatabaseInitData;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 import cz.rion.buildserver.wrappers.MyThread;
@@ -16,7 +17,7 @@ public abstract class LayeredThreadDB extends LayeredUserDB {
 
 	private final List<MyThread> threads = new ArrayList<>();
 	
-	public LayeredThreadDB(String dbName) throws DatabaseException {
+	public LayeredThreadDB(DatabaseInitData dbName) throws DatabaseException {
 		super(dbName);
 	}
 

@@ -21,4 +21,8 @@ public abstract class CachedData<T> {
 		msToRefresh = secondsToRefresh * 1000;
 	}
 
+	public void clear() {
+		cache = null;
+	}
+
 }

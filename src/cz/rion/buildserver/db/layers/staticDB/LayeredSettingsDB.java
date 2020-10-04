@@ -1,6 +1,7 @@
 package cz.rion.buildserver.db.layers.staticDB;
 
 import cz.rion.buildserver.Settings;
+import cz.rion.buildserver.db.DatabaseInitData;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.exceptions.FileWriteException;
 import cz.rion.buildserver.wrappers.FileReadException;
@@ -10,7 +11,7 @@ public abstract class LayeredSettingsDB extends LayeredToolchainMappingDB {
 
 	private static final String SettingsFileName = "settings.ini";
 
-	public LayeredSettingsDB(String dbName) throws DatabaseException {
+	public LayeredSettingsDB(DatabaseInitData dbName) throws DatabaseException {
 		super(dbName);
 		this.registerVirtualFile(new VirtualFile() {
 

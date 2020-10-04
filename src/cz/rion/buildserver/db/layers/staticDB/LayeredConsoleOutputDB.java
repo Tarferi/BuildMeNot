@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintStream;
 import cz.rion.buildserver.Settings;
+import cz.rion.buildserver.db.DatabaseInitData;
 import cz.rion.buildserver.exceptions.DatabaseException;
 
 public abstract class LayeredConsoleOutputDB extends LayeredAdminLogDB {
@@ -87,7 +88,7 @@ public abstract class LayeredConsoleOutputDB extends LayeredAdminLogDB {
 
 	}
 
-	public LayeredConsoleOutputDB(String dbName) throws DatabaseException {
+	public LayeredConsoleOutputDB(DatabaseInitData dbName) throws DatabaseException {
 		super(dbName);
 		BufferedStream berr = new BufferedStream(System.err, stderr, syncer, STDERRFileName);
 		BufferedStream bout = new BufferedStream(System.out, stdout, syncer, STDOUTFileName);

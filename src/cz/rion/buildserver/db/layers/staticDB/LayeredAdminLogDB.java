@@ -2,11 +2,12 @@ package cz.rion.buildserver.db.layers.staticDB;
 
 import java.util.Date;
 
+import cz.rion.buildserver.db.DatabaseInitData;
 import cz.rion.buildserver.exceptions.DatabaseException;
 
 public abstract class LayeredAdminLogDB extends LayeredThreadDB {
 
-	public LayeredAdminLogDB(String dbName) throws DatabaseException {
+	public LayeredAdminLogDB(DatabaseInitData dbName) throws DatabaseException {
 		super(dbName);
 		this.makeTable("admin_log", KEY("ID"), TEXT("login"), TEXT("address"), TEXT("command"), DATE("creation_time"), BIGTEXT("full"));
 	}

@@ -8,6 +8,7 @@ import javax.swing.UIManager;
 import javax.swing.UIManager.LookAndFeelInfo;
 import javax.swing.WindowConstants;
 
+import cz.rion.buildserver.db.DatabaseInitData;
 import cz.rion.buildserver.db.RuntimeDB;
 import cz.rion.buildserver.db.StaticDB;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
@@ -32,8 +33,8 @@ public class MAIN {
 
 	public static void main_recalcstats(String[] args) {
 		try {
-			StaticDB sdb = new StaticDB("static.sqlite");
-			RuntimeDB db = new RuntimeDB("data.sqlite", sdb);
+			StaticDB sdb = new StaticDB(new DatabaseInitData("static.sqlite"));
+			RuntimeDB db = new RuntimeDB(new DatabaseInitData("data.sqlite"), sdb);
 			for (Toolchain toolchain : sdb.getAllToolchains()) {
 				db.updateStatsForAllUsers(toolchain.getName());
 			}
@@ -85,7 +86,7 @@ public class MAIN {
 			}
 			HTTPServer server;
 			try {
-				server = new HTTPServer(Settings.GetHTTPServerPort());
+				server = new HTTPServer(Settings.GetHTTPServerPort(), Settings.GetHTTPSServerPort());
 				server.run();
 			} catch (HTTPServerException | DatabaseException | IOException e) {
 				e.printStackTrace();

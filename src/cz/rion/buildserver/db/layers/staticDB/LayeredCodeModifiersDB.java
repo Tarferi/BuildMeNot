@@ -4,6 +4,7 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+import cz.rion.buildserver.db.DatabaseInitData;
 import cz.rion.buildserver.db.RuntimeDB.BadResultType;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.test.GenericTest;
@@ -97,7 +98,7 @@ public abstract class LayeredCodeModifiersDB extends LayeredBuildersDB {
 		}
 	}
 
-	public LayeredCodeModifiersDB(String dbName) throws DatabaseException {
+	public LayeredCodeModifiersDB(DatabaseInitData dbName) throws DatabaseException {
 		super(dbName);
 		this.registerModifier(new NasmBaseModifier());
 		this.registerModifier(new GCCBaseModifier());

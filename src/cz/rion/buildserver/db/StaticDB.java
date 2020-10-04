@@ -5,7 +5,7 @@ import cz.rion.buildserver.exceptions.DatabaseException;
 
 public class StaticDB extends LayeredPermissionDB {
 
-	public StaticDB(String dbName) throws DatabaseException {
+	public StaticDB(DatabaseInitData dbName) throws DatabaseException {
 		super(dbName);
 	}
 }

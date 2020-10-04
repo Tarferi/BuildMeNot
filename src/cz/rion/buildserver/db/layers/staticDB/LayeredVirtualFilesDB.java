@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
+import cz.rion.buildserver.db.DatabaseInitData;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 
@@ -19,7 +20,7 @@ public class LayeredVirtualFilesDB extends LayeredFilesDB {
 
 	private final Object syncer = new Object();
 
-	public LayeredVirtualFilesDB(String fileName) throws DatabaseException {
+	public LayeredVirtualFilesDB(DatabaseInitData fileName) throws DatabaseException {
 		super(fileName);
 	}
 

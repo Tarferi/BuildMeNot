@@ -9,6 +9,7 @@ import java.net.URI;
 import javax.net.ssl.SSLSocketFactory;
 
 import cz.rion.buildserver.Settings;
+import cz.rion.buildserver.db.DatabaseInitData;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.exceptions.HTTPClientException;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
@@ -19,7 +20,7 @@ public abstract class LayeredPHPAuthDB extends LayeredPresenceDB {
 
 	private static final String AuthFileName = "auth/index.php";
 
-	public LayeredPHPAuthDB(String dbName) throws DatabaseException {
+	public LayeredPHPAuthDB(DatabaseInitData dbName) throws DatabaseException {
 		super(dbName);
 		this.registerVirtualFile(new VirtualFile() {
 

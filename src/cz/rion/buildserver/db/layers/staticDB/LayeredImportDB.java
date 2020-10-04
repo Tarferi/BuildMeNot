@@ -9,6 +9,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import cz.rion.buildserver.Settings;
+import cz.rion.buildserver.db.DatabaseInitData;
 import cz.rion.buildserver.db.StaticDB;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.exceptions.DatabaseException;
@@ -48,69 +49,6 @@ public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
 			if (realFile) {
 				loadedVirtualFiles.put(name, this);
 			}
-		}
-
-		private List<String> print(String currentPadding, String singlePadding, JsonValue val) {
-			List<String> lines = new ArrayList<>();
-			if (val.isArray()) {
-				if (val.asArray().Value.isEmpty()) {
-					lines.add(currentPadding + "[]");
-				} else {
-					lines.add(currentPadding + "[");
-					int valuesLeft = val.asArray().Value.size();
-					for (JsonValue v : val.asArray().Value) {
-						List<String> nestedLines = print(currentPadding + singlePadding, singlePadding, v);
-						if (valuesLeft > 1) {
-							String lastLine = nestedLines.remove(nestedLines.size() - 1);
-							nestedLines.add(lastLine + ",");
-							valuesLeft--;
-						}
-						lines.addAll(nestedLines);
-					}
-					lines.add(currentPadding + "]");
-				}
-			} else if (val.isObject()) {
-				if (val.asObject().getEntries().isEmpty()) {
-					lines.add(currentPadding + "{}");
-				} else {
-					lines.add(currentPadding + "{");
-					int valuesLeft = val.asObject().getEntries().size();
-					for (Entry<String, JsonValue> x : val.asObject().getEntries()) {
-						List<String> nestedLines = print(currentPadding + singlePadding, singlePadding, x.getValue());
-						if (valuesLeft > 1) {
-							String lastLine = nestedLines.remove(nestedLines.size() - 1);
-							nestedLines.add(lastLine + ",");
-							valuesLeft--;
-						}
-						String firstLine = nestedLines.remove(0);
-						firstLine = currentPadding + singlePadding + "\"" + x.getKey() + "\": " + firstLine.trim();
-						nestedLines.add(0, firstLine);
-						lines.addAll(nestedLines);
-					}
-					lines.add(currentPadding + "}");
-				}
-			} else {
-				lines.add(currentPadding + val.getJsonString());
-			}
-			return lines;
-		}
-
-		private String format(String data) {
-			JsonValue val = JsonValue.parse(data);
-			if (val != null) {
-				List<String> lines = print("", "    ", val);
-				boolean first = true;
-				StringBuilder sb = new StringBuilder();
-				for (String l : lines) {
-					if (!first) {
-						sb.append("\n");
-					}
-					sb.append(l);
-					first = false;
-				}
-				return sb.toString();
-			}
-			return data;
 		}
 
 		private boolean ensureFile(List<DatabaseFile> files) {
@@ -160,7 +98,7 @@ public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
 						return "Failed to read file";
 					}
 					try {
-						return format(fdb.getFile(realFileObj.ID, true).Contents);
+						return JsonValue.getPrettyJsonString(fdb.getFile(realFileObj.ID, true).Contents);
 					} catch (DatabaseException e) {
 						e.printStackTrace();
 						return "Failed to read file";
@@ -665,7 +603,7 @@ public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
 
 	}
 
-	public LayeredImportDB(String fileName) throws DatabaseException {
+	public LayeredImportDB(DatabaseInitData fileName) throws DatabaseException {
 		super(fileName);
 		addVirtualImporterForToolchain("IZP");
 		addVirtualImporterForToolchain("ISU");
@@ -687,7 +625,7 @@ public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
 		FileInfo fo = super.loadFile(name, decodeBigString);
 		if (fo != null) {
 			if (loadedVirtualFiles.containsKey(fo.FileName)) {
-				return new FileInfo(fo.ID, fo.FileName, loadedVirtualFiles.get(fo.FileName).format(fo.Contents));
+				return new FileInfo(fo.ID, fo.FileName, JsonValue.getPrettyJsonString(fo.Contents));
 			}
 		}
 		return fo;
@@ -698,7 +636,7 @@ public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
 		FileInfo fo = super.getFile(fileID, decodeBigString);
 		if (fo != null) {
 			if (loadedVirtualFiles.containsKey(fo.FileName)) {
-				return new FileInfo(fo.ID, fo.FileName, loadedVirtualFiles.get(fo.FileName).format(fo.Contents));
+				return new FileInfo(fo.ID, fo.FileName, JsonValue.getPrettyJsonString(fo.Contents));
 			}
 		}
 		return fo;

@@ -6,6 +6,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import cz.rion.buildserver.db.DatabaseInitData;
 import cz.rion.buildserver.db.RuntimeDB;
 import cz.rion.buildserver.db.SQLiteDB.ComparisionField;
 import cz.rion.buildserver.db.SQLiteDB.TableField;
@@ -91,8 +92,8 @@ public class Retester {
 	private final StaticDB sdb;
 
 	public Retester() throws DatabaseException {
-		this.sdb = new StaticDB("static.sqlite");
-		this.db = new RuntimeDB("data.sqlite", sdb);
+		this.sdb = new StaticDB(new DatabaseInitData("static.sqlite"));
+		this.db = new RuntimeDB(new DatabaseInitData("data.sqlite"), sdb);
 		tests = new TestManager(sdb, "./web/tests");
 	}
 

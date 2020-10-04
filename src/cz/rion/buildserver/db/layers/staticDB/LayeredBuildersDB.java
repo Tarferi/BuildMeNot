@@ -10,6 +10,7 @@ import java.util.Map.Entry;
 import java.util.Set;
 
 import cz.rion.buildserver.Settings;
+import cz.rion.buildserver.db.DatabaseInitData;
 import cz.rion.buildserver.db.RuntimeDB.BadResultType;
 import cz.rion.buildserver.db.RuntimeDB.BadResults;
 import cz.rion.buildserver.exceptions.CommandLineExecutionException;
@@ -466,7 +467,7 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 		return tc;
 	}
 
-	public LayeredBuildersDB(String dbName) throws DatabaseException {
+	public LayeredBuildersDB(DatabaseInitData dbName) throws DatabaseException {
 		super(dbName);
 		this.dropTable("builders");
 		this.dropTable("tools");

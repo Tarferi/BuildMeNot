@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Set;
 
 import cz.rion.buildserver.Settings;
+import cz.rion.buildserver.db.DatabaseInitData;
 import cz.rion.buildserver.db.layers.common.LayeredDBFileWrapperDB;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.exceptions.DatabaseException;
@@ -72,7 +73,7 @@ public abstract class LayeredUserDB extends LayeredDBFileWrapperDB {
 
 	private final Map<String, PermissionContext> mappings = new HashMap<>();
 
-	public LayeredUserDB(String dbName) throws DatabaseException {
+	public LayeredUserDB(DatabaseInitData dbName) throws DatabaseException {
 		super(dbName);
 		this.makeTable("users", KEY("ID"), TEXT("name"), TEXT("usergroup"), TEXT("login"), BIGTEXT("permissions"), TEXT("toolchain"));
 	}

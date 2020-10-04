@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import cz.rion.buildserver.db.DatabaseInitData;
 import cz.rion.buildserver.db.SQLiteDB;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.json.JsonValue;
@@ -28,7 +29,7 @@ public class LayeredMetaDB extends SQLiteDB {
 	private final Field nameField;
 	private final Field idField;
 
-	public LayeredMetaDB(String fileName, String metaDatabaseName) throws DatabaseException {
+	public LayeredMetaDB(DatabaseInitData fileName, String metaDatabaseName) throws DatabaseException {
 		super(fileName);
 		this.metaDatabaseName = metaDatabaseName;
 		this.dataField = BIGTEXT("data");
