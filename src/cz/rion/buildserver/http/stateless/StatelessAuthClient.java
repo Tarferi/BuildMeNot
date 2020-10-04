@@ -71,7 +71,7 @@ public class StatelessAuthClient extends StatelessTestClient {
 			if (host.contains("antares.rion.cz")) {
 				host = host.replace("antares.rion.cz", "isu.rion.cz");
 				HTTPResponse resp = new HTTPResponse(state.Request.protocol, 301, "No more antares", new byte[0], null, new ArrayList<String>());
-				resp.addAdditionalHeaderField("Location", "http://" + host);
+				resp.addAdditionalHeaderField("Location", "https://" + host);
 				return resp;
 			}
 		}
@@ -136,7 +136,7 @@ public class StatelessAuthClient extends StatelessTestClient {
 				if (session != null) { // Logged in, set cookie and redirect once more to here
 					String host = state.Request.headers.containsKey("host") ? state.Request.headers.get("host") : null;
 					if (host != null) {
-						redirectLocation = "http://" + host + state.Request.path;
+						redirectLocation = "https://" + host + state.Request.path;
 						redirectMessage = "Logged in, redirect once more";
 						// Create new cookies
 						cookieLines = new ArrayList<>();
