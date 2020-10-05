@@ -435,7 +435,7 @@ var tester = function() {
 			                     {
 			                        "type":"div",
 			                        "class":"w131",
-			                        "innerHTML": "&#344;ešení"
+			                        "innerHTML": "Řešení"
 			                     },
 			                     {
 			                        "type":"div",

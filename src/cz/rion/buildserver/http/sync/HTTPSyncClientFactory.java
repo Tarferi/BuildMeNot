@@ -100,7 +100,7 @@ public class HTTPSyncClientFactory implements HTTPClientFactory, HTTPResponseWri
 			}
 		}
 		if ((!method.equals("GET") && !method.equals("POST")) || !protocol.equals("HTTP/1.1")) {
-			throw new HTTPClientException("Invalid method or protocol");
+			throw new HTTPClientException("Invalid method or protocol (method is \"" + method + "\", protocol is \"" + protocol + "\"");
 		}
 		byte[] data = new byte[0];
 		if (header.containsKey("content-length")) {
@@ -136,7 +136,7 @@ public class HTTPSyncClientFactory implements HTTPClientFactory, HTTPResponseWri
 		String header = readLine();
 		String[] headerSplit = header.split(" ");
 		if (headerSplit.length < 3) {
-			throw new HTTPClientException("Not a HTTP request");
+			throw new HTTPClientException("Not a HTTP request (Header line: \"" + header + "\"");
 		}
 		String method = headerSplit[0];
 		String protocol = headerSplit[headerSplit.length - 1];

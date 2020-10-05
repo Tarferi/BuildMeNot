@@ -118,6 +118,7 @@ public class StatelessTermClient extends StatelessGraphProviderClient {
 			obj.add("Time", new JsonNumber(0, data.ReservationTime + ""));
 			obj.add("Type", new JsonString(data.Type.Code));
 			obj.add("TypeName", new JsonString(data.Type.Name));
+			obj.add("Show", new JsonBoolean(data.Type.Show));
 			my.add(obj);
 		}
 		if (nextEvent != 0 && nextEvent > now) {
