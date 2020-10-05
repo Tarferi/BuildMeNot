@@ -99,8 +99,8 @@ public class HTTPSyncClientFactory implements HTTPClientFactory, HTTPResponseWri
 				throw new HTTPClientException("Invalid authentication");
 			}
 		}
-		if ((!method.equals("GET") && !method.equals("POST")) || !protocol.equals("HTTP/1.1")) {
-			throw new HTTPClientException("Invalid method or protocol (method is \"" + method + "\", protocol is \"" + protocol + "\"");
+		if ((!method.equals("GET") && !method.equals("POST")) || (!protocol.equals("HTTP/1.1") && !protocol.equals("HTTP/1.0"))) {
+			throw new HTTPClientException("Invalid method or protocol (method is \"" + method + "\", protocol is \"" + protocol + "\")");
 		}
 		byte[] data = new byte[0];
 		if (header.containsKey("content-length")) {
