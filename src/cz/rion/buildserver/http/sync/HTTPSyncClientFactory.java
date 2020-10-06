@@ -19,9 +19,11 @@ import cz.rion.buildserver.http.server.HTTPClientFactory;
 public class HTTPSyncClientFactory implements HTTPClientFactory, HTTPResponseWriter {
 
 	private final CompatibleSocketClient client;
+	private final boolean isSSL;
 
-	public HTTPSyncClientFactory(CompatibleSocketClient client) {
+	public HTTPSyncClientFactory(CompatibleSocketClient client, boolean isSSL) {
 		this.client = client;
+		this.isSSL= isSSL;
 	}
 
 	private String readLine() throws HTTPClientException {
@@ -128,7 +130,7 @@ public class HTTPSyncClientFactory implements HTTPClientFactory, HTTPResponseWri
 			throw new HTTPClientException("Invalid hostname");
 		}
 		String host = header.get("host");
-		HTTPRequest req = new HTTPRequest(method, host, protocol, path, data, header, cookiesLines, client.getRemoteSocketAddress());
+		HTTPRequest req = new HTTPRequest(method, host, protocol, path, data, header, cookiesLines, client.getRemoteSocketAddress(), isSSL);
 		return req;
 	}
 

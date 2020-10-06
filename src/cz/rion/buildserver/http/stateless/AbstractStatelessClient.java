@@ -110,6 +110,12 @@ public class AbstractStatelessClient {
 	};
 
 	public HTTPResponse getResponse(HTTPRequest request) {
+		if (!request.isSSL && Settings.ForceSSL()) {
+			HTTPResponse resp = new HTTPResponse(request.protocol, 307, "HTTPS Forced", new byte[0], null, request.cookiesLines);
+			resp.addAdditionalHeaderField("Location", "https://" + request.host + request.path);
+			return resp;
+		}
+
 		Map<String, StaticEndpoint> staticEndpoints = cachedStaticEnpoints.get();
 		if (staticEndpoints.containsKey(request.path)) {
 			return new HTTPResponse(request.protocol, 200, "OK", staticEndpoints.get(request.path).contents, "text/html", request.cookiesLines);

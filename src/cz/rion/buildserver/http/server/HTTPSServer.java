@@ -114,7 +114,7 @@ public class HTTPSServer extends HTTPServer {
 						throw new HTTPServerException("Failed to accept client on port " + port, e);
 					}
 					try {
-						data.clients.put(new HTTPSyncClientFactory(new CompatibleSocketClient(client)));
+						data.clients.put(new HTTPSyncClientFactory(new CompatibleSocketClient(client), true));
 					} catch (InterruptedException e) {
 						e.printStackTrace();
 						try {

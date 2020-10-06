@@ -51,6 +51,7 @@ public class Settings {
 
 	private final SettingsValue SSLRequiresRemotePartX = new SettingsValue("SSLRequiresRemotePart", ValueType.BOOLEAN, 0);
 	private final SettingsValue SSLEmail = new SettingsValue("SSLEmail", ValueType.STRING, "");
+	private final SettingsValue forceSSL = new SettingsValue("SSLForced", ValueType.BOOLEAN, 0);
 
 	private List<SettingsValue> settings;
 
@@ -323,4 +324,9 @@ public class Settings {
 	public static String getSSLEmail() {
 		return instance.SSLEmail.asString();
 	}
+
+	public static boolean ForceSSL() {
+		return instance.forceSSL.asBoolean();
+	}
+
 }

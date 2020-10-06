@@ -13,8 +13,9 @@ public final class HTTPRequest {
 	public final Map<String, String> headers;
 	public final List<String> cookiesLines;
 	public final String remoteAddress;
+	public final boolean isSSL;
 
-	public HTTPRequest(String method, String host, String protocol, String path, byte[] data, Map<String, String> headers, List<String> cookiesLines, String remoteAddress) {
+	public HTTPRequest(String method, String host, String protocol, String path, byte[] data, Map<String, String> headers, List<String> cookiesLines, String remoteAddress, boolean isSSL) {
 		String authData = null;
 		if (path.contains("/auth/")) {
 			String[] np = path.split("/auth/", 2);
@@ -35,5 +36,6 @@ public final class HTTPRequest {
 		this.authData = authData;
 		this.cookiesLines = cookiesLines;
 		this.remoteAddress = remoteAddress;
+		this.isSSL = isSSL;
 	}
 }
