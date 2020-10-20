@@ -23,6 +23,7 @@ import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.json.JsonValue.JsonString;
 import cz.rion.buildserver.test.GenericTest;
+import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 import cz.rion.buildserver.wrappers.FileReadException;
 import cz.rion.buildserver.wrappers.MyExec;
 import cz.rion.buildserver.wrappers.MyExec.MyExecResult;
@@ -959,6 +960,26 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 	private void initDefaultToolchains() throws DatabaseException {
 		addNasmToolchain();
 		addGCCToolchain();
+		FileInfo tcf = this.loadFile("toolchains.ini", true);
+		if (tcf != null) {
+			Set<String> loaded = new HashSet<>();
+			loaded.add("IZP");
+			loaded.add("ISU");
+			for (String line : tcf.Contents.split("\n")) {
+				line = line.trim();
+				if (line.startsWith("#") || line.isEmpty()) {
+					continue;
+				}
+				String[] tcp = line.split("=", 2);
+				if (tcp.length == 2) {
+					String tc = tcp[1].trim();
+					if (!loaded.contains(tc)) {
+						loaded.add(tc);
+						this.createToolchainIfItDoesntExist(tc, "TOOLCHAIN_" + tc, new String[0], new String[0]);
+					}
+				}
+			}
+		}
 	}
 
 	private void loadToolchains() throws NoSuchToolException, DatabaseException {
