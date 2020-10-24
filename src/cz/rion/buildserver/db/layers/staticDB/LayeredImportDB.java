@@ -603,14 +603,25 @@ public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
 
 	}
 
+	private boolean toolchainsAdded = false;
+
 	public LayeredImportDB(DatabaseInitData fileName) throws DatabaseException {
 		super(fileName);
-		addVirtualImporterForToolchain("IZP");
-		addVirtualImporterForToolchain("ISU");
+	}
+
+	private void handleInitToolchains() {
+		if (!toolchainsAdded) {
+			toolchainsAdded = true;
+			StaticDB sdb = (StaticDB) this;
+			for (Toolchain tc : sdb.getAllToolchains()) {
+				addVirtualImporterForToolchain(tc.getName());
+			}
+		}
 	}
 
 	@Override
 	public List<DatabaseFile> getFiles() {
+		handleInitToolchains();
 		synchronized (syncer) {
 			List<DatabaseFile> files = super.getFiles();
 			for (ImportMetaFile myFile : loadedVirtualFiles.values()) {

@@ -9,7 +9,6 @@ import java.util.Set;
 
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.DatabaseInitData;
-import cz.rion.buildserver.db.layers.common.LayeredDBFileWrapperDB;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.json.JsonValue;
@@ -150,20 +149,32 @@ public abstract class LayeredUserDB extends LayeredSSLDB {
 		return false;
 	}
 
-	public Object[] getFullNameAndGroup(String login, Toolchain toolchain) {
+	public Object[] getFullNameAndGroupAndEmailAndOwnPerms(String login, Toolchain toolchain, Permission permissions) {
 		try {
 			final String tableName = "users";
-			JsonArray res = this.select(tableName, new TableField[] { getField(tableName, "name"), getField(tableName, "usergroup"), getField(tableName, "ID") }, true, new ComparisionField(getField(tableName, "login"), login), new ComparisionField(getField(tableName, "toolchain"), toolchain.getName()));
+			JsonArray res = this.select(tableName, new TableField[] { getField(tableName, "name"), getField(tableName, "permissions"), getField(tableName, "usergroup"), getField(tableName, "ID") }, true, new ComparisionField(getField(tableName, "login"), login), new ComparisionField(getField(tableName, "toolchain"), toolchain.getName()));
 			if (!res.Value.isEmpty()) {
 				String name = res.Value.get(0).asObject().getString("name").Value;
 				String grp = res.Value.get(0).asObject().getString("usergroup").Value;
+				String email = login.startsWith("x") ? login + "@stud.fit.vutbr.cz" : login + "@vutbr.cz"; // TODO: add email to database perhaps
 				int id = res.Value.get(0).asObject().getNumber("ID").Value;
-				return new Object[] { name, grp, id };
+				String perms = res.Value.get(0).asObject().getString("permissions").Value;
+				JsonValue pev = JsonValue.parse(perms);
+				if (pev != null) {
+					if (pev.isArray()) {
+						for (JsonValue v : pev.asArray().Value) {
+							if (v.isString()) {
+								permissions.add(new PermissionBranch(v.asString().Value));
+							}
+						}
+					}
+				}
+				return new Object[] { name, grp, id, email };
 			}
 		} catch (DatabaseException e) {
 			e.printStackTrace();
 		}
-		return new Object[] { login, Settings.GetDefaultGroup(), 0 };
+		return new Object[] { login, Settings.GetDefaultGroup(), 0, "" };
 	}
 
 	@Override

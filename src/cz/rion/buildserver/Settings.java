@@ -53,6 +53,9 @@ public class Settings {
 	private final SettingsValue SSLEmail = new SettingsValue("SSLEmail", ValueType.STRING, "");
 	private final SettingsValue forceSSL = new SettingsValue("SSLForced", ValueType.BOOLEAN, 0);
 
+	private final SettingsValue JWTApp = new SettingsValue("JWTApp", ValueType.STRING, "");
+	private final SettingsValue JWTSecret = new SettingsValue("JWTSecret", ValueType.STRING, "");
+
 	private List<SettingsValue> settings;
 
 	private Settings() {
@@ -327,6 +330,14 @@ public class Settings {
 
 	public static boolean ForceSSL() {
 		return instance.forceSSL.asBoolean();
+	}
+
+	public static String getJWTApp() {
+		return instance.JWTApp.asString();
+	}
+
+	public static String getJWTSecret() {
+		return instance.JWTSecret.asString();
 	}
 
 }

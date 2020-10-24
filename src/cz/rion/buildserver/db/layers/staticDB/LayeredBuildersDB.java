@@ -366,6 +366,8 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 	}
 
 	private final ToolInputModifier getModifier(String name) throws DatabaseException {
+		if(modifiers.isEmpty()) {
+		}
 		if (modifiers.containsKey(name)) {
 			return modifiers.get(name);
 		}
@@ -459,6 +461,14 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 	private Map<String, Toolchain> toolchains = new HashMap<>();
 
 	public Toolchain[] getAllToolchains() {
+		if(toolchains.isEmpty()) {
+			try {
+				loadToolchains();
+			} catch (NoSuchToolException | DatabaseException e) {
+				e.printStackTrace();
+			}
+		}
+		
 		Toolchain[] tc = new Toolchain[toolchains.entrySet().size()];
 		int i = 0;
 		for (Entry<String, Toolchain> entry : toolchains.entrySet()) {

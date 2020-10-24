@@ -502,6 +502,14 @@ public abstract class JsonValue {
 				return sb.toString();
 			}
 		}
+
+		public void add(int val) {
+			add(new JsonNumber(val));
+		}
+
+		public void add(String val) {
+			add(new JsonString(val));
+		}
 	}
 
 	public static final class JsonObject extends JsonValue {
@@ -644,6 +652,22 @@ public abstract class JsonValue {
 
 		public JsonValue get(String col) {
 			return Value.get(col);
+		}
+
+		public void add(String key, String value) {
+			add(key, new JsonString(value));
+		}
+
+		public void add(String key, int value) {
+			add(key, new JsonNumber(value));
+		}
+
+		public void add(String key, boolean value) {
+			add(key, new JsonBoolean(value));
+		}
+
+		public void add(String name, long value) {
+			add(name, new JsonNumber(0, "" + value));
 		}
 	}
 }

@@ -26,7 +26,7 @@ import cz.rion.buildserver.db.DatabaseInitData;
 import cz.rion.buildserver.db.StaticDB;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 
-public abstract class LayeredPresenceDB extends LayeredStaticEndpointDB {
+public abstract class LayeredPresenceDB extends LayeredExamDB {
 
 	public static class PresenceLimits {
 

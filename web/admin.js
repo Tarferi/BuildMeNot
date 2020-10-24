@@ -9,10 +9,14 @@ window.mobileAndTabletCheck = function() {
 	return check;
 };
 
-var Admin = function() {
+var Admin = function(givenCommon) {
 
 	var self = this;
-	self.common = new common();
+	if(givenCommon) {
+		self.common = givenCommon;
+	} else {
+		self.common = new Common();
+	}
 
 	self.originalUIVisibilities = {};
 
@@ -53,128 +57,173 @@ var Admin = function() {
 	}
 
 	self.UI = {
-		"type" : "table",
-		"class" : "adm_table_main",
-		"contents" : [ {
-			"type" : "tr",
-			"class" : "adm_tr_main",
-			"contents" : [ {
-				"type" : "td",
-				"colSpan" : 2,
-				"contents" : [ {
-					"type" : "Button",
-					"innerHTML" : "Zavřít",
-					"class" : "adm_td_main_header_closeButton",
-					"id" : "btnCloseAdmin"
-				} ]
-			} ]
-		}, {
-			"type" : "tr",
-			"class" : "adm_tr_main_full",
-			"contents" : [ {
-				"type" : "td",
-				"class" : "adm_td_main_left",
-				"id" : "cellLeft",
-				"contents" : [ {
-					"type" : "center",
-					"contents" : [ {
-						"type" : "button",
-						"innerHTML" : "Reload",
-						"id" : "btnReload"
-					}, {
-						"type" : "br"
-					}, {
-						"type" : "div",
-						"class" : "pnlCurrentPath",
-						"id" : "pnlCurrentPath"
-					} ]
-				} ]
-			}, {
-				"type" : "td",
-				"class" : "adm_td_main_right",
-				"rowSpan" : 2,
-				"contents" : [ {
-					"type" : "div",
-					"class" : "adm_right_top",
-					"id" : "adm_right_top",
-					"contents" : [ {
-						"type" : "center",
-						"contents" : [ {
-							"type" : "span",
-							"id" : "adm_right_top_lbl",
-							"innerHTML" : "test"
-						} ]
-					} ]
-				}, {
-					"type" : "div",
-					"class" : "adm_right_mid",
-					"contents" : [ {
-						"type" : "table",
-						"class" : "adm_content_table",
-						"id" : "adm_content_table"
-					}, {
-						"type" : "textarea",
-						"class" : "adm_content_editble",
-						"id" : "adm_content_editble"
-					}, {
-						"type" : "div",
-						"id" : "adm_content_details",
-						"class" : "adm_content_details"
-					} ]
-				}, {
-					"type" : "div",
-					"class" : "adm_right_bottom",
-					"contents" : [ {
-						"type" : "Button",
-						"innerHTML" : "Return",
-						"id" : "btnReturn"
-					}, {
-						"type" : "Button",
-						"innerHTML" : "View",
-						"id" : "btnEditView"
-					}, {
-						"type" : "Button",
-						"innerHTML" : "Close",
-						"id" : "btnClose"
-					}, {
-						"type" : "Button",
-						"innerHTML" : "Save",
-						"id" : "btnSave"
-					}, {
-						"type" : "Button",
-						"innerHTML" : "Save and close",
-						"id" : "btnSaveClose"
-					} ]
-				} ]
-			} ]
-		}, {
-			"type" : "tr",
-			"contents" : [ {
-				"type" : "td",
-				"class" : "adm_td_main_left_bottom",
-				"contents" : [ {
-					"type" : "div",
-					"class" : "adm_td_main_left_bottom_div",
-					"id" : "filesPnl"
-				}, {
-					"type" : "div",
-					"class" : "adm_td_main_left_bottom_div_nf",
-					"contents" : [ {
-						"type" : "input",
-						"id" : "adm_td_main_left_bottom_nf_name"
-					}, {
-						"type" : "button",
-						"id" : "adm_td_main_left_bottom_nf_btn",
-						"innerHTML" : "Create"
-					}, {
-						"type" : "div",
-						"class" : "adm_waiter",
-						"id" : "waiter"
-					} ]
-				} ]
-			} ]
-		} ]
-	}
+	  "type": "table",
+	  "class": "adm_table_main",
+	  "contents": [
+	    {
+	      "type": "tr",
+	      "class": "adm_tr_main",
+	      "contents": [
+	        {
+	          "type": "td",
+	          "colSpan": 2,
+	          "contents": [
+	            {
+	              "type": "Button",
+	              "innerHTML": "Zavřít",
+	              "class": "adm_td_main_header_closeButton",
+	              "id": "btnCloseAdmin"
+	            }
+	          ]
+	        }
+	      ]
+	    },
+	    {
+	      "type": "tr",
+	      "class": "adm_tr_main_full",
+	      "contents": [
+	        {
+	          "type": "td",
+	          "class": "adm_td_main_left",
+	          "id": "cellLeft",
+	          "contents": [
+	            {
+	              "type": "center",
+	              "contents": [
+	                {
+	                  "type": "button",
+	                  "innerHTML": "Reload",
+	                  "id": "btnReload"
+	                },
+	                {
+	                  "type": "br"
+	                },
+	                {
+	                  "type": "div",
+	                  "class": "pnlCurrentPath",
+	                  "id": "pnlCurrentPath"
+	                }
+	              ]
+	            }
+	          ]
+	        },
+	        {
+	          "type": "td",
+	          "class": "adm_td_main_right",
+	          "rowSpan": 2,
+	          "contents": [
+	            {
+	              "type": "div",
+	              "class": "adm_right_top",
+	              "id": "adm_right_top",
+	              "contents": [
+	                {
+	                  "type": "center",
+	                  "contents": [
+	                    {
+	                      "type": "span",
+	                      "id": "adm_right_top_lbl",
+	                      "innerHTML": "test"
+	                    }
+	                  ]
+	                }
+	              ]
+	            },
+	            {
+	              "type": "div",
+	              "class": "adm_right_mid",
+	              "contents": [
+	                {
+	                  "type": "table",
+	                  "class": "adm_content_table",
+	                  "id": "adm_content_table"
+	                },
+	                {
+	                  "type": "textarea",
+	                  "class": "adm_content_editble",
+	                  "id": "adm_content_editble"
+	                },
+	                {
+	                  "type": "div",
+	                  "id": "adm_content_details",
+	                  "class": "adm_content_details"
+	                }
+	              ]
+	            },
+	            {
+	              "type": "div",
+	              "class": "adm_right_bottom",
+	              "contents": [
+	                {
+	                  "type": "Button",
+	                  "innerHTML": "Return",
+	                  "id": "btnReturn"
+	                },
+	                {
+	                  "type": "Button",
+	                  "innerHTML": "View",
+	                  "id": "btnEditView"
+	                },
+	                {
+	                  "type": "Button",
+	                  "innerHTML": "Close",
+	                  "id": "btnClose"
+	                },
+	                {
+	                  "type": "Button",
+	                  "innerHTML": "Save",
+	                  "id": "btnSave"
+	                },
+	                {
+	                  "type": "Button",
+	                  "innerHTML": "Save and close",
+	                  "id": "btnSaveClose"
+	                }
+	              ]
+	            }
+	          ]
+	        }
+	      ]
+	    },
+	    {
+	      "type": "tr",
+	      "contents": [
+	        {
+	          "type": "td",
+	          "class": "adm_td_main_left_bottom",
+	          "contents": [
+	            {
+	              "type": "div",
+	              "class": "adm_td_main_left_bottom_div",
+	              "id": "filesPnl"
+	            },
+	            {
+	              "type": "div",
+	              "class": "adm_td_main_left_bottom_div_nf",
+	              "contents": [
+	                {
+	                  "type": "input",
+	                  "id": "adm_td_main_left_bottom_nf_name"
+	                },
+	                {
+	                  "type": "button",
+	                  "id": "adm_td_main_left_bottom_nf_btn",
+	                  "innerHTML": "Create"
+	                },
+	                {
+	                  "type": "div",
+	                  "class": "adm_waiter",
+	                  "id": "waiter"
+	                }
+	              ]
+	            }
+	          ]
+	        }
+	      ]
+	    }
+	  ]
+	};
+
 
 	self.createUI = function() {
 		var struct = self.common.reconstructUI(self.UI);
@@ -229,7 +278,7 @@ var Admin = function() {
 		if (path == "") {
 			return;
 		}
-		self.async("create:" + path, function(data) {
+		self.async("create", {"name":  path}, function(data) {
 			self.navigator.reloadFiles();
 			self.txtNewPath.value = "";
 		}, function(err) {
@@ -285,6 +334,15 @@ var Admin = function() {
 	}
 
 	self.openUI = function() {
+		if(self.originalUIVisibilities === undefined) {
+			self.originalUIVisibilities = []
+			for(var i = 0; i < document.body.childElementCount; i++) {
+				var child = document.body.children[i];
+				self.originalUIVisibilities.push([child, child.style.display]);
+				child.style.display = "none";
+			}
+		}
+		/*
 		self.originalUIVisibilities["txtHeader"] = txtHeader.style.display;
 		self.originalUIVisibilities["pnlWarnID"] = pnlWarnID.style.display;
 		self.originalUIVisibilities["id_indiv"] = id_indiv.style.display;
@@ -299,14 +357,26 @@ var Admin = function() {
 		txtHeader.style.display = "none";
 		pnlWarnID.style.display = "none";
 		id_indiv.style.display = "none";
-
-		self.mainUI.style.display = self.originalUIVisibilities["admin_mainUI"];
+		*/
+		
+		self.mainUI.style.display = "";
 		self.editor.hideEditors();
 		self.editor.hideButtons();
 		self.editor.setFileNameLabel("");
+		
 	}
 
 	self.closeUI = function() {
+		if(self.originalUIVisibilities.length) {
+			for(var i = 0; i < self.originalUIVisibilities.length; i++) {
+				var item = self.originalUIVisibilities[i];
+				var child = item[0];
+				var original = item[1];
+				child.style.display = original;
+			}
+		}
+		self.originalUIVisibilities = undefined;
+		/*
 		txtHeader.style.display = self.originalUIVisibilities["txtHeader"];
 		pnlWarnID.style.display = self.originalUIVisibilities["pnlWarnID"];
 		id_indiv.style.display = self.originalUIVisibilities["id_indiv"];
@@ -316,46 +386,32 @@ var Admin = function() {
 		if("id_faq" in self.originalUIVisibilities) {
 			id_faq.style.display = self.originalUIVisibilities["id_faq"];
 		}
-
+		*/
 		self.mainUI.style.display = "none";
 	}
 
 	self.loadFile = function(fl) {
-		self.async("load:" + fl["ID"], function(data) {
+		self.async("load", {"fileID": fl["ID"]}, function(data) {
 			self.editor.editFile(data);
 		}, function(err) {
 			alert(err);
-		})
+		}, true)
 	}
 
-	self.async = function(data, cbOk, cbFail) {
+	self.async = function(action, data, cbOk, cbFail, parseResult) {
 		self.setWaiterVisible(true);
 		var data = {
 			"action" : "ADMIN",
 			"admin_data" : data
 		};
-		var txtEnc = "q=" + self.common.encode(JSON.stringify(data));
-		self.common.async(txtEnc, function(response) {
+		data.admin_data.action = action
+		self.common.async(data, function(obj) {
 			self.setWaiterVisible(false);
-			var deco = self.common.decode(response);
-			if (deco !== false) {
-				var obj = JSON.parse(deco);
-				if (obj !== false) {
-					if (obj.result) {
-						if (obj.code == 0) {
-							cbOk(obj.result);
-							return;
-						}
-						cbFail(obj.result);
-						return;
-					}
-				}
-			}
-			cbFail(response)
+			cbOk(obj);
 		}, function(err) {
 			self.setWaiterVisible(false);
 			cbFail(err);
-		});
+		}, parseResult);
 	}
 
 	self.openAdmin = function() {
@@ -363,15 +419,19 @@ var Admin = function() {
 	}
 
 	self.insertAdminButton = function() {
-		var bl = btnLogout;
-		self.admButton = document.createElement("button");
-		self.admButton.addEventListener("click", self.openAdmin);
-		self.admButton.innerHTML = "Administrace";
+		if (self.common.addButtonToLoginPanel) {
+			self.admButton = self.common.addButtonToLoginPanel("Administrace", function(){self.openAdmin();});
+		} else {
+			var bl = btnLogout;
+			self.admButton = document.createElement("button");
+			self.admButton.innerHTML = "Administrace";
+			self.admButton.addEventListener("click", self.openAdmin);
+			
+			txtHeader.removeChild(bl);
+			txtHeader.appendChild(self.admButton);
+			txtHeader.appendChild(bl);
+		}
 		self.admButton.style.marginRight = "4px";
-
-		txtHeader.removeChild(bl);
-		txtHeader.appendChild(self.admButton);
-		txtHeader.appendChild(bl);
 	}
 
 	self.materialize = function() {
@@ -380,11 +440,14 @@ var Admin = function() {
 	}
 
 	self.init = function() {
+	 	self.editor = new AdminEditor(self);
+		self.navigator = new AdminNavigator(self);
 		self.materialize();
 		self.editor.initEditor();
 		self.closeUI();
 	}
 
+	self.init();
 	return this;
 };
 
@@ -520,12 +583,12 @@ var AdminNavigator = function(adminer) {
 	self.reloadFiles = function() {
 		var cbOK = function(data) {
 			self.currentWorkingDir = "";
-			self.putFiles(JSON.parse(data));
+			self.putFiles(data);
 		};
 		var cbFail = function(data) {
 			alert(data);
 		};
-		adminer.async("getFiles", cbOK, cbFail);
+		adminer.async("getFiles", {}, cbOK, cbFail);
 	}
 
 	return self;
@@ -674,81 +737,6 @@ var AdminEditor = function(adminer) {
 		}
 	}
 
-	self.specEncTable = {
-		228 : 50084,
-		196 : 50052,
-		225 : 50081,
-		193 : 50049,
-		269 : 50317,
-		268 : 50316,
-		271 : 50319,
-		270 : 50318,
-		235 : 50091,
-		203 : 50059,
-		233 : 50089,
-		201 : 50057,
-		283 : 50331,
-		282 : 50330,
-		237 : 50093,
-		205 : 50061,
-		239 : 50095,
-		207 : 50063,
-		314 : 50362,
-		313 : 50361,
-		328 : 50568,
-		327 : 50567,
-		246 : 50102,
-		214 : 50070,
-		243 : 50099,
-		211 : 50067,
-		345 : 50585,
-		344 : 50584,
-		341 : 50581,
-		340 : 50580,
-		353 : 50593,
-		352 : 50592,
-		357 : 50597,
-		356 : 50596,
-		252 : 50108,
-		220 : 50076,
-		250 : 50106,
-		218 : 50074,
-		367 : 50607,
-		366 : 50606,
-		253 : 50109,
-		221 : 50077,
-		255 : 50111,
-		376 : 50616,
-		382 : 50622,
-		381 : 50621
-	};
-
-	self.specEnc = function(data) {
-		var res = [];
-		for (var charI = 0; charI < data.length; charI++) {
-			var code = data.charCodeAt(charI);
-			if (code in self.specEncTable) {
-				code = self.specEncTable[code];
-			}
-
-			var nt = [];
-			while (code > 255) {
-				var ncode = code % 256;
-				nt.push(ncode);
-				code >>= 8;
-			}
-			nt.push(code);
-			for (var ntI = nt.length - 1; ntI >= 0; ntI--) {
-				var code = nt[ntI];
-				var c1 = String.fromCharCode(self.common.toHex(code >> 4));
-				var c2 = String.fromCharCode(self.common.toHex(code & 15));
-				res.push(c1);
-				res.push(c2);
-			}
-		}
-		return res.join("");
-	}
-
 	self.onSaveClose = function() {
 		self.onSavePress(true);
 	}
@@ -758,14 +746,14 @@ var AdminEditor = function(adminer) {
 		var isInViewEdit = self.btnEditView.innerHTML == "View";
 		if (ext == "view") {
 			if (isInViewEdit) { // Editing SQL
-				var changed = self.specEnc(self.editArea.value);
-				adminer.async("save:" + self.currentlyEditing.ID + ":" + changed, function(data) {
+				var changed = self.editArea.value;
+				adminer.async("save", {"fileID": self.currentlyEditing.ID, "contents" : changed}, function(data) {
 					if (close === true) {
 						self.close();
 					}
 				}, function(err) {
 					alert(err);
-				});
+				}, false);
 			} else { // Details? Not allowed
 				alert("Not allowed");
 			}
@@ -779,23 +767,22 @@ var AdminEditor = function(adminer) {
 				items[name] = value;
 			}
 			var rs = JSON.stringify(items);
-			var rss = self.specEnc(rs);
-			adminer.async("tableEdit:" + self.currentlyEditing.ID + ":" + rss, function(data) {
+			adminer.async("tableEdit", {"fileID": self.currentlyEditing.ID, "contents": rs}, function(data) {
 				if (close === true) {
 					self.close();
 				}
 			}, function(err) {
 				alert(err);
-			})
+			}, false)
 		} else {
-			var changed = self.specEnc(self.editArea.value);
-			adminer.async("save:" + self.currentlyEditing.ID + ":" + changed, function(data) {
+			var changed = self.editArea.value;
+			adminer.async("save", {"fileID": self.currentlyEditing.ID, "contents": changed}, function(data) {
 				if (close === true) {
 					self.close();
 				}
 			}, function(err) {
 				alert(err);
-			})
+			}, false)
 		}
 	}
 
@@ -849,21 +836,10 @@ var AdminEditor = function(adminer) {
 		self.showCloseAndSaveButton();
 	}
 
-	self.specDecode = function(data) {
-		const regex = /(&#\d+;)/gm;
-
-		data = data.replace(regex, function(a, b) {
-			var x = b.substr(2, b.length - 3) * 1;
-			return String.fromCharCode(x);
-		})
-
-		return data;
-	}
-
 	self.showEditRawFile = function(contents) {
 		self.hideEditors();
 		self.editArea.style.display = "block";
-		self.editArea.value = self.specDecode(contents);
+		self.editArea.value = contents;
 	}
 
 	self.extractColumns = function(contents) {
@@ -1202,7 +1178,6 @@ var AdminEditor = function(adminer) {
 		self.hideEditors();
 		self.hideButtons();
 		self.setFileNameLabel("");
-		fn = JSON.parse(fn);
 		self.currentlyEditing = fn;
 		var fo = fn["fo"];
 		if (fo == 1) {
@@ -1231,7 +1206,4 @@ var AdminEditor = function(adminer) {
 
 window.pastAload = function() {
 	admin = new Admin();
-	admin.editor = new AdminEditor(admin);
-	admin.navigator = new AdminNavigator(admin);
-	admin.init();
 }

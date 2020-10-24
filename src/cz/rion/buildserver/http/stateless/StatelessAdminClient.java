@@ -75,74 +75,29 @@ public class StatelessAdminClient extends StatelessPermissionClient {
 		}
 	}
 
-	private byte fromHex(char c) {
-		byte b = (byte) c;
-		if (b >= '0' && b <= '9') {
-			return (byte) (b - '0');
-		} else if (b >= 'A' && b <= 'F') {
-			return (byte) (b + 10 - 'A');
-		} else if (b >= 'a' && b <= 'f') {
-			return (byte) (b + 10 - 'a');
-		} else {
-			return 0;
-		}
-	}
-
-	private static final short[] js_codingOffsets = new short[] { 228, 196, 225, 193, 269, 268, 271, 270, 235, 203, 233, 201, 283, 282, 237, 205, 239, 207, 314, 313, 328, 327, 246, 214, 243, 211, 345, 344, 341, 340, 353, 352, 357, 356, 252, 220, 250, 218, 367, 366, 253, 221, 255, 376, 382, 381
-
-	};
-
-	private static final int[] java_codingOffsets = new int[] { 50084, 50052, 50081, 50049, 50317, 50316, 50319, 50318, 50091, 50059, 50089, 50057, 50331, 50330, 50093, 50061, 50095, 50063, 50362, 50361, 50568, 50567, 50102, 50070, 50099, 50067, 50585, 50584, 50581, 50580, 50593, 50592, 50597, 50596, 50108, 50076, 50106, 50074, 50607, 50606, 50109, 50077, 50111, 50616, 50622, 50621 };
-
-	private static final char[] codingTable = new char[] { 'ä', 'Ä', 'á', 'Á', 'č', 'Č', 'ď', 'Ď', 'ë', 'Ë', 'é', 'É', 'ě', 'Ě', 'í', 'Í', 'ï', 'Ï', 'ĺ', 'Ĺ', 'ň', 'Ň', 'ö', 'Ö', 'ó', 'Ó', 'ř', 'Ř', 'ŕ', 'Ŕ', 'š', 'Š', 'ť', 'Ť', 'ü', 'Ü', 'ú', 'Ú', 'ů', 'Ů', 'ý', 'Ý', 'ÿ', 'Ÿ', 'ž', 'Ž' };
-
-	private String specialDec(String data) {
-		byte[] result = new byte[data.length() / 2];
-		for (int i = 0; i < result.length; i++) {
-			char c1 = data.charAt(i * 2);
-			char c2 = data.charAt((i * 2) + 1);
-			byte b1 = fromHex(c1);
-			byte b2 = fromHex(c2);
-			byte b = (byte) ((b1 << 4) | b2);
-			result[i] = b;
-		}
-		String utf = new String(result, StandardCharsets.UTF_8);
-		return new String(utf.getBytes(StandardCharsets.UTF_8), Settings.getDefaultCharset());
-	}
-
 	protected JsonObject handleAdminEvent(ProcessState state, JsonObject obj) {
 		JsonObject result = new JsonObject();
 		result.add("code", new JsonNumber(1));
 		result.add("result", new JsonString("Invalid admin command"));
 		StaticDB sdb = state.Data.StaticDB;
 
-		if (obj.containsString("admin_data")) {
-			String admin_data = obj.getString("admin_data").Value;
-			if (admin_data.equals("getFiles")) {
-				result.add("code", new JsonNumber(0));
-				result.add("result", new JsonString(collectFiles(state).getJsonString()));
-				sdb.adminLog(state.Request.remoteAddress, state.getPermissions().Login, "getFiles", admin_data);
-			} else if (admin_data.startsWith("load:")) {
-				int fileID;
-				try {
-					fileID = Integer.parseInt(admin_data.substring("load:".length()));
-				} catch (Exception e) {
-					return result;
-				}
-				result.add("code", new JsonNumber(0));
-				result.add("result", new JsonString(loadFile(state, fileID, true).getJsonString()));
-			} else if (admin_data.startsWith("save:") || admin_data.startsWith("tableEdit")) {
-				String[] parts = admin_data.split(":", 3);
-				if (parts.length == 3) {
-					int fileID;
-					try {
-						fileID = Integer.parseInt(parts[1]);
-					} catch (Exception e) {
-						return result;
-					}
-					String newContents = specialDec(parts[2]);
-					boolean isSavingRawFile = admin_data.startsWith("save:");
-					boolean isEditingRow = admin_data.startsWith("tableEdit");
+		if (obj.containsObject("admin_data")) {
+			JsonObject data = obj.getObject("admin_data");
+			if (data.containsString("action")) {
+				String action = data.getString("action").Value;
+				if (action.equals("getFiles")) {
+					result.add("code", new JsonNumber(0));
+					result.add("result", new JsonString(collectFiles(state).getJsonString()));
+					sdb.adminLog(state.Request.remoteAddress, state.getPermissions().Login, "getFiles", data.getJsonString());
+				} else if (action.equals("load") && data.containsNumber("fileID")) {
+					int fileID = data.getNumber("fileID").Value;
+					result.add("code", new JsonNumber(0));
+					result.add("result", new JsonString(loadFile(state, fileID, true).getJsonString()));
+				} else if ((action.equals("save") || action.equals("tableEdit")) && data.containsNumber("fileID") && data.containsString("contents")) {
+					int fileID = data.getNumber("fileID").Value;
+					String newContents = data.getString("contents").Value;
+					boolean isSavingRawFile = action.equals("save");
+					boolean isEditingRow = action.equals("tableEdit");
 
 					if (isSavingRawFile) { // Log handled internally
 						if (this.saveFile(state, fileID, newContents)) {
@@ -161,11 +116,8 @@ public class StatelessAdminClient extends StatelessPermissionClient {
 							result.add("result", new JsonString("Failed to save file"));
 						}
 					}
-				}
-			} else if (admin_data.startsWith("create:")) {
-				String[] parts = admin_data.split(":", 3);
-				if (parts.length == 2) {
-					String fileName = parts[1];
+				} else if (action.equals("create") && data.containsString("name")) {
+					String fileName = data.getString("name").Value;
 					if (!fileName.isEmpty()) {
 						try {
 							sdb.createFile(fileName, "", false);

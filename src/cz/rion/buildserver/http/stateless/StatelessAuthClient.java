@@ -29,7 +29,8 @@ public class StatelessAuthClient extends StatelessTestClient {
 		cookieLines.add("token=deleted; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT");
 
 		HTTPResponse resp = new HTTPResponse(state.Request.protocol, 307, "Logout", new byte[0], null, cookieLines);
-		resp.addAdditionalHeaderField("Location", Settings.getAuthURL(state.Toolchain.getName(), state.Request.host) + "?action=logout");
+		String tc = state.Request.host.trim().equals("meet.rion.cz") ? "bongo" : state.Toolchain.getName();
+		resp.addAdditionalHeaderField("Location", Settings.getAuthURL(tc, state.Request.host) + "?action=logout");
 		return resp;
 	}
 
@@ -63,6 +64,7 @@ public class StatelessAuthClient extends StatelessTestClient {
 
 	protected HTTPResponse handleAuth(ProcessState state) {
 		if (!Settings.isAuth()) {
+			loadPermissions(state, 0, Settings.GetDefaultUsername());
 			return null;
 		}
 
@@ -112,7 +114,8 @@ public class StatelessAuthClient extends StatelessTestClient {
 			}
 		}
 
-		String redirectLocation = Settings.getAuthURL(state.Toolchain.getName(), state.Request.host) + "?cache=" + RuntimeDB.randomstr(32);
+		String tc = state.Request.host.trim().equals("meet.rion.cz") ? "bongo" : state.Toolchain.getName();
+		String redirectLocation = Settings.getAuthURL(tc, state.Request.host) + "?cache=" + RuntimeDB.randomstr(32);
 
 		String redirectMessage = "OK but login first";
 		List<String> cookieLines = state.Request.cookiesLines;

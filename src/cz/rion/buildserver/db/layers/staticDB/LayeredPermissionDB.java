@@ -55,6 +55,7 @@ public abstract class LayeredPermissionDB extends LayeredTestDB {
 		private final RuntimeDB rdb;
 		public final String Login;
 		private String fullName = null;
+		private String email = null;
 		private String userGroup = null;
 		private int StaticUserID = -1;
 		private int userID = -1;
@@ -68,7 +69,7 @@ public abstract class LayeredPermissionDB extends LayeredTestDB {
 
 		public boolean isValid() {
 			handleInit();
-			return userID != -1 && fullName != null && userGroup != null && StaticUserID != -1 && permissions != null;
+			return userID != -1 && fullName != null && userGroup != null && StaticUserID != -1 && permissions != null && email != null;
 		}
 
 		public JsonObject getIdentity() {
@@ -116,10 +117,11 @@ public abstract class LayeredPermissionDB extends LayeredTestDB {
 				}
 			}
 			if (fullName == null) {
-				Object[] parts = db.getFullNameAndGroup(Login, Toolchain);
+				Object[] parts = db.getFullNameAndGroupAndEmailAndOwnPerms(Login, Toolchain, permissions);
 				fullName = (String) parts[0];
 				userGroup = (String) parts[1];
 				StaticUserID = (int) parts[2];
+				email = (String) parts[3];
 			}
 			if (userID == -1) {
 				try {
@@ -140,6 +142,9 @@ public abstract class LayeredPermissionDB extends LayeredTestDB {
 		}
 
 		public boolean can(PermissionBranch action) {
+			if(!Settings.isAuth()) {
+				return true;
+			}
 			if (Login == null) {
 				return false;
 			}
@@ -161,6 +166,16 @@ public abstract class LayeredPermissionDB extends LayeredTestDB {
 
 		public int getSessionID() {
 			return SessionID;
+		}
+
+		public String getEmail() {
+			handleInit();
+			return this.email;
+		}
+
+		public String getFullName() {
+			handleInit();
+			return this.fullName;
 		}
 
 	}

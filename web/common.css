@@ -1,0 +1,10 @@
+body > .txtHeader {
+	height: 30px;
+	border-bottom: 1px solid black;
+	border-left: 1px solid black;
+	background: #efefef;
+	position:absolute;
+	top: 0px;
+	right:0px;
+	padding:7px;
+}

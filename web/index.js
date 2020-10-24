@@ -1,341 +1,9 @@
 var confetti={maxCount:150,speed:2,frameInterval:15,alpha:1,gradient:!1,start:null,stop:null,toggle:null,pause:null,resume:null,togglePause:null,remove:null,isPaused:null,isRunning:null};!function(){confetti.start=s,confetti.stop=w,confetti.toggle=function(){e?w():s()},confetti.pause=u,confetti.resume=m,confetti.togglePause=function(){i?m():u()},confetti.isPaused=function(){return i},confetti.remove=function(){stop(),i=!1,a=[]},confetti.isRunning=function(){return e};var t=window.requestAnimationFrame||window.webkitRequestAnimationFrame||window.mozRequestAnimationFrame||window.oRequestAnimationFrame||window.msRequestAnimationFrame,n=["rgba(30,144,255,","rgba(107,142,35,","rgba(255,215,0,","rgba(255,192,203,","rgba(106,90,205,","rgba(173,216,230,","rgba(238,130,238,","rgba(152,251,152,","rgba(70,130,180,","rgba(244,164,96,","rgba(210,105,30,","rgba(220,20,60,"],e=!1,i=!1,o=Date.now(),a=[],r=0,l=null;function d(t,e,i){return t.color=n[Math.random()*n.length|0]+(confetti.alpha+")"),t.color2=n[Math.random()*n.length|0]+(confetti.alpha+")"),t.x=Math.random()*e,t.y=Math.random()*i-i,t.diameter=10*Math.random()+5,t.tilt=10*Math.random()-10,t.tiltAngleIncrement=.07*Math.random()+.05,t.tiltAngle=Math.random()*Math.PI,t}function u(){i=!0}function m(){i=!1,c()}function c(){if(!i)if(0===a.length)l.clearRect(0,0,window.innerWidth,window.innerHeight),null;else{var n=Date.now(),u=n-o;(!t||u>confetti.frameInterval)&&(l.clearRect(0,0,window.innerWidth,window.innerHeight),function(){var t,n=window.innerWidth,i=window.innerHeight;r+=.01;for(var o=0;o<a.length;o++)t=a[o],!e&&t.y<-15?t.y=i+100:(t.tiltAngle+=t.tiltAngleIncrement,t.x+=Math.sin(r)-.5,t.y+=.5*(Math.cos(r)+t.diameter+confetti.speed),t.tilt=15*Math.sin(t.tiltAngle)),(t.x>n+20||t.x<-20||t.y>i)&&(e&&a.length<=confetti.maxCount?d(t,n,i):(a.splice(o,1),o--))}(),function(t){for(var n,e,i,o,r=0;r<a.length;r++){if(n=a[r],t.beginPath(),t.lineWidth=n.diameter,i=n.x+n.tilt,e=i+n.diameter/2,o=n.y+n.tilt+n.diameter/2,confetti.gradient){var l=t.createLinearGradient(e,n.y,i,o);l.addColorStop("0",n.color),l.addColorStop("1.0",n.color2),t.strokeStyle=l}else t.strokeStyle=n.color;t.moveTo(e,n.y),t.lineTo(i,o),t.stroke()}}(l),o=n-u%confetti.frameInterval),requestAnimationFrame(c)}}function s(t,n,o){var r=window.innerWidth,u=window.innerHeight;window.requestAnimationFrame=window.requestAnimationFrame||window.webkitRequestAnimationFrame||window.mozRequestAnimationFrame||window.oRequestAnimationFrame||window.msRequestAnimationFrame||function(t){return window.setTimeout(t,confetti.frameInterval)};var m=document.getElementById("confetti-canvas");null===m?((m=document.createElement("canvas")).setAttribute("id","confetti-canvas"),m.setAttribute("style","display:block;z-index:999999;pointer-events:none;position:fixed;top:0"),document.body.prepend(m),m.width=r,m.height=u,window.addEventListener("resize",function(){m.width=window.innerWidth,m.height=window.innerHeight},!0),l=m.getContext("2d")):null===l&&(l=m.getContext("2d"));var s=confetti.maxCount;if(n)if(o)if(n==o)s=a.length+o;else{if(n>o){var f=n;n=o,o=f}s=a.length+(Math.random()*(o-n)+n|0)}else s=a.length+n;else o&&(s=a.length+o);for(;a.length<s;)a.push(d({},r,u));e=!0,i=!1,c(),t&&window.setTimeout(w,t)}function w(){e=!1}}();
 
-var common = function() {
-
-	var self = this;
-	
-	self.IDENTITY_TOKEN = $IDENTITY_TOKEN$;
-	self.TOOLCHAIN = "$TOOLCHAIN$";
-		
-	self.logout = function() {
-	    var cookies = document.cookie.split(";");
-	    for (var i = 0; i < cookies.length; i++) {
-	        var cookie = cookies[i];
-	        var eqPos = cookie.indexOf("=");
-	        var name = eqPos > -1 ? cookie.substr(0, eqPos) : cookie;
-	        document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT";
-	    }
-	    window.location.href="http://" + self.TOOLCHAIN +".rion.cz/logout"
-	}
-
-	
-	self.getErrorSolution = function(code) {
-		if(code == 0){
-			return self.dec("<span class=\"log_err\">Nepodařilo se kontaktovat server</span>");
-		} else if(code == 1){
-			return self.dec("<span class=\"log_err\">Nepodařilo se dekódovat odpověď serveru</span>");
-	 	} else if(code == 3) {
-	 		return self.dec("<span class=\"log_err\">Nepodařilo se kontaktovar server. Obnovte prosím stránku</span>");
-		} else if(code == 53){
-			return self.dec("<span class=\"log_err\">Byl jsi odhlášen. Pro přihlášení si obnov stránku (nezapomeň si někam bokem uložit kód, který se právě snažíš přeložit)</span>");
-		} else {
-			return self.dec("<span class=\"log_err\">Neznámá chyba</span>");
-		}
-	}
-		
-	self.generateRandomString = function(length) {
-		var result = "";
-		var characters  = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-		var charactersLength = characters.length;
-		for (var i = 0; i < length; i++ ) {
-			result += characters.charAt(Math.floor(Math.random() * charactersLength));
-		}
-		return result;
-	}
-	
-	self.async = function(data, callbackOK, callbackFail) {
-		var http = new XMLHttpRequest();
-		try {
-			var url = window.location.href+"test?cache="+self.generateRandomString(10);
-			http.onreadystatechange = function(e) {
-				if(e.target.readyState == 4) {
-					if(e.target.status == 200) {
-						callbackOK(http.responseText);
-					} else {
-						callbackFail(self.getErrorSolution(0));
-					}
-				}
-			};
-			http.onerror = function(e){
-			    callbackFail(self.getErrorSolution(0));
-			};
-			http.open("POST", url, true);
-			http.send(data);
-		} catch(e) {
-			callbackFail(self.getErrorSolution(0));
-		}
-	}
-	
-	self.sanitizeData = function(data) {
-		if(data instanceof Array) { 
-			var res = [];
-			for(var i = 0; i < data.length; i++) {
-				res[i] = self.sanitizeData(data[i]); 
-			}
-			return res;
-		} else if(data instanceof Object) { 
-			var res = {};
-			for(var item in data){
-				if(data.hasOwnProperty(item)){
-					res[self.sanitizeData(item)] = self.sanitizeData(data[item]);
-				}
-			}
-			return res;
-		} else if(typeof(data) === typeof("abc")){
-			return self.dec(data);
-		} else {
-			return data;
-		}
-	}
-	
-	self.toHex = function(c) {
-		if (c >= 0 && c <= 9) {
-			return (c + '0'.charCodeAt(0));
-		} else if (c >= 10 && c <= 15) {
-			return ((c - 10) + 'a'.charCodeAt(0));
-		} else {
-			return false;
-		}
-	}
-	
-	self.encode = function(bdata) {
-		var result = [];
-		for (var i = 0; i < bdata.length; i++) {
-			var c = bdata.charCodeAt(i);
-			if(c < 256) { // Special chars ignored
-				var c1 = self.toHex(c >> 4);
-				var c2 = self.toHex(c & 15);
-				if (c1 === false || c2 === false) {
-					return false;
-				}
-				result[i * 2] = String.fromCharCode(c1);
-				result[(i * 2) + 1] = String.fromCharCode(c2);
-			}
-		}
-		return result.join("");
-	
-	}
-	
-	var decTable = {
-				
-				195: {
-					63: 193, // "??"
-					161: 225, // "á"
-					169: 233, // "é"
-					137: 201, // "É"
-					141: 205, // "Í"
-					173: 237, // "í"
-					147: 211, // "Ó"
-					179: 243, // "ó"
-					154: 218, // "Ú"
-					186: 250, // "ú"
-					157: 221, // "Ý"
-					189: 253, // "ý"
-					132: 196, // "Ä"
-					164: 228, // "ä"
-					139: 203, // "Ë"
-					171: 235, // "ë"
-					143: 207, // "Ï"
-					175: 239, // "ï"
-					150: 214, // "Ö"
-					182: 246, // "ö"
-					156: 220, // "Ü"
-					188: 252, // "ü"
-					191: 255 // "ÿ"
-				},
-	
-				196: {
-					140: 268, // "Č"
-					141: 269, // "č"
-					142: 270, // "Ď"
-					143: 271, // "ď"
-					155: 283, // "ě"
-					154: 282 // "Ě"
-				},
-				
-				197: {
-					135: 327, // "Ň"
-					132: 328, // "??"
-					63: 344, // "??"
-					153: 345, // "ř"
-					32: 352, // "Š"
-					161: 353, // "š"
-					164: 356, // ""
-					165: 357, // "ť"
-					174: 366, // "Ů"
-					175: 367, // "ů"
-					189: 381, // "Ž"
-					190: 382, // "ž"
-					184: 376 // "Ÿ"
-	
-				}
-		};
-		
-    var reversedDecTable = {};
-    { // Sestavime reverzni prvky
-		var getDecDiv = document.createElement("span");
-		var getDec = function(enc) {
-		   getDecDiv.innerHTML = enc;
-		   return getDecDiv.innerHTML;
-		}
-		
-		// Entities
-		var reverseMapping = {};
-		for(var x1 in decTable) {
-		   if(decTable.hasOwnProperty(x1)) {
-		      for(var x2 in decTable[x1]) {
-		         if(decTable[x1].hasOwnProperty(x2)) {
-		            var value = decTable[x1][x2];
-		            var reversed = getDec("&#" + value + ";");
-		            reverseMapping[value] = reversed;
-		         }
-		      }
-		   }
-		}
-	}
-	
-	self.dec = function(str) {
-		var res="";
-		// Decode UTF-8
-		
-	
-		for(var i = 0; i < str.length; i++) {
-			var x = str.charAt(i);
-			var c = str.charCodeAt(i);
-			if(i + 1 < str.length) {
-				var decT = false;
-				if(decTable[c]) {
-					decT = decTable[c];
-				}
-				if(decT!==false){
-					i++;
-					var c = str.charCodeAt(i);
-					if(decT[c]){
-						x=String.fromCharCode(decT[c]);
-					}
-				}
-			}
-			res+=x;
-		}
-		
-		var newValue = [];
-		str = res;
-		for(var i = 0; i < str.length; i++) {
-		   if(str[i] == '&' && str.indexOf('#',i) == i + 1 && str.indexOf(';',i) >i+1) { // Tag
-		      var tagValue = str.substr(i+2, str.indexOf(';',i)-(i+2));
-		      if(!isNaN(tagValue)) {
-		         tagValue = tagValue * 1;
-		         if(tagValue in reverseMapping) {
-		            newValue.push(reverseMapping[tagValue]);
-		            i = str.indexOf(';',i);
-		            continue;
-		         }
-		      }
-		   }
-		   newValue.push(str[i]);
-		}
-		res = newValue.join("");
-		return res;
-	}
-	
-	self.fromHex = function(c) {
-		if (c >= '0'.charCodeAt(0) && c <= '9'.charCodeAt(0)) {
-			return c - '0'.charCodeAt(0);
-		} else if (c >= 'A'.charCodeAt(0) && c <= 'F'.charCodeAt(0)) {
-			return 10 + c - 'A';
-		} else if (c >= 'a'.charCodeAt(0) && c <= 'f'.charCodeAt(0)) {
-			return 10 + c - 'a'.charCodeAt(0);
-		} else {
-			return false;
-		}
-	}
-	
-	self.decode = function(data) {
-		var sb = "";
-		for (var i = 0; i < data.length / 2; i++) {
-			var c1 = data.charCodeAt(i * 2);
-			var c2 = data.charCodeAt((i * 2) + 1);
-			c1 = self.fromHex(c1);
-			c2 = self.fromHex(c2);
-			if (c1 === false || c2 === false) {
-				return false;
-			}
-			var x = (c1 << 4) | c2;
-			sb += String.fromCharCode(x);
-		}
-		return sb;
-	}
-	
-
-	self.reconstructUI = function(data, ids) {
-		if(!ids){
-			ids = {};
-		}
-		var type = data.type;
-		var el = document.createElement(type);
-		if(data.class) {
-			el.classList.add(data.class);
-		}
-		if(data.innerHTML) {
-			el.innerHTML = data.innerHTML;
-		}
-		if(data.colSpan){
-			el.colSpan = data.colSpan;
-		}
-		if(data.rowSpan){
-			el.rowSpan = data.colspan;
-		}
-		if(data.id) {
-			el.id = data.id;
-			ids[data.id] = el;
-		}
-		if(data.contents) { 
-			for(var i = 0; i < data.contents.length; i++) {
-				var childData = data.contents[i];
-				var sub = self.reconstructUI(childData, ids);
-				var subEl = sub[0];
-				var subIds = sub[1];
-				el.appendChild(subEl);
-				for(var x in subIds){
-					ids[x] = subIds[x];
-				}
-			}
-		}
-		return [el, ids];
-	}
-	
-	var getNewElement2 = function(parent, tagName, className, contents) {
-		var wr = document.createElement(tagName);
-		if (className !== false) {
-			if(typeof(className) == typeof("str")){
-				wr.classList.add(className);
-			} else if(typeof(className) == typeof([])){
-				for(var x = 0; x < className.length;x++) {
-					wr.classList.add(className[x]);
-				}
-			}
-		}
-		if(contents!==false){
-			wr.innerHTML = contents;
-		}
-		parent.appendChild(wr);
-		return wr;
-	}
-	
-	var getNewElement1 = function(parent, tagName, className) {
-		return getNewElement2(parent, tagName, className, false);
-	}
-	
-	var getNewElement0 = function(parent, tagName) {
-		return getNewElement1(parent, tagName, false);
-	}
-};
-
-
 var tester = function() {
 	
 	var self = this;
-	self.common = new common();
+	self.common = new Common();
 	
 	self.allTests = [];
 	self.mres = function() {
@@ -356,98 +24,99 @@ var tester = function() {
 		this.rs = null;
 		
 		var UI = {
-			      "type":"div",
-			      "class":"w0",
-			      "contents":[
-			         {
-			            "type":"div",
-			            "class":"w00",
-			            "id":"nwBorder",
-			            "contents": [
-			            	{
-			            		"type":"div",
-			            		"class":"w001",
-			            		"id":"txtBrief"
-			            	},{
-			            		"type":"div",
-			            		"class":"w002",
-			            		"contents":[
-			            			{
-				            			"type":"Button",
-					            		"innerHTML":"Skrýt",
-					            		"id":"btnHide"
-			            			}
-			            		]
-			            	}
-			            ]
-			         },
-			         {
-			            "type":"div",
-			            "id":"pnlMain",
-			            "class":"w1",
-			            "contents":[
-			               {
-			                  "type":"div",
-			                  "class":"w11",
-			                  "contents":[
-			                     {
-			                        "type":"textarea",
-			                        "class":"w111",
-			                        "id":"txtArea"
-			                     },
-			                     {
-			                        "type":"div",
-			                        "class":"w112",
-			                        "contents":[
-			                           {
-			                              "type":"button",
-			                              "id":"runtests",
-			                              "innerHTML":"Otestovat řešení"
-			                           },
-			                           {
-			                        	   "type":"div",
-			                        	   "class":"w1121"
-			                           }
-			                        ]
-			                     }
-			                  ]
-			               },
-			               {
-			                  "type":"div",
-			                  "class":"w12",
-			                  "contents":[
-			                     {
-			                        "type":"div",
-			                        "class":"w121",
-			                        "innerHTML":"Zadání"
-			                     },
-			                     {
-			                        "type":"div",
-			                        "id":"txtDescr",
-			                        "class":"w122"
-			                     }
-			                  ]
-			               },
-			               {
-			                  "type":"div",
-			                  "class":"w13",
-			                  "contents":[
-			                     {
-			                        "type":"div",
-			                        "class":"w131",
-			                        "innerHTML": "Řešení"
-			                     },
-			                     {
-			                        "type":"div",
-			                        "id":"txtSolution",
-			                        "class":"w132"
-			                     }
-			                  ]
-			               }
-			            ]
-			         }
-			      ]
-				};
+		  "type": "div",
+		  "class": "w0",
+		  "contents": [
+		    {
+		      "type": "div",
+		      "class": "w00",
+		      "id": "nwBorder",
+		      "contents": [
+		        {
+		          "type": "div",
+		          "class": "w001",
+		          "id": "txtBrief"
+		        },
+		        {
+		          "type": "div",
+		          "class": "w002",
+		          "contents": [
+		            {
+		              "type": "Button",
+		              "innerHTML": "Skrýt",
+		              "id": "btnHide"
+		            }
+		          ]
+		        }
+		      ]
+		    },
+		    {
+		      "type": "div",
+		      "id": "pnlMain",
+		      "class": "w1",
+		      "contents": [
+		        {
+		          "type": "div",
+		          "class": "w11",
+		          "contents": [
+		            {
+		              "type": "textarea",
+		              "class": "w111",
+		              "id": "txtArea"
+		            },
+		            {
+		              "type": "div",
+		              "class": "w112",
+		              "contents": [
+		                {
+		                  "type": "button",
+		                  "id": "runtests",
+		                  "innerHTML": "Otestovat řešení"
+		                },
+		                {
+		                  "type": "div",
+		                  "class": "w1121"
+		                }
+		              ]
+		            }
+		          ]
+		        },
+		        {
+		          "type": "div",
+		          "class": "w12",
+		          "contents": [
+		            {
+		              "type": "div",
+		              "class": "w121",
+		              "innerHTML": "Zadání"
+		            },
+		            {
+		              "type": "div",
+		              "id": "txtDescr",
+		              "class": "w122"
+		            }
+		          ]
+		        },
+		        {
+		          "type": "div",
+		          "class": "w13",
+		          "contents": [
+		            {
+		              "type": "div",
+		              "class": "w131",
+		              "innerHTML": "Řešení"
+		            },
+		            {
+		              "type": "div",
+		              "id": "txtSolution",
+		              "class": "w132"
+		            }
+		          ]
+		        }
+		      ]
+		    }
+		  ]
+		};
 	
 		this.handleResize = function() {
 			var parentHeight = self.ta.parentElement.clientHeight;
@@ -575,45 +244,12 @@ var tester = function() {
 			self.ta.readOnly = !ex;
 		}
 	
-		this.getElementOld = function() {
-			var el = document.createElement("div"); // Hlavni prvek
-			el.classList.add("txtTest");
-			
-			var solvStr = data.finished_date ? " (vyřešeno "+data.finished_date+")" : "";
-			
-			getNewElement2(el, "div", "txtTestLbl", data.title + solvStr);
-			
-			var wr = getNewElement1(el, "div", "txtWrap");
-			self.mainPnl = wr;
-			
-			self.ta = getNewElement2(wr, "textarea", "txtAsm", data.init);
-			
-			var pc = getNewElement1(wr, "div", "pnlControls");
-			self.b1 = getNewElement2(pc, "button", false, "Otestovat řešení");
-				
-	
-			// Zadani
-			var pz = getNewElement1(el, "div", "txtDescr");
-			getNewElement2(pz, "div", "txtDescrName", "Popis");
-			getNewElement2(pz, "span", "txtDescrTxt", data.zadani)
-			
-			// Reseni
-			var sl = getNewElement1(el, "div", "txtDescr");
-			getNewElement2(sl, "div", ["txtDescrName", "txtDescrNameSolution"], "�?ešení");
-			self.rs = getNewElement2(sl, "span", "txtDescrSolutionLog", "Zde se objevi detaily testů tvého řešení")
-			setup();
-			return el;
-		};
-		
 		return this;
 	}
 	
-	
-	
 	self.submit = function(id, asm, cbOK, cbFail) {
 		var data = {"asm":asm, "id": id}
-		var txtEnc = "q=" + self.common.encode(JSON.stringify(data));
-		self.common.async(txtEnc, function(response) {
+		self.common.async(data, function(response) {
 			var deco=self.common.decode(response);
 			if(deco!==false) {
 				var obj = JSON.parse(deco);
@@ -637,7 +273,7 @@ var tester = function() {
 				return;
 			}
 			cbFail(self.getErrorSolution(0));
-		}, cbFail);
+		}, cbFail, false);
 	}
 	
 	self.getErrorSolution = function(code) {
@@ -707,7 +343,6 @@ var tester = function() {
 		};
 		
 		var cbFail = function(descr, waiter) {
-			descr = self.common.dec(descr);
 			tesx.setSolution(descr);
 			self.setAllTestsEnabled(true);
 			
@@ -718,7 +353,7 @@ var tester = function() {
 				self.setBlockTimeout(then);
 			}
 		}
-		tesx.setSolution(self.common.dec("Vyhodnocuji test..."));
+		tesx.setSolution("Vyhodnocuji test...");
 		self.submit(tesx.getID(), tesx.getASM(), cbOK, cbFail);
 	}
 	
@@ -727,13 +362,13 @@ var tester = function() {
 		id_indiv.innerHTML = "";
 		self.allTests = [];
 		for(var i = 0; i <data.length; i++) {
-			data[i].title = self.common.dec(data[i].title);
-			data[i].id = self.common.dec(data[i].id);
-			data[i].zadani = self.common.dec(data[i].zadani);
-			data[i].init = self.common.dec(data[i].init);
+			data[i].title = data[i].title;
+			data[i].id = data[i].id;
+			data[i].zadani = data[i].zadani;
+			data[i].init = data[i].init;
 			var dataI = new self.testI(data[i], self, self.common);
 			self.allTests[self.allTests.length] = dataI;
-			id_indiv.appendChild(self.use_old_ui ? dataI.getElementOld() : dataI.getElement());
+			id_indiv.appendChild(dataI.getElement());
 			if(data[i].finished_date){
 				dataI.setFinished(true);
 			}
@@ -761,33 +396,20 @@ var tester = function() {
 	
 	self.loadRemoteTests = function() {
 		var cbFail = function(data) {
-			id_loader.innerHTML = self.common.dec(data);
+			id_loader.innerHTML = data;
 			id_loader.classList.remove("loader");
 			id_loader.classList.add("loader_error");
 		};
 		var cbOk = function(data) {
-			var deco = self.common.decode(data);
-			if(deco!==false){
-				var jsn = JSON.parse(deco);
-				if(jsn!==false){
-					if(jsn.code === 0) {
-						self.materialize(jsn.tests, jsn.wait);
-						self.showLoginPanel();
-					} else {
-						if(jsn.code == 53){
-							document.location.reload();
-						} else {
-							cbFail(self.common.dec("Nepodařilo se nahrát testy: <br />" + jsn.result));
-						}
-					}
-					return;
-				}
+			if(data && data.tests) {
+				self.materialize(data.tests, data.wait);
+				self.showLoginPanel();
+			} else {
+				cbFail("Nepodařilo se nahrát testy");
 			}
-			cbFail(self.common.dec("Nepodařilo se dekódovat testy"));
 		};
 		var data = {"action":"COLLECT"}
-		var txtEnc = "q=" + self.common.encode(JSON.stringify(data));
-		self.common.async(txtEnc, cbOk, cbFail);
+		self.common.async(data, cbOk, cbFail);
 	}
 
 	
@@ -873,36 +495,27 @@ var tester = function() {
 			self.hideStats();
 		};
 		var cbOk = function(data) {
-			var deco = self.common.decode(data);
-			if(deco!==false){
-				var jsn = JSON.parse(deco);
-				if(jsn!==false) { 
-					if(jsn.code == 0) {
-						self.materializeGraphs(jsn.data);
-						return;
-					}
-				}
-			}
-			cbFail(self.common.dec("Nepodařilo se dekódovat statistiky"));
+			self.materializeGraphs(data);
 		};
 		var data = {"action":"GRAPHS"}
-		var txtEnc = "q=" + self.common.encode(JSON.stringify(data));
-		self.common.async(txtEnc, cbOk, cbFail);
+		self.common.async(data, cbOk, cbFail);
 	}
 
 	
 	self.aload = function() {
+		self.loadRemoteTests();
 		window.addEventListener("resize", self.mres);
-		txtLogin.innerHTML = self.common.IDENTITY_TOKEN.name + " ("+self.common.IDENTITY_TOKEN.primary+"@"+self.common.IDENTITY_TOKEN.group+")";
+		self.common.addButtonToLoginPanel = undefined
+		
+		txtLogin.innerHTML = self.common.identity.name + " ("+self.common.identity.primary+"@"+self.common.identity.group+")";
 		btnLogout.addEventListener("click", function(){self.common.logout();});
 		btnStats.addEventListener("click", function(){self.showStats();});
 		btnFaq.addEventListener("click", function(){self.showFaq();});
 		btnCloseStats.addEventListener("click", function() {self.hideStats();});
 		btnCloseFaq.addEventListener("click", function() {self.hideFaq();});
 		pnlWarnID.addEventListener("click", function() {self.showFaq();});
-		self.loadRemoteTests();
-		if(window.pastAload){
-			window.pastAload();
+		if(window.Admin){
+			admin = new Admin(self.common);
 		}
 	}
 	
@@ -925,639 +538,13 @@ var tester = function() {
 		use_old_ui = true;
 		self.loadRemoteTests();
 	}
-}
+};
 
-var terminer = function() {
-    var self = this
-    self.common = new common();
-    
-    self.getDate = function(stamp) {
-    	var dd = function(i) {
-    	   if(i < 9) {
-    	      return "0"+i
-    	   } else {
-    	      return "" + i;
-    	   }
-    	}
-		var cas = new Date(stamp);
-		cas = cas.getDate() + "." + (cas.getMonth()+1) + "." + cas.getFullYear() + " " + dd(cas.getHours()) + ":" + dd(cas.getMinutes());
-		return cas
-    }
-
-    self.materialize = function(data) {
-    	var available = data.Available;
-    	var my = data.MyData
-    	term_table_root.innerHTML = "";
-    	
-    	if(data.Now && data.NextEvent) {
-    		var diff = data.NextEvent - data.Now;
-    		if(diff > 0) {
-    		    setTimeout(function(){ self.loadTerms(true, false); }, diff+10000);
-    		}
-    	}
-    	
-    	var newMy = {};
-    	for(var m in my) {
-    	   if(my.hasOwnProperty(m)) {
-    	      var d = my[m]
-    	      var cas = self.getDate(d.Time);
-    	      d.Time = cas;
-    	      newMy[d.SlotID] = d;
-    	   }
-    	}
-    	
-    	var adm = {};
-    	var allowedLogins = {};
-    	if(data.Admin && data.AdminAll) {
-	    	for(var m in data.AdminAll) {
-	    		if(data.AdminAll.hasOwnProperty(m)) {
-	    			for(var i = 0; i < data.AdminAll[m].length; i++) {
-	    			    var am = data.AdminAll[m][i];
-	    			    allowedLogins[am.Login] = true;
-						if(am.SlotID in adm) {
-							adm[am.SlotID][am.Login] = am;
-						} else {
-							adm[am.SlotID] = {};
-				    		adm[am.SlotID][am.Login] = am;
-						}
-					}
-				}
-	    	}
-			for(var i = 0; i < data.Admin.length; i++) {
-				var am = data.Admin[i];
-				if(am.Login in allowedLogins) {
-					if(am.SlotID in adm) {
-						adm[am.SlotID][am.Login] = am;
-					} else {
-						adm[am.SlotID] = {};
-				    	adm[am.SlotID][am.Login] = am;
-					}
-				}
-			}    	
-    	} 
-    	var cdm = {}
-		for(var m in adm) {
-			if(adm.hasOwnProperty(m)) {
-				cdm[m] = [];
-				for(var mm in adm[m]) {
-					if(adm[m].hasOwnProperty(mm)) {
-						cdm[m].push(adm[m][mm]);
-					}	
-				}		
-			}
-		}
-		adm = cdm;
-    	
-    	for(var i = 0; i < available.length; i++) {
-    	   var av = available[i];
-    	   var show = (!data.Admin) || (!data.AdminAll); // Pokud nejsou admini
-    	   if(av.OwnerLogin == "") {
-    	   	   show = true;
-    	   } else if(av.OwnerLogin == self.common.IDENTITY_TOKEN.login) {
-    	   		show = true;
-    	   } else {
-    	   		show |= av.OwnerLogin.split(",").reduce(function(data, item) {return item==self.common.IDENTITY_TOKEN.login||data;}, false);
-    	   }
-    	   if(show) {
-    	   	   var el = self.constructTerm(av, newMy, adm);
-    	   	   term_table_root.appendChild(el);
-	   	   }
-	   }
-	   term_table_root.style.display = "block";
-	   return;
-    }
-    
-    
-    self.changeOption = function(slotID, variantID) {
-    	self.setWaiterVisible(true);
-    	var cbFail = function(data) {
-    		self.setWaiterVisible(false);
-			var el = document.createElement("span");
-			el.innerHTML = data;
-			alert(el.innerText);
-		};
-		var cbOk = function(data) {
-			self.setWaiterVisible(false);
-			var deco = self.common.decode(data);
-			if(deco!==false){
-				var jsn = JSON.parse(deco);
-				if(jsn!==false){
-					if(jsn.code === 0 && jsn.result) {
-						var result = JSON.parse(jsn.result);
-						if(result && result.MyData && result.Available) {
-							self.materialize(result);
-							self.showLoginPanel();
-						} else {
-							cbFail(self.common.dec("Nepodařilo se nahrát termíny kvůli špatné struktuře ze serveru"));
-						}
-					} else {
-						if(jsn.code == 53){
-							document.location.reload();
-						} else {
-							cbFail(self.common.dec("Nepodařilo se nahrát termíny: <br />" + jsn.result));
-						}
-					}
-					return;
-				}
-			}
-			cbFail(self.common.dec("Nepodařilo se dekódovat testy"));
-		};
-		var data = {"action":"HANDLE_TERMS", "term_data": "subscribe", "slotID": slotID, "variantID": variantID};
-		var txtEnc = "q=" + self.common.encode(JSON.stringify(data));
-		self.common.async(txtEnc, cbOk, cbFail);
-    
-    }
-    
-    self.signUp = function(slotID, variantID) {
-    	self.changeOption(slotID, variantID);
-    }
-    
-    self.btnHideCB = function(id, btn, btnRefresh, el1, el2, spanner) {
-    	if(btn.innerHTML == "Skrýt") {
-    	   self.setHidden(id, true);
-    	   btn.innerHTML = "Zobrazit";
-    	   el2.style.display ="none";
-    	   el1.style.borderBottom="none";
-    	   btnRefresh.style.display = "none";
-    	   spanner.style.marginBottom = "10px";
-    	} else {
-    	   self.setHidden(id, false);
-    	   btn.innerHTML = "Skrýt";
-    	   el2.style.display ="";
-    	   el1.style.borderBottom="";
-    	   btnRefresh.style.display = "";
-			spanner.style.marginBottom = "70px";
-    	}
-    }
-    
-    self.constructTerm = function(data, my, adm) {
-       var UI = 
-       {
-              "type": "div",
-              "class": "term_table_w0",
-              "id": "term_table_bottom_spanner",
-              "contents": [
-              		{
-              		   "type": "div",
-              		   "class": "term_table_w00",
-              		   "id": "nwBorder",
-              		   "contents": [
-              		   		{
-              		   		   "type": "div",
-              		   		   "class": "term_table_w001",
-              		   		   "id": "txtBrief"
-              		   		},
-              		   		{
-              		   		   "type": "div",
-              		   		   "class": "term_table_w002",
-              		   		   "contents": [
-              		   		   		{
-              		   		   		   "type": "button",
-              		   		   		   "id": "btnRefresh",
-              		   		   		   "innerHTML": "Aktualizovat"
-              		   		   		},
-              		   		   		{
-              		   		   		   "type": "button",
-              		   		   		   "id": "btnHide",
-              		   		   		   "innerHTML": "Skrýt"
-              		   		   		}
-              		   		   ]
-              		   		}
-              		   
-              		   ]
-              		},
-              		{
-              			"type": "div",
-              			"class": "term_table_w1",
-              			"id": "pnlMain",
-              			"contents": [
-              				{
-              					"type": "div",
-              					"class": "term_table_w12",
-              					"contents": [
-              						{
-	              						"type": "div",
-              							"class": "term_table_w121",
-              							"innerHTML": "Popis"
-              						}, {
-              						 	"type": "div",
-              						 	"class": "term_table_w122",
-              						 	"id": "txtDescr"
-              						}
-              					]
-              				},
-              				{
-              				   "type": "div",
-              				   "class": "term_table_w13",
-              				   "contents": [
-									{
-										"type": "div",
-										"class": "term_table_w131",
-										"innerHTML": "Přihlášení",
-										"id": "lbl_SignTitle"
-									},
-									{
-										"type": "div",
-										"class": "term_table_w132",
-										"id": "pre_adm_appender",
-										"contents": [
-											{
-												"type": "table",
-												"class": "term_table",
-												"id": "term_loginTable",
-												"contents": [
-													{
-														"type": "tr",
-														"contents": [
-															{
-																"type": "th",
-																"innerHTML": "Varianta",
-																"id": "lbl_Variant"
-															},
-															{
-																"type": "th",
-																"innerHTML": "Kapacita",
-																"id": "lbl_Capacity"
-															},
-															{
-																"type": "th",
-																"innerHTML": "Přihlášeno",
-																"id": "lbl_SignedUp"
-															},
-															{
-																"type": "th",
-																"innerHTML": "Přihlášení",
-																"id": "lbl_SigningUp"
-															}
-														]
-													}
-												
-												]
-											}
-										]
-									}              				   
-              				   ] 
-              				}
-              			]
-              		}
-              ]
-          }
-          
-          var admUITable = 
-				{
-					"type": "table",
-					"class": "term_table",
-					"id": "term_adm",
-					"contents": [
-						{
-							"type": "tr",
-							"contents": [
-								{
-									"type": "th",
-									"colSpan": 4,
-									"id": "term_adm_var",
-									"class": "term_adm_var_title",
-									"innerHTML": ""
-								}
-							
-							]
-						},
-						{
-							"type": "tr",
-							"class": "term_adm_var_title",
-							"contents": [
-								{
-									"type": "th",
-									"innerHTML": "#"
-								},
-								{
-									"type": "th",
-									"innerHTML": "Login"
-								},
-								{
-									"type": "th",
-									"innerHTML": "Jméno"
-								},
-								{
-									"type": "th",
-									"innerHTML": "Čas přihlášení"
-								}
-							]
-						}
-					]
-				};
-          
-          var admUI = {
-          		"type": "tr",
-				"class": "term_adm_var_tr",
-          		"contents": [
-					{
-						"type": "td",
-						"id": "cellOrder"
-					},
-										{
-						"type": "td",
-						"id": "cellLogin"
-					},
-					{
-						"type": "td",
-						"id": "cellName"
-					},
-					{
-						"type": "td",
-						"id": "cellTime"
-					}        		
-          		
-          		]
-          };   
-           
-          var signUI = {
-          		"type": "tr",
-          		"contents": [
-					{
-						"type": "td",
-						"id": "cellName"
-					},
-										{
-						"type": "td",
-						"id": "cellCap"
-					},
-					{
-						"type": "td",
-						"id": "cellNow"
-					},
-					{
-						"type": "td",
-						"contents": [
-							 {
-							 	"type": "span",
-							 	"class": "term_table_logged",
-							 	"id": "term_table_logged"
-							 },
-							 {
-							 	"type": "button",
-							 	"id": "btnLog",
-							 	"innerHTML": "Odhlásit"
-							 }
-						
-						]
-					}        		
-          		
-          		]
-          }
-          
-       	var struct = self.common.reconstructUI(UI);
-		var el = struct[0];
-		var ids = struct[1];
-		
-		var loggedVariant = false;
-		
-		var constrF = function(st, labels) {
-			var name = st.Name;
-		    var code = st.Code;
-		    var limit = st.Limit;
-		    var value = st.Value;
-		      
-		      
-		    var subStruct = self.common.reconstructUI(signUI);
-		    var subEls = subStruct[0];
-		    var subIds = subStruct[1];
-		      
-		    subIds.cellCap.innerHTML = limit;
-		    subIds.cellName.innerHTML = name;
-		    subIds.cellNow.innerHTML = value;
-		    
-		    var prihlasenLbl = labels.SelfSignedUp ? labels.SelfSignedUp : "Přihlášen";
-		    var prihlasitLbl = labels.SignUp ? labels.SignUp : "Přihlásit";
- 		    var odhlasitLbl = labels.SignOut ? labels.SignOut : "Odhlásit";
-		    
-		    if(data.Available == 1) {
-			    if(data.ID in my && my[data.ID].Type == code) {
-			        var cas =  my[data.ID].Time;
-				    subIds.btnLog.addEventListener("click", function() {self.signUp(data.ID, data.DefaultType);});
-				    subIds.btnLog.innerHTML = odhlasitLbl;
-				    subIds.term_table_logged.innerHTML = prihlasenLbl + ": " +cas;
-			    } else {
-				    subIds.btnLog.addEventListener("click", function() {self.signUp(data.ID, code);});
-				    subIds.btnLog.innerHTML = prihlasitLbl;
-				    subIds.term_table_logged.style.display = "none";
-	            }
-            } else {
-            	subIds.btnLog.style.display = "none";
-            	if(data.ID in my && my[data.ID].Type == code) {
-            		var cas =  my[data.ID].Time;
-            		subIds.term_table_logged.innerHTML = prihlasenLbl + ": " +cas;
-        		}
-            }
-            
-            for(var lbl in labels) {
-                if(labels.hasOwnProperty(lbl) && ids.hasOwnProperty("lbl_"+lbl)) {
-                    var id = ids["lbl_"+lbl];
-                    id.innerHTML = labels[lbl];
-                }
-            }
-            
-            return subEls;
-		};
-		
-		if(data.ID in my && my[data.ID].Show) {
-	    	loggedVariant = "Přihlášena varianta \""+my[data.ID].TypeName+"\"";
-	    	ids.nwBorder.style.background = "#68CD34";
-    	} 
-		
-		for(var d in data.Stats) {
-		   if(data.Stats.hasOwnProperty(d)) {
-		      var st = data.Stats[d];
-		      if(st.Show) {
-		         ids.term_loginTable.appendChild(constrF(st, data.Labels ? data.Labels : {}));
-		      }
-		   }
-		}
-		if(data.ID in adm && adm[data.ID].length && adm[data.ID].length > 0) {
-			var admData = adm[data.ID];
-			// Resort by types
-			var newAdmData = {};
-			for(var i = 0; i < admData.length;i++) {
-				var type = admData[i].Type;
-				if(!(type in newAdmData)) {
-					newAdmData[type] = [];					
-				}
-				newAdmData[type].push(admData[i]);
-			}
-			admDataTotal = newAdmData;
-			
-			for(var admDataTotalKey in admDataTotal) {
-			   if(admDataTotal.hasOwnProperty(admDataTotalKey)) {
-				   var admData = admDataTotal[admDataTotalKey];
-				   if(admData.length > 0) {
-						
-				      	var admStruct = self.common.reconstructUI(admUITable);
-						var admEl = admStruct[0];
-						var admIds = admStruct[1];
-					
-					
-						admIds.term_adm_var.innerHTML = "Varianta \""+admData[0].TypeName+"\"";
-						admData.sort(function(a, b) {return (a.Login > b.Login) ? 1 : -1;})
-					
-						for(var i = 0; i < admData.length; i++) {
-						    var aData = admData[i];
-						   
-					      	var aDataStruct = self.common.reconstructUI(admUI);
-							var aDataEl = aDataStruct[0];
-							var aDataIds = aDataStruct[1];
-							var cas = "";
-							if(aData.Time && aData.Time > 0) {
-								cas = self.getDate(aData.Time);
-			    	      	}
-							
-							aDataIds.cellOrder.innerHTML = (i+1)+"";
-							aDataIds.cellTime.innerHTML = cas;
-							aDataIds.cellName.innerHTML = aData.Name
-							aDataIds.cellLogin.innerHTML = aData.Login;
-							
-						    admEl.appendChild(aDataEl);
-						}
-						ids.pre_adm_appender.appendChild(document.createElement("br"));
-						ids.pre_adm_appender.appendChild(admEl);
-					}
-				}
-			}
-		}
-		
-		ids.txtBrief.innerHTML = data.Title;
-		ids.txtDescr.innerHTML = data.Description.split("\n").join("<br />");
-		var hideCB =  function() {self.btnHideCB(data.ID, ids.btnHide, ids.btnRefresh, ids.nwBorder, ids.pnlMain, ids.term_table_bottom_spanner);}
-		ids.btnHide.addEventListener("click", hideCB);
-		if(self.wasHidden(data.ID)) {
-			hideCB();
-		}
-		
-		ids.btnRefresh.addEventListener("click", function() {self.loadTerms(true, false);});
-		
-		if(loggedVariant !== false) {
-			ids.txtBrief.innerHTML += " ("+loggedVariant+")";		
-		}
-		
-		return el;
-    };
-    
-    self.setHidden = function(slotID, collapsed) {
-    	slotID = "slot_"+slotID;
-  		if(window.location && window.location.href && window.localStorage && window.localStorage.getItem) {
-    		var key = window.location.href+":collapsed";
-    	   	var data = window.localStorage.getItem(key);
-    	   	var newData = {};
-    	   	if(data) {
-    	   		data = JSON.parse(data);
-    	   		if(data) {
-    	   			newData = data;
-    	   		}
-    	   	}
-    	   	newData[slotID] = collapsed;
-    	   	window.localStorage.setItem(key, JSON.stringify(newData));
-    	}
-    }
-    
-    self.wasHidden = function(slotID) {
-    	slotID = "slot_"+slotID;
-    	if(window.location && window.location.href && window.localStorage && window.localStorage.getItem) {
-    		var key = window.location.href+":collapsed";
-    	   	var data = window.localStorage.getItem(key);
-    	   	if(data) {
-    	   		data = JSON.parse(data);
-    	   		if(data) {
-    	   			if(slotID in data) {
-    	   				return data[slotID];
-    	   			}
-    	   		}
-    	   	}
-    	}
-    	return false;
-    }
-	
-	self.showLoginPanel =  function() {
-		txtHeader.style.display="block";
-	}
-	
-    self.loadTerms = function(useWaiter, revealLoader) {
-    	if(useWaiter) {
-    		self.setWaiterVisible(true);
-    	}
-    	if(revealLoader) {
-    		id_loader.style.display = "";
-    	}
-   		var cbFail = function(data) {
-    		term_table_root.innerHTML = "";
-   			if(useWaiter) {
-	    		self.setWaiterVisible(false);
-    		}
-			id_loader.innerHTML = self.common.dec(data);
-			id_loader.classList.remove("loader");
-			id_loader.classList.add("loader_error");
-		};
-		var cbOk = function(data) {
-			term_table_root.innerHTML = "";
-   			if(useWaiter) {
-	    		self.setWaiterVisible(false);
-    		}
-			id_loader.style.display = "none";
-			var deco = self.common.decode(data);
-			if(deco!==false){
-				var jsn = JSON.parse(deco);
-				if(jsn!==false){
-					if(jsn.code === 0 && jsn.result) {
-						var result = JSON.parse(jsn.result);
-						if(result && result.MyData && result.Available) {
-							self.materialize(result);
-							self.showLoginPanel();
-						} else {
-							cbFail(self.common.dec("Nepodařilo se nahrát termíny kvůli špatné struktuře ze serveru"));
-						}
-					} else {
-						if(jsn.code == 53){
-							document.location.reload();
-						} else {
-							cbFail(self.common.dec("Nepodařilo se nahrát termíny: <br />" + jsn.result));
-						}
-					}
-					return;
-				}
-			}
-			cbFail(self.common.dec("Nepodařilo se dekódovat testy"));
-		};
-		var data = {"action":"HANDLE_TERMS", "term_data": "getTerms"};
-		var txtEnc = "q=" + self.common.encode(JSON.stringify(data));
-		self.common.async(txtEnc, cbOk, cbFail);
-    }
-    
-    self.setWaiterVisible = function(visible) {
-    	var waiterObj = document.getElementById("id_waiter");
-		if (visible) {
-			waiterObj.style.display = "block";
-		} else {
-			waiterObj.style.display = "none";
-		}
-    }
-
-	self.aload = function() {
-	   txtLogin.innerHTML = self.common.IDENTITY_TOKEN.name + " ("+self.common.IDENTITY_TOKEN.primary+"@"+self.common.IDENTITY_TOKEN.group+")";
-	   btnLogout.addEventListener("click", function(){self.common.logout();});
-	   self.loadTerms(false, true);
-	   if(window.pastAload){
-           window.pastAload();
-	   }
-	}
-
-}
 
 function aload() {
 	window.tester = new tester();
 	tester.aload();
 }
 
-function cviceni_load() {
-   window.terminer = new terminer();
-   terminer.aload();
-}
-
-$INJECT_ADMIN$
+$INJECT(common.js)$
+$INJECT(WEB.ADMIN, admin.js)$

@@ -1,12 +1,24 @@
 package cz.rion.buildserver.http.stateless;
 
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
+import java.util.regex.MatchResult;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.StaticDB;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
+import cz.rion.buildserver.db.layers.staticDB.LayeredPermissionDB.UsersPermission;
 import cz.rion.buildserver.http.HTTPResponse;
+import cz.rion.buildserver.json.JsonValue.JsonObject;
+import cz.rion.buildserver.permissions.PermissionBranch;
 import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 import cz.rion.buildserver.utils.CachedData;
 import cz.rion.buildserver.utils.CachedDataGetter;
@@ -18,6 +30,71 @@ import cz.rion.buildserver.wrappers.FileReadException;
 import cz.rion.buildserver.wrappers.MyFS;
 
 public class StatelessFileProviderClient extends StatelessAdminClient {
+	private static final class JWTCrypto {
+
+		private static String jwt_header = null;
+
+		private static final String base64(String data) {
+			return Base64.getEncoder().encodeToString(data.getBytes(Settings.getDefaultCharset())).replaceAll("=", "");
+		}
+
+		private static String encode(byte[] bytes) {
+			return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+		}
+
+		private static String hmacSha256(String data, String secret) {
+			try {
+				byte[] hash = secret.getBytes(Settings.getDefaultCharset());
+				Mac sha256Hmac = Mac.getInstance("HmacSHA256");
+				SecretKeySpec secretKey = new SecretKeySpec(hash, "HmacSHA256");
+				sha256Hmac.init(secretKey);
+				byte[] signedBytes = sha256Hmac.doFinal(data.getBytes(Settings.getDefaultCharset()));
+				return encode(signedBytes);
+			} catch (InvalidKeyException | NoSuchAlgorithmException ex) {
+				return null;
+			}
+		}
+
+		private static String EncodeHMAC(String data) {
+			if (jwt_header == null) {
+				JsonObject obj = new JsonObject();
+				obj.add("alg", "HS256");
+				obj.add("typ", "JWT");
+				jwt_header = obj.getJsonString();
+			}
+			String bheader = base64(jwt_header);
+			String bdata = base64(data);
+			String signature = hmacSha256(bheader + "." + bdata, Settings.getJWTSecret());
+			if (signature == null) {
+				return null;
+			}
+			String jwtToken = bheader + "." + bdata + "." + signature;
+			return jwtToken;
+		}
+
+		private static final PermissionBranch pb = new PermissionBranch("MEET.ADMIN");
+
+		private static String getJWT(ProcessState state) {
+			JsonObject obj = new JsonObject();
+			UsersPermission perms = state.getPermissions();
+			JsonObject context = new JsonObject();
+			// context.add("avatar", "https://robohash.org/john-doe");
+			JsonObject user = new JsonObject();
+			user.add("name", perms.getFullName());
+			user.add("email", perms.getEmail());
+			context.add("user", user);
+
+			obj.add("name", perms.getFullName());
+			obj.add("context", context);
+			obj.add("aud", Settings.getJWTApp());
+			obj.add("iss", Settings.getJWTApp());
+			obj.add("sub", "meet.jitsi");
+			obj.add("room", "TEST");
+			obj.add("moderator", perms.can(pb));
+			return EncodeHMAC(obj.getJsonString());
+		}
+
+	}
 
 	private final StatelessInitData data;
 
@@ -26,12 +103,62 @@ public class StatelessFileProviderClient extends StatelessAdminClient {
 		this.data = data;
 	}
 
-	protected String handleJSManipulation(ProcessState state, String path, String content) {
-		String repl = "";
-		if (state.getPermissions().allowSeeWebAdmin()) {
-			repl = readFileOrDBFile("admin.js");
+	private String handleReplacements(String content, UsersPermission perms) {
+
+		final String regex = "\\$INJECT\\(([a-zA-Z0-9\\.]+,){0,1} *([a-zA-Z0-9_\\.\\/]+)\\)\\$";
+
+		final Pattern pattern = Pattern.compile(regex, Pattern.MULTILINE);
+		final Matcher matcher = pattern.matcher(content);
+
+		while (matcher.find()) {
+			final MatchResult matchResult = matcher.toMatchResult();
+			String name = null;
+			if (matchResult.groupCount() == 1) {
+				name = matchResult.group(0);
+			} else if (matchResult.groupCount() == 2) {
+				name = matchResult.group(2);
+				String permsD = matchResult.group(1);
+				if (permsD != null) {
+					if (!perms.can(new PermissionBranch(permsD))) {
+						name = null;
+					}
+				}
+			} else {
+				continue;
+			}
+			String replacement = "";
+			if (name != null) {
+				replacement = readFileOrDBFile(name);
+				if (replacement == null) {
+					replacement = "";
+				} else {
+					replacement = handleReplacements(replacement, perms);
+				}
+			}
+			content = content.substring(0, matchResult.start()) + replacement + content.substring(matchResult.end());
+			matcher.reset(content);
 		}
-		content = content.replace("$INJECT_ADMIN$", repl);
+
+		return content;
+	}
+
+	protected String handleJSManipulation(ProcessState state, String path, String content) {
+		content = handleReplacements(content, state.getPermissions());
+
+		{
+			int index = content.indexOf("$INJECT_JWT$");
+			if (index != -1) {
+				String jwt = null;
+				try {
+					jwt = JWTCrypto.getJWT(state);
+				} catch (Throwable t) {
+					t.printStackTrace();
+				}
+				String repl = jwt == null ? "alert(\"Nepodarilo se ziskat prihlasovaci udaje\");return false;" : jwt;
+				content = content.replace("$INJECT_JWT$", repl);
+			}
+		}
+
 		return content;
 	}
 
@@ -40,11 +167,7 @@ public class StatelessFileProviderClient extends StatelessAdminClient {
 	}
 
 	protected String handleCSSManipulation(ProcessState state, String path, String content) {
-		String repl = "";
-		if (state.getPermissions().allowSeeWebAdmin()) {
-			repl = readFileOrDBFile("admin.css");
-		}
-		content = content.replace("$INJECT_ADMIN$", repl);
+		content = handleReplacements(content, state.getPermissions());
 		return content;
 	}
 
@@ -154,7 +277,7 @@ public class StatelessFileProviderClient extends StatelessAdminClient {
 
 			if (state.Request.path.startsWith("/") && state.Request.method.equals("GET")) {
 				int returnCode = 200;
-				String type = "multipart/form-data;";
+				String type = "text/html;";
 				String returnCodeDescription = "OK";
 
 				byte[] data = ("\"" + state.Request.path + "\" neumim!").getBytes(Settings.getDefaultCharset());

@@ -50,18 +50,6 @@ public class StatelessTestClient extends StatelessTermClient {
 		return others;
 	}
 
-	private static int fromHex(char c) throws HTTPClientException {
-		if (c >= '0' && c <= '9') {
-			return c - '0';
-		} else if (c >= 'A' && c <= 'F') {
-			return 10 + c - 'A';
-		} else if (c >= 'a' && c <= 'f') {
-			return 10 + c - 'a';
-		} else {
-			throw new HTTPClientException("Invalid data item: " + c);
-		}
-	}
-
 	@Override
 	protected String handleJSManipulation(ProcessState state, String path, String js) {
 		js = super.handleJSManipulation(state, path, js);
@@ -95,68 +83,21 @@ public class StatelessTestClient extends StatelessTermClient {
 		}
 	});
 
-	private static String decode(byte[] data) throws HTTPClientException {
-		StringBuilder sb = new StringBuilder();
-		for (int i = 0; i < data.length / 2; i++) {
-			char c1 = (char) data[i * 2];
-			char c2 = (char) data[(i * 2) + 1];
-			int x = (fromHex(c1) << 4) | fromHex(c2);
-			char c = (char) x;
-			sb.append(c);
-		}
-		return sb.toString();
-	}
-
-	private static char toHex(int c) throws HTTPClientException {
-		if (c >= 0 && c <= 9) {
-			return (char) (c + '0');
-		} else if (c >= 10 && c <= 15) {
-			return (char) ((c - 10) + 'a');
-		} else {
-			throw new HTTPClientException("Invlaid by to encode");
-		}
-	}
-
-	private static byte[] encode(String data) throws HTTPClientException {
-		byte[] bdata = data.getBytes(Settings.getDefaultCharset());
-		byte[] result = new byte[bdata.length * 2];
-
-		for (int i = 0; i < bdata.length; i++) {
-			int c = bdata[i] & 0xff;
-			char c1 = toHex((byte) (c >> 4));
-			char c2 = toHex((byte) (c & 0b1111));
-			result[i * 2] = (byte) c1;
-			result[(i * 2) + 1] = (byte) c2;
-		}
-		return result;
-	}
-
 	private boolean canBypassTimeout(ProcessState state) {
 		return state.getPermissions().allowBypassTimeout() || !Settings.getForceTimeoutOnErrors();
 	}
 
 	private JsonObject decode(HTTPRequest request) {
-		byte[] data = request.data;
-		if (data[0] == 'q' && data[1] == '=') {
-			byte[] newData = new byte[data.length - 2];
-			System.arraycopy(data, 2, newData, 0, data.length - 2);
-			data = newData;
-		}
-		if (data.length % 2 == 0) {
-			String jsn;
-			try {
-				jsn = decode(data);
-			} catch (HTTPClientException e) {
-				e.printStackTrace();
-				return null;
-			}
-			JsonValue json = JsonValue.parse(jsn);
+		try {
+			JsonValue json = JsonValue.parse(new String(request.data, Settings.getDefaultCharset()));
 			if (json != null) {
 				if (json.isObject()) {
 					JsonObject obj = json.asObject();
 					return obj;
 				}
 			}
+		} catch (Exception e) {
+			e.printStackTrace();
 		}
 		return null;
 	}
@@ -305,12 +246,15 @@ public class StatelessTestClient extends StatelessTermClient {
 			return returnValue;
 		}
 
+		JsonObject res = new JsonObject();
+		res.add("tests", new JsonArray(d));
+
 		returnValue.add("code", new JsonNumber(0));
-		returnValue.add("tests", new JsonArray(d));
+		returnValue.add("result", res.getJsonString());
 		if (canBypassTimeout(state)) {
-			returnValue.add("wait", new JsonNumber(0, (new Date().getTime() - 10000) + ""));
+			res.add("wait", new JsonNumber(0, (new Date().getTime() - 10000) + ""));
 		} else {
-			returnValue.add("wait", new JsonNumber(0, (badResults.AllowNext.getTime()) + ""));
+			res.add("wait", new JsonNumber(0, (badResults.AllowNext.getTime()) + ""));
 		}
 		return returnValue;
 	}
@@ -320,7 +264,7 @@ public class StatelessTestClient extends StatelessTermClient {
 		JsonValue graphs = loadGraphs(state);
 		JsonObject returnValue = new JsonObject();
 		returnValue.add("code", new JsonNumber(0));
-		returnValue.add("data", graphs == null ? new JsonArray(new ArrayList<JsonValue>()) : graphs);
+		returnValue.add("result", graphs == null ? new JsonArray(new ArrayList<JsonValue>()).getJsonString() : graphs.getJsonString());
 		return returnValue;
 	}
 
@@ -332,6 +276,11 @@ public class StatelessTestClient extends StatelessTermClient {
 	private JsonObject execute_terms(ProcessState state, JsonObject data) {
 		state.setIntention(Intention.TERM_COMMAND);
 		return handleTermsEvent(state, data);
+	}
+
+	private JsonObject execute_exams(ProcessState state, JsonObject data) {
+		state.setIntention(Intention.EXAM_COMMAND);
+		return handleExamsEvent(state, data);
 	}
 
 	private JsonObject execute(ProcessState state, JsonObject input) {
@@ -357,6 +306,8 @@ public class StatelessTestClient extends StatelessTermClient {
 				return execute_admin(state, input);
 			} else if (act.equals("HANDLE_TERMS")) {
 				return execute_terms(state, input);
+			} else if (act.equals("HANDLE_EXAMS")) {
+				return execute_exams(state, input);
 			}
 		}
 		JsonObject obj = new JsonObject();
@@ -365,27 +316,15 @@ public class StatelessTestClient extends StatelessTermClient {
 		return obj;
 	}
 
-	private byte[] encode(JsonObject obj) {
-		try {
-			return encode(obj.getJsonString());
-		} catch (HTTPClientException e) {
-			e.printStackTrace();
-		}
-		return null;
-	}
-
 	@Override
 	protected HTTPResponse handle(ProcessState state) {
-		if (state.Request.path.startsWith("/test?cache=") && state.Request.method.equals("POST") && state.Request.data.length > 0) {
+		if (state.Request.path.startsWith("/exec?cache=") && state.Request.method.equals("POST") && state.Request.data.length > 0) {
 			byte[] data = new byte[0];
 			JsonObject req = decode(state.Request);
 			if (req != null) {
 				JsonObject resp = execute(state, req);
 				if (resp != null) {
-					byte[] rdata = encode(resp);
-					if (rdata != null) {
-						data = rdata;
-					}
+					data = resp.getJsonString().getBytes(Settings.getDefaultCharset());
 				}
 			}
 			return new HTTPResponse(state.Request.protocol, 200, "OK", data, "multipart/form-data;", state.Request.cookiesLines);
