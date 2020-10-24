@@ -12,7 +12,6 @@ import cz.rion.buildserver.db.RuntimeDB.BadResults;
 import cz.rion.buildserver.db.RuntimeDB.CompletedTest;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.exceptions.DatabaseException;
-import cz.rion.buildserver.exceptions.HTTPClientException;
 import cz.rion.buildserver.http.HTTPRequest;
 import cz.rion.buildserver.http.HTTPResponse;
 import cz.rion.buildserver.json.JsonValue;
@@ -116,7 +115,7 @@ public class StatelessTestClient extends StatelessTermClient {
 			e.printStackTrace();
 			returnValue.add("code", new JsonNumber(53));
 			returnValue.add("result", new JsonString("Not logged in"));
-			returnValue.add("authUrl", new JsonString(Settings.getAuthURL(state.Toolchain.getName(), "")));
+			returnValue.add("authUrl", new JsonString(Settings.getAuthURL(state.Request.protocol, state.Request.host)));
 			return returnValue;
 		}
 		boolean canBypassTimeout = canBypassTimeout(state);
@@ -242,7 +241,7 @@ public class StatelessTestClient extends StatelessTermClient {
 			e.printStackTrace();
 			returnValue.add("code", new JsonNumber(53));
 			returnValue.add("result", new JsonString("Not logged in"));
-			returnValue.add("authUrl", new JsonString(Settings.getAuthURL(state.Toolchain.getName(), "")));
+			returnValue.add("authUrl", new JsonString(Settings.getAuthURL(state.Request.protocol, state.Request.host)));
 			return returnValue;
 		}
 
@@ -288,7 +287,7 @@ public class StatelessTestClient extends StatelessTermClient {
 			JsonObject returnValue = new JsonObject();
 			returnValue.add("code", new JsonNumber(53));
 			returnValue.add("result", new JsonString("Not logged in"));
-			returnValue.add("authUrl", new JsonString(Settings.getAuthURL(state.Toolchain.getName(), "")));
+			returnValue.add("authUrl", new JsonString(Settings.getAuthURL(state.Request.protocol, state.Request.host)));
 			return returnValue;
 		}
 

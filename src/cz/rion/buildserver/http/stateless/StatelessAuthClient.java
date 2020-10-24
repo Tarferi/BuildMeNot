@@ -29,8 +29,7 @@ public class StatelessAuthClient extends StatelessTestClient {
 		cookieLines.add("token=deleted; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT");
 
 		HTTPResponse resp = new HTTPResponse(state.Request.protocol, 307, "Logout", new byte[0], null, cookieLines);
-		String tc = state.Request.host.trim().equals("meet.rion.cz") ? "bongo" : state.Toolchain.getName();
-		resp.addAdditionalHeaderField("Location", Settings.getAuthURL(tc, state.Request.host) + "?action=logout");
+		resp.addAdditionalHeaderField("Location", Settings.getAuthURL(state.Request.protocol, state.Request.host) + "&action=logout");
 		return resp;
 	}
 
@@ -38,6 +37,7 @@ public class StatelessAuthClient extends StatelessTestClient {
 	protected String handleJSManipulation(ProcessState state, String path, String js) {
 		js = super.handleJSManipulation(state, path, js);
 		js = js.replace("$IDENTITY_TOKEN$", state.getPermissions().getIdentity().getJsonString());
+		js = js.replace("$REMOTE_NOW$", System.currentTimeMillis() + "");
 		return js;
 	}
 
@@ -114,8 +114,7 @@ public class StatelessAuthClient extends StatelessTestClient {
 			}
 		}
 
-		String tc = state.Request.host.trim().equals("meet.rion.cz") ? "bongo" : state.Toolchain.getName();
-		String redirectLocation = Settings.getAuthURL(tc, state.Request.host) + "?cache=" + RuntimeDB.randomstr(32);
+		String redirectLocation = Settings.getAuthURL(state.Request.protocol, state.Request.host) + "&cache=" + RuntimeDB.randomstr(32);
 
 		String redirectMessage = "OK but login first";
 		List<String> cookieLines = state.Request.cookiesLines;
@@ -139,11 +138,12 @@ public class StatelessAuthClient extends StatelessTestClient {
 				if (session != null) { // Logged in, set cookie and redirect once more to here
 					String host = state.Request.headers.containsKey("host") ? state.Request.headers.get("host") : null;
 					if (host != null) {
-						redirectLocation = "https://" + host + state.Request.path;
+						redirectLocation = state.Request.protocol.split("/")[0].toLowerCase().trim() + "://" + host + "/" + state.Request.path;
 						redirectMessage = "Logged in, redirect once more";
 						// Create new cookies
 						cookieLines = new ArrayList<>();
 						cookieLines.add(Settings.getCookieName() + "=" + session + "; Max-Age=2592000; Domain=" + host + "; Path=/");
+						return getJSRedirect(state, cookieLines, Settings.getCookieName(), session);
 					}
 				}
 			} catch (Exception e) {
@@ -154,7 +154,19 @@ public class StatelessAuthClient extends StatelessTestClient {
 		byte[] data = new byte[0];
 		HTTPResponse resp = new HTTPResponse(state.Request.protocol, 307, redirectMessage, data, null, cookieLines);
 		resp.addAdditionalHeaderField("Location", redirectLocation);
+		return resp;
+	}
 
+	private HTTPResponse getJSRedirect(ProcessState state, List<String> cookieLines, String newCookieName, String newCookieContents) {
+		StringBuilder sb = new StringBuilder();
+		sb.append("<script>\r\n");
+		sb.append("var d = new Date();\r\n");
+		sb.append("d.setTime(d.getTime() + (7*24*60*60*1000));\r\n");
+		sb.append("var expires = \"expires=\"+ d.toUTCString();\r\n");
+		sb.append("document.cookie = \"" + newCookieName + "=" + newCookieContents + "; expires=\" + expires + \" UTC; path=/\";\r\n");
+		sb.append("window.location.href=document.location.protocol + \"//" + state.Request.host + "\"\r\n");
+		sb.append("</script>");
+		HTTPResponse resp = new HTTPResponse(state.Request.protocol, 200, "OK", sb.toString(), "text/html", cookieLines);
 		return resp;
 	}
 

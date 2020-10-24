@@ -4,6 +4,8 @@ import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.sun.org.apache.xml.internal.security.utils.Base64;
+
 import cz.rion.buildserver.wrappers.FileReadException;
 import cz.rion.buildserver.wrappers.MyFS;
 
@@ -220,12 +222,15 @@ public class Settings {
 		return instance.authURL.asString() != null;
 	}
 
-	public static String getAuthURL(String toolchain, String host) {
-		int fi = host.toLowerCase().indexOf(toolchain.toLowerCase());
-		if (fi > 0) {
-			toolchain = toolchain + "/" + host.substring(0, fi - 1);
+	public static String getAuthURL(String protocol, String host) {
+		if (Settings.ForceSSL()) {
+			protocol = "https";
+		} else {
+			protocol = protocol.split("/")[0].toLowerCase().trim();
 		}
-		return instance.authURL.asString() + "/" + toolchain.toLowerCase();
+		@SuppressWarnings("deprecation")
+		String ret = Base64.encode((protocol + "://" + host).getBytes(Settings.getDefaultCharset()));
+		return instance.authURL.asString() + "?return=" + ret.replaceAll("=", "");
 	}
 
 	public static String getMainDB() {
@@ -236,7 +241,7 @@ public class Settings {
 		return instance.static_db.asString();
 	}
 
-	public static Object getCookieName() {
+	public static String getCookieName() {
 		return instance.cookieName.asString();
 	}
 

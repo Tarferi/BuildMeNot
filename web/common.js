@@ -5,6 +5,15 @@ var Common = function() {
 	var self = this;
 	self.hasLoginPanel = false;
 	self.identity = $IDENTITY_TOKEN$;
+
+	var REMOTE_NOW = $REMOTE_NOW$;
+	var now = new Date().getTime();
+	
+	var diff = REMOTE_NOW - now;
+	
+	self.getRemoteNow = function() {
+		return new Date().getTime() + diff;
+	}
 	
 	self.logout = function() {
 	    var cookies = document.cookie.split(";");
@@ -145,8 +154,8 @@ var Common = function() {
 								}
 							}
 						}
+						callbackFail(self.getErrorSolution(0));
 					}
-					callbackFail(self.getErrorSolution(0));
 				}
 			};
 			http.onerror = function(e) {
@@ -193,12 +202,15 @@ var Common = function() {
 			document.body.appendChild(self.loginPnl);
 			ids.txtLogin.innerHTML = self.identity.name + " ("+self.identity.primary+"@"+self.identity.group+")&nbsp;";
 			document.body.style.marginTop = "60px";
+			self.loginPnl.style.display = self.loginPanelVisible ? "" : "none";
 		}
 	}
 	
+	self.loginPanelVisible = false;
 	self.setLoginPanelVisible = function(vis) {
+		self.loginPanelVisible = vis;
 		if(self.loginPnl) {
-			self.loginPnl.style.display = vis ? "" : "none";
+			self.loginPnl.style.display = self.loginPanelVisible ? "" : "none";
 		} 
 	}
 	
