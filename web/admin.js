@@ -283,7 +283,7 @@ var Admin = function(givenCommon) {
 			self.txtNewPath.value = "";
 		}, function(err) {
 			alert(err);
-		})
+		}, false)
 	}
 
 	self.navigatorUpdate = function() {
