@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import cz.rion.buildserver.db.DatabaseInitData;
+import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 import cz.rion.buildserver.wrappers.MyThread;
@@ -16,11 +17,10 @@ public abstract class LayeredThreadDB extends LayeredUserDB {
 	private static final String ThreadsAllThreads = "All Threads";
 
 	private final List<MyThread> threads = new ArrayList<>();
-	
+
 	public LayeredThreadDB(DatabaseInitData dbName) throws DatabaseException {
 		super(dbName);
 	}
-
 
 	@Override
 	public List<DatabaseFile> getFiles() {
@@ -56,7 +56,7 @@ public abstract class LayeredThreadDB extends LayeredUserDB {
 	}
 
 	@Override
-	public FileInfo loadFile(String name, boolean decodeBigString) {
+	public FileInfo loadFile(String name, boolean decodeBigString, Toolchain toolchain) {
 		if (name.startsWith(ThreadsDir) && name.endsWith(ThreadsExtension)) {
 			String threadName = name.substring(ThreadsDir.length());
 			threadName = threadName.substring(0, threadName.length() - ThreadsExtension.length());
@@ -74,7 +74,7 @@ public abstract class LayeredThreadDB extends LayeredUserDB {
 			}
 			return new FileInfo(DB_THREAD_BASE, name, "Failed to load thread info: thread not found");
 		} else {
-			return super.loadFile(name, decodeBigString);
+			return super.loadFile(name, decodeBigString, toolchain);
 		}
 	}
 
@@ -96,7 +96,7 @@ public abstract class LayeredThreadDB extends LayeredUserDB {
 	}
 
 	@Override
-	public FileInfo getFile(int fileID, boolean decodeBigString) throws DatabaseException {
+	public FileInfo getFile(int fileID, boolean decodeBigString, Toolchain toolchain) throws DatabaseException {
 		if (fileID == DB_THREAD_BASE) { // All threads
 			return new FileInfo(fileID, ThreadsDir + ThreadsAllThreads + ThreadsExtension, getAllThreadsData());
 		} else if (fileID > DB_THREAD_BASE && fileID < DB_THREAD_BASE + threads.size() + 1) {
@@ -105,7 +105,7 @@ public abstract class LayeredThreadDB extends LayeredUserDB {
 				return new FileInfo(fileID, ThreadsDir + thread.getName() + ThreadsExtension, thread.getStackTrace());
 			}
 		} else {
-			return super.getFile(fileID, decodeBigString);
+			return super.getFile(fileID, decodeBigString, toolchain);
 		}
 	}
 }

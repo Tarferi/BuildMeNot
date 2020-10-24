@@ -831,7 +831,7 @@ public class RuntimeDB extends LayeredMetaDB {
 		@Override
 		protected Map<String, BypassedClient> update() {
 			Map<String, BypassedClient> result = new HashMap<>();
-			FileInfo f = sdb.loadFile("remapped_users.ini", true);
+			FileInfo f = sdb.loadFile("remapped_users.ini", true, null);
 			if (f != null) {
 				for (String line : f.Contents.split("\n")) {
 					line = line.trim();

@@ -7,6 +7,7 @@ import java.util.Map;
 
 import cz.rion.buildserver.db.DatabaseInitData;
 import cz.rion.buildserver.db.SQLiteDB;
+import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
@@ -65,14 +66,21 @@ public class LayeredMetaDB extends SQLiteDB {
 		return tables.containsKey(name.toLowerCase());
 	}
 
-	public final JsonArray readTable(String tableName, boolean decodeBigString) throws DatabaseException {
+	public final JsonArray readTable(String tableName, boolean decodeBigString, Toolchain toolchain) throws DatabaseException {
 		List<TableField> fields = this.getFields(tableName);
 		TableField[] fld = new TableField[fields.size()];
 		for (int i = 0; i < fld.length; i++) {
 			TableField f = fields.get(i);
 			fld[i] = f;
 		}
-		return this.select(tableName, fld, decodeBigString);
+		ComparisionField[] fa = new ComparisionField[0];
+		if (toolchain != null) {
+			try {
+				fa = new ComparisionField[] { new ComparisionField(getField(tableName, "toolchain"), toolchain.getName()) };
+			} catch (Exception e) {
+			}
+		}
+		return this.select(tableName, fld, decodeBigString, fa);
 	}
 
 	private final Map<String, Map<String, TableField>> __fieldsCache = new HashMap<>();
@@ -107,11 +115,10 @@ public class LayeredMetaDB extends SQLiteDB {
 		return resultField;
 	}
 
-
 	public boolean tableWriteable(String tableName) {
 		return true;
 	}
-	
+
 	public final List<TableField> getFields(String name) {
 		JsonArray res;
 		try {

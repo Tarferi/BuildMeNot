@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 
 import cz.rion.buildserver.db.DatabaseInitData;
+import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 
@@ -76,7 +77,7 @@ public class LayeredVirtualFilesDB extends LayeredFilesDB {
 	}
 
 	@Override
-	public FileInfo loadFile(String name, boolean decodeBigString) {
+	public FileInfo loadFile(String name, boolean decodeBigString, Toolchain toolchain) {
 		if (filesByName.containsKey(name)) {
 			try {
 				return new FileInfo(IdsByName.get(name), name, filesByName.get(name).read());
@@ -85,17 +86,17 @@ public class LayeredVirtualFilesDB extends LayeredFilesDB {
 				return null;
 			}
 		} else {
-			return super.loadFile(name, decodeBigString);
+			return super.loadFile(name, decodeBigString, toolchain);
 		}
 	}
 
 	@Override
-	public FileInfo getFile(int fileID, boolean decodeBigString) throws DatabaseException {
+	public FileInfo getFile(int fileID, boolean decodeBigString, Toolchain toolchain) throws DatabaseException {
 		if (filesById.containsKey(fileID)) {
 			VirtualFile vf = filesById.get(fileID);
 			return new FileInfo(fileID, vf.getName(), vf.read());
 		} else {
-			return super.getFile(fileID, decodeBigString);
+			return super.getFile(fileID, decodeBigString, toolchain);
 		}
 	}
 }

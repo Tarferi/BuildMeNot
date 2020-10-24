@@ -970,7 +970,7 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 	private void initDefaultToolchains() throws DatabaseException {
 		addNasmToolchain();
 		addGCCToolchain();
-		FileInfo tcf = this.loadFile("toolchains.ini", true);
+		FileInfo tcf = this.loadFile("toolchains.ini", true, null);
 		if (tcf != null) {
 			Set<String> loaded = new HashSet<>();
 			loaded.add("IZP");

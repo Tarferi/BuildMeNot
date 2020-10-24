@@ -17,6 +17,7 @@ import java.util.Set;
 import cz.rion.buildserver.compression.Compressor;
 import cz.rion.buildserver.compression.Decompressor;
 import cz.rion.buildserver.db.layers.common.LayeredMetaDB;
+import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.exceptions.CompressionException;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.json.JsonValue;
@@ -373,7 +374,7 @@ public abstract class SQLiteDB {
 		if (res != null) {
 			JsonArray ar;
 			try {
-				ar = res.getJSON(decodeBigString, fields);
+				ar = res.getJSON(decodeBigString, fields, null);
 			} catch (CompressionException e) {
 				throw new DatabaseException("Failed to decode encoded string data", e);
 			}
@@ -435,7 +436,7 @@ public abstract class SQLiteDB {
 
 		private boolean closed = false;
 
-		public JsonArray getJSON(boolean decodeBigString, TableField[] fields) throws CompressionException {
+		public JsonArray getJSON(boolean decodeBigString, TableField[] fields, Toolchain toolchain) throws CompressionException {
 			JsonArray ar = new JsonArray(new ArrayList<JsonValue>());
 			try {
 				ResultSetMetaData rsmd = rs.getMetaData();
@@ -452,15 +453,21 @@ public abstract class SQLiteDB {
 				int[] colTypes = new int[rsmd.getColumnCount()];
 				boolean[] colCompressed = new boolean[rsmd.getColumnCount()];
 
+				int resToolchainIndex = -1;
 				for (int i = 0; i < colNames.length; i++) {
 					colNames[i] = rsmd.getColumnName(i + 1);
 					colTypes[i] = rsmd.getColumnType(i + 1);
+					if (colNames[i].toLowerCase().equals("toolchain")) {
+						resToolchainIndex = i;
+					}
 					colCompressed[i] = fieldsMap.containsKey(colNames[i].toLowerCase()) ? fieldsMap.get(colNames[i].toLowerCase()).field.IsBigString() : false;
 				}
 
+				int toolchainColumnIndex = toolchain == null ? -1 : resToolchainIndex;
+
 				while (rs.next()) {
 					JsonObject obj = new JsonObject();
-
+					boolean add = true;
 					for (int i = 0; i < colNames.length; i++) {
 						String colName = colNames[i];
 						int colType = colTypes[i];
@@ -471,10 +478,18 @@ public abstract class SQLiteDB {
 							if (decodeBigString && colCompressed[i] && str != null) {
 								str = Decompressor.decompress(str);
 							}
+							if (i == toolchainColumnIndex) {
+								if (!str.equals(toolchain.getName())) {
+									add = false;
+									break;
+								}
+							}
 							obj.add(colName, new JsonString(str));
 						}
 					}
-					ar.add(obj);
+					if (add) {
+						ar.add(obj);
+					}
 				}
 			} catch (SQLException e) {
 				e.printStackTrace();

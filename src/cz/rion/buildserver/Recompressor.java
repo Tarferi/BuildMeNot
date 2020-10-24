@@ -36,7 +36,7 @@ public class Recompressor {
 
 	@SuppressWarnings("deprecation")
 	private void handle(LayeredMetaDB db, TableField field) throws DatabaseException, CompressionException {
-		JsonArray allData = db.select_raw("SELECT * FROM " + field.table).getJSON(false, getFields(db, field.table));
+		JsonArray allData = db.select_raw("SELECT * FROM " + field.table).getJSON(false, getFields(db, field.table), null);
 		int all = allData.Value.size();
 		int done = 0;
 		for (JsonValue val : allData.Value) {

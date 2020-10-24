@@ -98,7 +98,7 @@ public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
 						return "Failed to read file";
 					}
 					try {
-						return JsonValue.getPrettyJsonString(fdb.getFile(realFileObj.ID, true).Contents);
+						return JsonValue.getPrettyJsonString(fdb.getFile(realFileObj.ID, true, null).Contents);
 					} catch (DatabaseException e) {
 						e.printStackTrace();
 						return "Failed to read file";
@@ -632,8 +632,8 @@ public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
 	}
 
 	@Override
-	public FileInfo loadFile(String name, boolean decodeBigString) {
-		FileInfo fo = super.loadFile(name, decodeBigString);
+	public FileInfo loadFile(String name, boolean decodeBigString,Toolchain toolchain) {
+		FileInfo fo = super.loadFile(name, decodeBigString, toolchain);
 		if (fo != null) {
 			if (loadedVirtualFiles.containsKey(fo.FileName)) {
 				return new FileInfo(fo.ID, fo.FileName, JsonValue.getPrettyJsonString(fo.Contents));
@@ -643,8 +643,8 @@ public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
 	}
 
 	@Override
-	public FileInfo getFile(int fileID, boolean decodeBigString) throws DatabaseException {
-		FileInfo fo = super.getFile(fileID, decodeBigString);
+	public FileInfo getFile(int fileID, boolean decodeBigString, Toolchain toolchain) throws DatabaseException {
+		FileInfo fo = super.getFile(fileID, decodeBigString, toolchain);
 		if (fo != null) {
 			if (loadedVirtualFiles.containsKey(fo.FileName)) {
 				return new FileInfo(fo.ID, fo.FileName, JsonValue.getPrettyJsonString(fo.Contents));

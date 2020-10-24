@@ -36,16 +36,16 @@ public class StatelessGraphProviderClient extends StatelessFileProviderClient {
 		return graphCache.get(state.Toolchain);
 	}
 
-	private FileInfo getFile(int fileID, boolean decodeBigString) {
+	private FileInfo getFile(int fileID, boolean decodeBigString, Toolchain toolchain) {
 		FileInfo fo = null;
 		try {
-			fo = data.StaticDB.getFile(fileID, decodeBigString);
+			fo = data.StaticDB.getFile(fileID, decodeBigString, toolchain);
 		} catch (DatabaseException e1) {
 			e1.printStackTrace();
 		}
 		if (fo == null) {
 			try {
-				fo = LayeredDBFileWrapperDB.getFile(data.RuntimeDB, fileID, decodeBigString);
+				fo = LayeredDBFileWrapperDB.getFile(data.RuntimeDB, fileID, decodeBigString, toolchain);
 			} catch (DatabaseException e) {
 				e.printStackTrace();
 			}
@@ -58,7 +58,7 @@ public class StatelessGraphProviderClient extends StatelessFileProviderClient {
 		StaticDB sdb = data.StaticDB;
 		if (fileIds.containsKey(view)) {
 			int fileID = fileIds.get(view);
-			FileInfo fo = LayeredDBFileWrapperDB.processPostLoadedFile(db, LayeredDBFileWrapperDB.processPostLoadedFile(sdb, getFile(fileID, decodeBigString), decodeBigString), decodeBigString);
+			FileInfo fo = LayeredDBFileWrapperDB.processPostLoadedFile(db, LayeredDBFileWrapperDB.processPostLoadedFile(sdb, getFile(fileID, decodeBigString, toolchain), decodeBigString, toolchain), decodeBigString, toolchain);
 			if (fo != null) {
 				JsonValue jsn = JsonValue.parse(fo.Contents);
 				if (jsn != null) {
@@ -107,7 +107,7 @@ public class StatelessGraphProviderClient extends StatelessFileProviderClient {
 					}
 
 					// Load tests
-					FileInfo src = data.StaticDB.loadFile("graphs.cfg", true);
+					FileInfo src = data.StaticDB.loadFile("graphs.cfg", true, toolchain);
 
 					if (src != null) {
 						JsonValue val = JsonValue.parse(src.Contents);

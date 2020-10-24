@@ -20,7 +20,6 @@ import cz.rion.buildserver.db.StaticDB;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.BuildThread.BuilderStats;
 import cz.rion.buildserver.http.CompatibleSocketClient;
-import cz.rion.buildserver.http.server.HTTPServer;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonNumber;
@@ -146,13 +145,13 @@ public class RemoteUIProviderServer {
 			JsonObject obj = val.asObject();
 			FileInfo f;
 			try {
-				f = this.sdb.getFile(fileID, false);
+				f = this.sdb.getFile(fileID, false, null);
 				if (f != null) { // SDB database
 					if (LayeredDBFileWrapperDB.editRow(sdb, f, obj)) {
 						returnCode = 42;
 					}
 				} else { // DB database ?
-					f = LayeredDBFileWrapperDB.getFile(db, fileID, false);
+					f = LayeredDBFileWrapperDB.getFile(db, fileID, false, null);
 					if (f != null) {
 						if (LayeredDBFileWrapperDB.editRow(db, f, obj)) {
 							returnCode = 42;
@@ -193,13 +192,13 @@ public class RemoteUIProviderServer {
 		String newContents = inBuffer.readString();
 		outBuffer.writeInt(FileSavedEvent.ID);
 		try {
-			FileInfo fo = sdb.getFile(fileID, false);
+			FileInfo fo = sdb.getFile(fileID, false, null);
 			if (fo == null) {
 				outBuffer.writeInt(0);
 				return;
 			} else {
 				sdb.storeFile(fo, newFileName, newContents);
-				fo = sdb.getFile(fileID, false);
+				fo = sdb.getFile(fileID, false, null);
 				if (fo == null) { // Check the write operation
 					outBuffer.writeInt(0);
 				} else {
@@ -218,13 +217,13 @@ public class RemoteUIProviderServer {
 	private FileInfo getFile(int fileID) {
 		FileInfo fo = null;
 		try {
-			fo = sdb.getFile(fileID, false);
+			fo = sdb.getFile(fileID, false, null);
 		} catch (DatabaseException e1) {
 			e1.printStackTrace();
 		}
 		if (fo == null) {
 			try {
-				fo = LayeredDBFileWrapperDB.getFile(db, fileID, false);
+				fo = LayeredDBFileWrapperDB.getFile(db, fileID, false, null);
 			} catch (DatabaseException e) {
 				e.printStackTrace();
 			}
@@ -235,7 +234,7 @@ public class RemoteUIProviderServer {
 	private void writeFile(InputPacketRequest inBuffer, MemoryBuffer outBuffer) throws IOException {
 		int fileID = inBuffer.readInt();
 		outBuffer.writeInt(FileLoadedEvent.ID);
-		FileInfo fo = LayeredDBFileWrapperDB.processPostLoadedFile(db, LayeredDBFileWrapperDB.processPostLoadedFile(sdb, getFile(fileID), false), false);
+		FileInfo fo = LayeredDBFileWrapperDB.processPostLoadedFile(db, LayeredDBFileWrapperDB.processPostLoadedFile(sdb, getFile(fileID), false, null), false, null);
 		if (fo == null) {
 			outBuffer.writeInt(0);
 			return;

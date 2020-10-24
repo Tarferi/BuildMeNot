@@ -21,6 +21,12 @@ import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonNumber;
 import cz.rion.buildserver.json.JsonValue.JsonString;
 import cz.rion.buildserver.utils.CachedData;
+import cz.rion.buildserver.utils.CachedDataGetter;
+import cz.rion.buildserver.utils.CachedDataWrapper2;
+import cz.rion.buildserver.utils.CachedToolchainData;
+import cz.rion.buildserver.utils.CachedToolchainData2;
+import cz.rion.buildserver.utils.CachedToolchainDataGetter2;
+import cz.rion.buildserver.utils.CachedToolchainDataWrapper2;
 import cz.rion.buildserver.wrappers.MyExec;
 import cz.rion.buildserver.wrappers.MyExec.MyExecResult;
 import cz.rion.buildserver.wrappers.MyExec.TestResultsExpectations;
@@ -135,46 +141,45 @@ public class TestManager {
 		private Map<String, GenericTest> mtest = new HashMap<String, GenericTest>();
 	}
 
-	private final class CachedTestCollection extends CachedData<TestCollection> {
-
-		private final TestCollection collection = new TestCollection();
-
-		public CachedTestCollection() {
-			super(60);
-		}
+	private final CachedToolchainData2<TestCollection> Tests = new CachedToolchainDataWrapper2<TestCollection>(300, new CachedToolchainDataGetter2<TestCollection>() {
 
 		@Override
-		protected TestCollection update() {
-			synchronized (collection.tests) {
-				collection.tests.clear();
-				collection.mtest.clear();
-				List<GenericTest> jsonTests = JsonTestManager.load(sdb, testDirectory);
-				for (GenericTest test : jsonTests) {
-					String toolchain = test.getToolchain().toLowerCase();
-					if (!collection.tests.containsKey(toolchain)) {
-						collection.tests.put(toolchain, new ArrayList<GenericTest>());
-					}
-					collection.tests.get(toolchain).add(test);
-					collection.mtest.put(test.getToolchain().toUpperCase() + "/" + test.getID().toLowerCase(), test);
-				}
-				for (List<GenericTest> entry : collection.tests.values()) {
-					entry.sort(new Comparator<GenericTest>() {
+		public CachedData<TestCollection> createData(int refreshIntervalInSeconds, final Toolchain toolchain) {
 
-						@Override
-						public int compare(GenericTest o1, GenericTest o2) {
-							return o1.getID().compareTo(o2.getID());
+			return new CachedDataWrapper2<>(refreshIntervalInSeconds, new CachedDataGetter<TestCollection>() {
+
+				@Override
+				public TestCollection update() {
+					TestCollection collection = new TestCollection();
+					collection.tests.clear();
+					collection.mtest.clear();
+					List<GenericTest> jsonTests = JsonTestManager.load(sdb, testDirectory, toolchain);
+					for (GenericTest test : jsonTests) {
+						String toolchain = test.getToolchain().toLowerCase();
+						if (!collection.tests.containsKey(toolchain)) {
+							collection.tests.put(toolchain, new ArrayList<GenericTest>());
 						}
-					});
-				}
-			}
-			return collection;
-		}
+						collection.tests.get(toolchain).add(test);
+						collection.mtest.put(test.getToolchain().toUpperCase() + "/" + test.getID().toLowerCase(), test);
+					}
+					for (List<GenericTest> entry : collection.tests.values()) {
+						entry.sort(new Comparator<GenericTest>() {
 
-	};
+							@Override
+							public int compare(GenericTest o1, GenericTest o2) {
+								return o1.getID().compareTo(o2.getID());
+							}
+						});
+					}
+					return collection;
+				}
+
+			});
+		}
+	});
 
 	private final String testDirectory;
 	private final StaticDB sdb;
-	private final CachedTestCollection Tests = new CachedTestCollection();
 
 	public TestManager(StaticDB sdb, String testDirectory) {
 		this.testDirectory = testDirectory;
@@ -187,8 +192,12 @@ public class TestManager {
 
 	private static final List<GenericTest> emptyListOfTests = new ArrayList<>();
 
-	public List<GenericTest> getAllTests(String toolchain) {
-		return Tests.get().tests.containsKey(toolchain.toLowerCase()) ? Tests.get().tests.get(toolchain.toLowerCase()) : emptyListOfTests;
+	public List<GenericTest> getAllTests(Toolchain toolchain) {
+		TestCollection cache = Tests.get(toolchain);
+		if (cache.tests.containsKey(toolchain.getName().toLowerCase())) {
+			return cache.tests.get(toolchain.getName().toLowerCase());
+		}
+		return emptyListOfTests;
 	}
 
 	private static final Object globalSyncer = new Object();
@@ -227,10 +236,10 @@ public class TestManager {
 
 	public TestResults run(final BadResults badResults, int builderID, Toolchain toolchain, String test_id, String asm, String login) {
 		GenericTest test = null;
-		synchronized (Tests.get().tests) {
+		synchronized (Tests.get(toolchain).tests) {
 			String testKey = toolchain.getName().toUpperCase() + "/" + test_id.toLowerCase();
-			if (Tests.get().mtest.containsKey(testKey)) {
-				test = Tests.get().mtest.get(testKey);
+			if (Tests.get(toolchain).mtest.containsKey(testKey)) {
+				test = Tests.get(toolchain).mtest.get(testKey);
 			}
 		}
 		int code = 1;

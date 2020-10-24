@@ -5,6 +5,7 @@ import java.util.List;
 
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.DatabaseInitData;
+import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
@@ -117,7 +118,7 @@ public abstract class LayeredFilesDB extends LayeredStaticDB {
 		}
 	}
 
-	public FileInfo getFile(int fileID, boolean decodeBigString) throws DatabaseException {
+	public FileInfo getFile(int fileID, boolean decodeBigString, Toolchain toolchain) throws DatabaseException {
 		final String tableName = "files";
 		JsonArray res = select(tableName, new TableField[] { getField(tableName, "ID"), getField(tableName, "name"), getField(tableName, "contents") }, true, new ComparisionField(getField(tableName, "ID"), fileID));
 		if (res != null) {
@@ -171,7 +172,7 @@ public abstract class LayeredFilesDB extends LayeredStaticDB {
 		}
 	}
 
-	public FileInfo loadFile(String name, boolean decodeBigString) {
+	public FileInfo loadFile(String name, boolean decodeBigString, Toolchain toolchain) {
 		try {
 			final String tableName = "files";
 			JsonArray res = select(tableName, new TableField[] { getField(tableName, "ID"), getField(tableName, "name"), getField(tableName, "contents") }, true, new ComparisionField(getField(tableName, "name"), name));

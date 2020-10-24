@@ -40,13 +40,13 @@ public class StatelessAdminClient extends StatelessPermissionClient {
 	private FileInfo getFile(ProcessState state, int fileID) {
 		FileInfo fo = null;
 		try {
-			fo = state.Data.StaticDB.getFile(fileID, true);
+			fo = state.Data.StaticDB.getFile(fileID, true, state.Toolchain);
 		} catch (DatabaseException e1) {
 			e1.printStackTrace();
 		}
 		if (fo == null) {
 			try {
-				fo = LayeredDBFileWrapperDB.getFile(state.Data.RuntimeDB, fileID, true);
+				fo = LayeredDBFileWrapperDB.getFile(state.Data.RuntimeDB, fileID, true, state.Toolchain);
 			} catch (DatabaseException e) {
 				e.printStackTrace();
 			}
@@ -55,7 +55,7 @@ public class StatelessAdminClient extends StatelessPermissionClient {
 	}
 
 	private JsonValue loadFile(ProcessState state, int fileID, boolean log) {
-		FileInfo fo = LayeredDBFileWrapperDB.processPostLoadedFile(state.Data.RuntimeDB, LayeredDBFileWrapperDB.processPostLoadedFile(state.Data.StaticDB, getFile(state, fileID), true), true);
+		FileInfo fo = LayeredDBFileWrapperDB.processPostLoadedFile(state.Data.RuntimeDB, LayeredDBFileWrapperDB.processPostLoadedFile(state.Data.StaticDB, getFile(state, fileID), true, state.Toolchain), true, state.Toolchain);
 		JsonObject obj = new JsonObject();
 		if (fo == null) {
 			if (log) {
@@ -150,13 +150,13 @@ public class StatelessAdminClient extends StatelessPermissionClient {
 				JsonObject obj = val.asObject();
 				FileInfo f;
 				try {
-					f = state.Data.StaticDB.getFile(fileID, false);
+					f = state.Data.StaticDB.getFile(fileID, false, state.Toolchain);
 					if (f != null) { // SDB database
 						if (LayeredDBFileWrapperDB.editRow(state.Data.StaticDB, login, address, state.Data.StaticDB, f, obj)) {
 							return true;
 						}
 					} else { // DB database ?
-						f = LayeredDBFileWrapperDB.getFile(state.Data.RuntimeDB, fileID, false);
+						f = LayeredDBFileWrapperDB.getFile(state.Data.RuntimeDB, fileID, false, state.Toolchain);
 						if (f != null) {
 							if (LayeredDBFileWrapperDB.editRow(state.Data.StaticDB, login, address, state.Data.RuntimeDB, f, obj)) {
 								return true;
@@ -177,7 +177,7 @@ public class StatelessAdminClient extends StatelessPermissionClient {
 			if (f.ID == fileID) {
 				FileInfo fo = null;
 				try {
-					fo = state.Data.StaticDB.getFile(fileID, true);
+					fo = state.Data.StaticDB.getFile(fileID, true, state.Toolchain);
 				} catch (DatabaseException e) {
 					e.printStackTrace();
 					return false;

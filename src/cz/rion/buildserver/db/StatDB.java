@@ -240,11 +240,11 @@ public class StatDB {
 			last.setYear(2021);
 
 			try {
-				JsonArray firstData = db.select_raw("SELECT creation_time FROM compilations ORDER BY id ASC LIMIT 1").getJSON(false, new TableField[0]);
+				JsonArray firstData = db.select_raw("SELECT creation_time FROM compilations ORDER BY id ASC LIMIT 1").getJSON(false, new TableField[0], null);
 				if (!firstData.Value.isEmpty()) {
 					first = new Date(firstData.Value.get(0).asObject().getNumber("creation_time").asLong());
 				}
-				JsonArray lastData = db.select_raw("SELECT creation_time FROM compilations ORDER BY id DESC LIMIT 1").getJSON(false, new TableField[0]);
+				JsonArray lastData = db.select_raw("SELECT creation_time FROM compilations ORDER BY id DESC LIMIT 1").getJSON(false, new TableField[0], null);
 				if (!lastData.Value.isEmpty()) {
 					last = new Date(lastData.Value.get(0).asObject().getNumber("creation_time").asLong());
 				}

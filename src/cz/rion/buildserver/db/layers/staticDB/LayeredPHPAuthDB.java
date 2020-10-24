@@ -60,7 +60,7 @@ public abstract class LayeredPHPAuthDB extends LayeredPresenceDB {
 	}
 
 	private String getKeyHash() {
-		FileInfo fo = this.loadFile("enc.key", true);
+		FileInfo fo = this.loadFile("enc.key", true, null);
 		if (fo != null) {
 			try {
 				java.security.MessageDigest md = java.security.MessageDigest.getInstance("MD5");

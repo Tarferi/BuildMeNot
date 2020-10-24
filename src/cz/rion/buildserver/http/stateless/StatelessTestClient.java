@@ -73,7 +73,7 @@ public class StatelessTestClient extends StatelessTermClient {
 
 				@Override
 				public String update() {
-					FileInfo fo = data.StaticDB.loadFile("FAQs/" + toolchain.getName() + ".faq", true);
+					FileInfo fo = data.StaticDB.loadFile("FAQs/" + toolchain.getName() + ".faq", true, toolchain);
 					if (fo == null) {
 						return "FAQ neni pro tento toolchain dostupne";
 					}
@@ -184,7 +184,7 @@ public class StatelessTestClient extends StatelessTermClient {
 		returnValue.add("code", new JsonNumber(1));
 		returnValue.add("result", new JsonString("Internal error"));
 
-		List<GenericTest> tsts = state.Data.Tests.getAllTests(state.Toolchain.getName());
+		List<GenericTest> tsts = state.Data.Tests.getAllTests(state.Toolchain);
 		tsts.sort(new Comparator<GenericTest>() {
 
 			@Override

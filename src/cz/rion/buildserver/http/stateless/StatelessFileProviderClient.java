@@ -103,7 +103,7 @@ public class StatelessFileProviderClient extends StatelessAdminClient {
 		this.data = data;
 	}
 
-	private String handleReplacements(String content, UsersPermission perms) {
+	private String handleReplacements(String content, UsersPermission perms, Toolchain toolchain) {
 
 		final String regex = "\\$INJECT\\(([a-zA-Z0-9\\.]+,){0,1} *([a-zA-Z0-9_\\.\\/]+)\\)\\$";
 
@@ -128,11 +128,11 @@ public class StatelessFileProviderClient extends StatelessAdminClient {
 			}
 			String replacement = "";
 			if (name != null) {
-				replacement = readFileOrDBFile(name);
+				replacement = readFileOrDBFile(name, toolchain);
 				if (replacement == null) {
 					replacement = "";
 				} else {
-					replacement = handleReplacements(replacement, perms);
+					replacement = handleReplacements(replacement, perms, toolchain);
 				}
 			}
 			content = content.substring(0, matchResult.start()) + replacement + content.substring(matchResult.end());
@@ -143,7 +143,7 @@ public class StatelessFileProviderClient extends StatelessAdminClient {
 	}
 
 	protected String handleJSManipulation(ProcessState state, String path, String content) {
-		content = handleReplacements(content, state.getPermissions());
+		content = handleReplacements(content, state.getPermissions(), state.Toolchain);
 
 		{
 			int index = content.indexOf("$INJECT_JWT$");
@@ -167,7 +167,7 @@ public class StatelessFileProviderClient extends StatelessAdminClient {
 	}
 
 	protected String handleCSSManipulation(ProcessState state, String path, String content) {
-		content = handleReplacements(content, state.getPermissions());
+		content = handleReplacements(content, state.getPermissions(), state.Toolchain);
 		return content;
 	}
 
@@ -209,7 +209,7 @@ public class StatelessFileProviderClient extends StatelessAdminClient {
 		public FileMappingManager(StaticDB sdb, Toolchain toolchain) {
 			List<FileMapping> lst = new ArrayList<>();
 			try {
-				FileInfo fo = sdb.loadFile("file_mapping.ini", true);
+				FileInfo fo = sdb.loadFile("file_mapping.ini", true, toolchain);
 				if (fo != null) {
 					for (String line : fo.Contents.split("\n")) {
 						line = line.trim();
@@ -258,12 +258,12 @@ public class StatelessFileProviderClient extends StatelessAdminClient {
 		}
 	});
 
-	private String readFileOrDBFile(String endPoint) {
+	private String readFileOrDBFile(String endPoint, Toolchain toolchain) {
 		try {
 			String fileContents = MyFS.readFile("./web/" + endPoint);
 			return fileContents;
 		} catch (FileReadException e) {
-			FileInfo dbf = data.StaticDB.loadFile("web/" + endPoint, true);
+			FileInfo dbf = data.StaticDB.loadFile("web/" + endPoint, true, toolchain);
 			if (dbf != null) {
 				return dbf.Contents;
 			}
@@ -289,7 +289,7 @@ public class StatelessFileProviderClient extends StatelessAdminClient {
 				FileMappingManager mapping = fileMappings.get(state.Toolchain);
 				String allowed = mapping.getRemappedEndpoint(endPoint, state.Request.host);
 				if (allowed != null) {
-					String contents = readFileOrDBFile(allowed);
+					String contents = readFileOrDBFile(allowed, state.Toolchain);
 					if (contents != null) {
 						data = contents.getBytes(Settings.getDefaultCharset());
 						state.setIntention(Intention.GET_RESOURCE);

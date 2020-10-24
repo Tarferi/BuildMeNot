@@ -376,7 +376,7 @@ public class JsonTestManager {
 		}
 	}
 
-	private static void fillDBTests(StaticDB sdb, List<Pair<String, JsonObject>> data) {
+	private static void fillDBTests(StaticDB sdb, List<Pair<String, JsonObject>> data, Toolchain toolchain) {
 		if (sdb == null) {
 			return;
 		}
@@ -385,7 +385,7 @@ public class JsonTestManager {
 			String fname = file.FileName;
 			if (fname.startsWith("tests/") && fname.endsWith(".json")) {
 				try {
-					FileInfo fileData = sdb.getFile(file.ID, true);
+					FileInfo fileData = sdb.getFile(file.ID, true, toolchain);
 					JsonValue val = JsonValue.parse(fileData.Contents);
 					if (val != null) {
 						if (val.isObject()) {
@@ -503,11 +503,11 @@ public class JsonTestManager {
 
 	}
 
-	public static List<GenericTest> load(StaticDB sdb, String testDirectory) {
+	public static List<GenericTest> load(StaticDB sdb, String testDirectory, Toolchain toolchain) {
 		List<GenericTest> lst = new ArrayList<>();
 		List<Pair<String, JsonObject>> tests = new ArrayList<>();
 		fillFSTests(tests, testDirectory);
-		fillDBTests(sdb, tests);
+		fillDBTests(sdb, tests, toolchain);
 		for (Pair<String, JsonObject> obj : tests) {
 			GenericTest test = ConvertJsonToTest(obj.Key, obj.Value, sdb);
 			if (test != null) {
