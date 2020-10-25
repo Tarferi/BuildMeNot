@@ -120,7 +120,18 @@ var ExamsAdminUITemplates = function() {
 			},
 			{
 				"type": "td",
-				"id": "pnl_details"
+				"contents": [
+					{
+						"type": "div",
+						"class": "pnl_details1",
+						"id": "pnl_details1"
+					},
+					{
+						"type": "div",
+						"class": "pnl_details2",
+						"id": "pnl_details2"
+					}
+				]
 			},
 			{
 				"type": "td",

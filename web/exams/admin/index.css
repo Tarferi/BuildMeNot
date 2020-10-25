@@ -29,6 +29,19 @@ body {
 	border-collapse: collapse;
 }
 
+.tab_questions .pnl_details1 {
+	display: inline-block;
+	width: 30%;
+	text-align: right;
+	border: 0px;
+	margin-right: 10px;
+}
+
+.tab_questions .pnl_details2 {
+	display: inline-block;
+	border: 0px;
+}
+
 .borderedTab > thead > tr > th:not(:first-child), .borderedTab > tbody > tr > td:not(:first-child) {
    border-left: 1px solid black;
 }

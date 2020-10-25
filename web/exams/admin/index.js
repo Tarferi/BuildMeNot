@@ -382,25 +382,32 @@ var ExamAdminExam = function(data, stopExamEditing, saveCB, delCB, setRenderedTa
 			
 			var status = "";
 			
-			var details = [];
+			var details1 = [];
+			var details2 = [];
 			
 			if(data.Finished) {
 				status = "Ukončeno";
-				details.push("Zahájeno " + self.common.convertDateTime(data.StartedAt));
-				details.push("Ukončeno " + self.common.convertDateTime(data.FinishedAt));
+				details1.push("Zahájeno");
+				details2.push(self.common.convertDateTime(data.StartedAt));
+				details1.push("Ukončeno");
+				details2.push(self.common.convertDateTime(data.FinishedAt));
 			} else if (data.Timeouted) {
 				status = "Ukončeno vypršením času";
-				details.push("Zahájeno " + self.common.convertDateTime(data.StartedAt));
-				details.push("Vypršení času " + self.common.convertDateTime(data.TimeoutedAt));
+				details1.push("Zahájeno");
+				details2.push(self.common.convertDateTime(data.StartedAt));
+				details1.push("Vypršení času");
+				details2.push(self.common.convertDateTime(data.TimeoutedAt));
 			} else if(data.StartedAt) {
 				status = "Probíhá";
-				details.push("Zahájeno " + self.common.convertDateTime(data.StartedAt));
+				details1.push("Zahájeno");
+				details2.push(self.common.convertDateTime(data.StartedAt));
  			} else {
 				status = "Nezahájeno";
 			}
 			
 			ids.pnl_status.innerHTML = status;
-			ids.pnl_details.innerHTML =details.join("<br />");
+			ids.pnl_details1.innerHTML = details1.join("<br />");
+			ids.pnl_details2.innerHTML = details2.join("<br />");
 			
 			ids.btn_open.addEventListener("click", function() {
 				new ExamAdminOpenedTest(data, function() {
