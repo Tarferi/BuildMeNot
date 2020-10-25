@@ -115,8 +115,8 @@ public class StatelessExamClient extends StatelessGraphProviderClient {
 		return null;
 	}
 
-	private JsonObject getGenerated(ProcessState state, Generated gen) {
-		boolean includeQuestions = false;
+	private JsonObject getGenerated(ProcessState state, Generated gen, boolean includeQuestionsByDefault) {
+		boolean includeQuestions = includeQuestionsByDefault;
 		JsonObject obj = new JsonObject();
 		obj.add("Available", true);
 		obj.add("ExamID", gen.Exam.ID);
@@ -160,11 +160,11 @@ public class StatelessExamClient extends StatelessGraphProviderClient {
 		return obj;
 	}
 
-	private JsonObject getGenerated(ProcessState state, int generatedID) {
+	private JsonObject getGenerated(ProcessState state, int generatedID, boolean includeQuestionsByDefault) {
 		StaticDB sdb = state.Data.StaticDB;
 		for (Generated gen : sdb.getExamsData(state.Toolchain).Generated) {
 			if (gen.ID == generatedID) {
-				return getGenerated(state, gen);
+				return getGenerated(state, gen, includeQuestionsByDefault);
 			}
 		}
 		JsonObject obj = new JsonObject();
@@ -178,7 +178,7 @@ public class StatelessExamClient extends StatelessGraphProviderClient {
 		if (lst != null) {
 			Generated gen = getExam(lst, examID);
 			if (gen != null) {
-				return getGenerated(state, gen);
+				return getGenerated(state, gen, false);
 			}
 		}
 		JsonObject obj = new JsonObject();
@@ -411,7 +411,7 @@ public class StatelessExamClient extends StatelessGraphProviderClient {
 				result.add("result", new JsonString(getResultsFor(state, obj.getNumber("ID").Value).getJsonString()));
 			} else if (canAdmin && exam_data.equals("get_result_by_id") && obj.containsNumber("ID")) {
 				result.add("code", 0);
-				result.add("result", new JsonString(getGenerated(state, obj.getNumber("ID").Value).getJsonString()));
+				result.add("result", new JsonString(getGenerated(state, obj.getNumber("ID").Value, true).getJsonString()));
 			}
 		}
 		return result;

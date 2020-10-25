@@ -290,11 +290,13 @@ public class StatelessTestClient extends StatelessTermClient {
 			returnValue.add("authUrl", new JsonString(Settings.getAuthURL(state.Request.protocol, state.Request.host)));
 			return returnValue;
 		}
-
 		if (input.containsString("asm") && input.containsString("id")) {
 			String code = input.getString("asm").Value;
 			String id = input.getString("id").Value;
-			return execute_tests(state, id, code);
+			JsonObject obj = new JsonObject();
+			obj.add("code", new JsonNumber(0));
+			obj.add("result", new JsonString(execute_tests(state, id, code).getJsonString()));
+			return obj;
 		} else if (input.containsString("action")) {
 			String act = input.getString("action").Value;
 			if (act.equals("COLLECT")) {

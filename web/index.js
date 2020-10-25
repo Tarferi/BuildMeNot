@@ -250,9 +250,8 @@ var tester = function() {
 	self.submit = function(id, asm, cbOK, cbFail) {
 		var data = {"asm":asm, "id": id}
 		self.common.async(data, function(response) {
-			var deco=self.common.decode(response);
-			if(deco!==false) {
-				var obj = JSON.parse(deco);
+			if(response!==false) {
+				var obj = JSON.parse(response);
 				if(obj!==false){
 					if(obj.details) {
 						console.log(JSON.stringify(obj.details));
