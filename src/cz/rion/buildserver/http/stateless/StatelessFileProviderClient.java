@@ -4,7 +4,9 @@ import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.MatchResult;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -28,6 +30,11 @@ import cz.rion.buildserver.utils.CachedToolchainDataGetter2;
 import cz.rion.buildserver.utils.CachedToolchainDataWrapper2;
 import cz.rion.buildserver.wrappers.FileReadException;
 import cz.rion.buildserver.wrappers.MyFS;
+
+import com.google.javascript.jscomp.CompilationLevel;
+import com.google.javascript.jscomp.Compiler;
+import com.google.javascript.jscomp.CompilerOptions;
+import com.google.javascript.jscomp.SourceFile;
 
 public class StatelessFileProviderClient extends StatelessAdminClient {
 	private static final class JWTCrypto {
@@ -103,15 +110,38 @@ public class StatelessFileProviderClient extends StatelessAdminClient {
 		this.data = data;
 	}
 
-	private String handleReplacements(String content, UsersPermission perms, Toolchain toolchain) {
+	private static final Pattern pattern_inject = Pattern.compile("\\$INJECT\\(([a-zA-Z0-9\\.]+,){0,1} *([a-zA-Z0-9_\\.\\/]+)\\)\\$", Pattern.MULTILINE);
+	private static final Pattern pattern_code = Pattern.compile("\\$INJECT_CODE_NOPERMS\\(([a-zA-Z0-9\\.]+), *([a-zA-Z0-9; =_\\.\\/]+)\\)\\$", Pattern.MULTILINE);
 
-		final String regex = "\\$INJECT\\(([a-zA-Z0-9\\.]+,){0,1} *([a-zA-Z0-9_\\.\\/]+)\\)\\$";
+	private String handleReplacements(String content, UsersPermission perms, Toolchain toolchain, Set<String> included) {
+		if (included == null) {
+			included = new HashSet<>();
+		}
 
-		final Pattern pattern = Pattern.compile(regex, Pattern.MULTILINE);
-		final Matcher matcher = pattern.matcher(content);
+		final Matcher matcher_code = pattern_code.matcher(content);
+		while (matcher_code.find()) {
+			String replacement = "";
+			final MatchResult matchResult = matcher_code.toMatchResult();
+			if (matchResult.groupCount() == 2) {
+				String permsStr = matchResult.group(1);
+				String code = matchResult.group(2);
+				if (!perms.can(new PermissionBranch(permsStr))) {
+					replacement = code;
+				}
+			} else {
+				continue;
+			}
+			if (!replacement.isEmpty()) {
+				return content.substring(0, matchResult.start()) + replacement;
+			} else {
+				content = content.substring(0, matchResult.start()) + replacement + content.substring(matchResult.end());
+				matcher_code.reset(content);
+			}
+		}
 
-		while (matcher.find()) {
-			final MatchResult matchResult = matcher.toMatchResult();
+		final Matcher matcher_inject = pattern_inject.matcher(content);
+		while (matcher_inject.find()) {
+			final MatchResult matchResult = matcher_inject.toMatchResult();
 			String name = null;
 			if (matchResult.groupCount() == 1) {
 				name = matchResult.group(0);
@@ -128,22 +158,27 @@ public class StatelessFileProviderClient extends StatelessAdminClient {
 			}
 			String replacement = "";
 			if (name != null) {
-				replacement = readFileOrDBFile(name, toolchain);
+				if (included.contains(name)) {
+					replacement = null;
+				} else {
+					replacement = readFileOrDBFile(name, toolchain);
+					included.add(name);
+				}
 				if (replacement == null) {
 					replacement = "";
 				} else {
-					replacement = handleReplacements(replacement, perms, toolchain);
+					replacement = handleReplacements(replacement, perms, toolchain, included);
 				}
 			}
 			content = content.substring(0, matchResult.start()) + replacement + content.substring(matchResult.end());
-			matcher.reset(content);
+			matcher_inject.reset(content);
 		}
 
 		return content;
 	}
 
 	protected String handleJSManipulation(ProcessState state, String path, String content) {
-		content = handleReplacements(content, state.getPermissions(), state.Toolchain);
+		content = handleReplacements(content, state.getPermissions(), state.Toolchain, null);
 
 		{
 			int index = content.indexOf("$INJECT_JWT$");
@@ -158,8 +193,19 @@ public class StatelessFileProviderClient extends StatelessAdminClient {
 				content = content.replace("$INJECT_JWT$", repl);
 			}
 		}
-
 		return content;
+	}
+
+	private String compressJS(String content) {
+		if (Settings.DoJSCompression()) {
+			Compiler compiler = new Compiler();
+			CompilerOptions options = new CompilerOptions();
+			CompilationLevel.SIMPLE_OPTIMIZATIONS.setOptionsForCompilationLevel(options);
+			compiler.compile(SourceFile.fromCode("a.js", ""), SourceFile.fromCode("index.js", content), options);
+			return compiler.toSource();
+		} else {
+			return content;
+		}
 	}
 
 	protected String handleHTMLManipulation(ProcessState state, String path, String content) {
@@ -167,7 +213,7 @@ public class StatelessFileProviderClient extends StatelessAdminClient {
 	}
 
 	protected String handleCSSManipulation(ProcessState state, String path, String content) {
-		content = handleReplacements(content, state.getPermissions(), state.Toolchain);
+		content = handleReplacements(content, state.getPermissions(), state.Toolchain, null);
 		return content;
 	}
 
@@ -302,7 +348,7 @@ public class StatelessFileProviderClient extends StatelessAdminClient {
 						}
 						if (allowed.endsWith(".js")) {
 							contents = this.handleJSManipulation(state, endPoint, contents);
-							data = contents.getBytes(Settings.getDefaultCharset());
+							data = compressJS(contents).getBytes(Settings.getDefaultCharset());
 						} else if (allowed.endsWith(".css")) {
 							contents = this.handleCSSManipulation(state, endPoint, contents);
 							data = contents.getBytes(Settings.getDefaultCharset());

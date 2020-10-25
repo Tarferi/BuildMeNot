@@ -400,12 +400,12 @@ var Admin = function(givenCommon) {
 
 	self.async = function(action, data, cbOk, cbFail, parseResult) {
 		self.setWaiterVisible(true);
-		var data = {
+		var asyncData = {
 			"action" : "ADMIN",
 			"admin_data" : data
 		};
-		data.admin_data.action = action
-		self.common.async(data, function(obj) {
+		asyncData.admin_data.action = action
+		self.common.async(asyncData, function(obj) {
 			self.setWaiterVisible(false);
 			cbOk(obj);
 		}, function(err) {
@@ -421,7 +421,7 @@ var Admin = function(givenCommon) {
 	self.insertAdminButton = function() {
 		if (self.common.addButtonToLoginPanel) {
 			self.admButton = self.common.addButtonToLoginPanel("Administrace", function(){self.openAdmin();});
-		} else {
+		} else if(btnLogout) {
 			var bl = btnLogout;
 			self.admButton = document.createElement("button");
 			self.admButton.innerHTML = "Administrace";
@@ -453,7 +453,6 @@ var Admin = function(givenCommon) {
 
 var AdminNavigator = function(adminer) {
 	var self = this;
-	var adminer = adminer;
 	self.common = adminer.common;
 
 	self.files = [];
@@ -596,7 +595,6 @@ var AdminNavigator = function(adminer) {
 
 var AdminEditor = function(adminer) {
 	var self = this;
-	var adminer = adminer;
 	self.common = adminer.common;
 
 	self.initEditor = function() {
@@ -759,7 +757,7 @@ var AdminEditor = function(adminer) {
 			}
 		} else if (ext == "table") {
 			// Collect currently editing fields
-			items = {};
+			var items = {};
 			for (var editorI = 0; editorI < self.currentEditor.length; editorI++) {
 				var editor = self.currentEditor[editorI];
 				var name = editor.name;
@@ -886,7 +884,7 @@ var AdminEditor = function(adminer) {
 					var i4 = dateStr.indexOf(":");
 					if (i4 > 0) {
 						var h = (dateStr.substr(0, i4).trim() * 1);
-						min = dateStr.substr(i4 + 1).trim();
+						var min = dateStr.substr(i4 + 1).trim();
 						var date = new Date();
 						date.setDate(d);
 						date.setMonth(m);
@@ -1026,8 +1024,6 @@ var AdminEditor = function(adminer) {
 		self.editTable.innerHTML = "";
 		self.currentlyEditing.shown = [];
 		self.currentFilterObjs = {};
-
-		var filterRow = {};
 
 		var filterRow = document.createElement("tr");
 		var headerRow = document.createElement("tr");
@@ -1205,5 +1201,5 @@ var AdminEditor = function(adminer) {
 };
 
 window.pastAload = function() {
-	admin = new Admin();
+	var admin = new Admin();
 }

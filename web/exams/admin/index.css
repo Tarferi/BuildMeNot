@@ -1,0 +1,130 @@
+body {
+    font-family: verdana;
+}
+
+.control_pnl {
+	margin-top: 40px;
+	display: block;
+	min-width: 600px;
+	margin-left:10%;
+	margin-right: 10%;
+	border-top: 1px solid black;
+	border-right: 1px solid black;
+	border-left: 1px solid black;
+}
+
+.control_pnl > .pnl_title {
+    display: block;
+    font-size: 19pt;
+    width: 100%;
+    text-align: center;
+    border-bottom: 1px solid black;
+    background: #efefef;
+    padding-top: 5px;
+    padding-bottom: 5px;
+}
+
+.borderedTab {
+	width: 100%;
+	border-collapse: collapse;
+}
+
+.borderedTab > thead > tr > th:not(:first-child), .borderedTab > tbody > tr > td:not(:first-child) {
+   border-left: 1px solid black;
+}
+
+.borderedTab > tbody > tr > td {
+   padding-left: 10px;
+}
+
+.borderedTab > thead > tr > th, .tab_exams > tbody > tr > td  {
+   padding-top: 5px;
+   padding-bottom: 5px;
+   border-bottom: 1px solid black;
+}
+
+.pnl_tab_act {
+   width: 230px;
+   text-align: center;
+}
+
+.pnl_tab_act > button {
+   margin-left: 2px;
+   margin-right: 2px;
+   width: 100px;
+   height: 30px;
+   margin-top: 5px;
+   margin-bottom: 5px;
+}
+
+.borderedTab > tbody > tr {
+   border-bottom: 1px solid black;
+}
+
+.tab_exams > tbody > tr > td:nth-child(1), .tab_exams > tbody > tr > td:nth-child(3) {
+	text-align: center;
+}
+
+.tab_exams_toppnl {
+	text-align: left;
+	margin-right: 5px;
+} 
+
+.tab_exams_bottompnl {
+	padding-top: 5px;
+	padding-bottom: 5px;
+    display: block;
+    width: 100%;
+    border-bottom: 1px solid black;
+}
+
+.tab_exams_bottompnl > button, .tab_exams_toppnl > button {
+    margin-left: 5px;
+    width: 120px;
+    height: 30px;
+}
+
+.tab_questions {
+	width: 100%;
+	border-collapse: collapse;
+}
+
+.align_center {
+	text-align: center;
+}
+
+.pnl_ex_config {
+    width: 400px;
+}
+
+.configTab {
+	border-collapse: collapse;
+	width: 400px;
+}
+
+.configTab th {
+    text-align: right;
+    font-size: 10pt;
+    whitespace: nowrap;
+}
+
+.configTab td > input {
+    margin-left: 10px;
+   	display: inline-block;
+   	width: 200px;
+}
+
+.txtHeader {
+	height: 30px;
+	border-bottom: 1px solid black;
+	border-left: 1px solid black;
+	background: #efefef;
+	position:absolute;
+	top: 0px;
+	right:0px;
+	padding:7px;
+}
+
+
+$INJECT(exams/index.css)$
+$INJECT(WEB.ADMIN, admin.css)$

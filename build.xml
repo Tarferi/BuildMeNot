@@ -17,6 +17,7 @@
             <zipfileset excludes="META-INF/*.SF" src="${dir.jarfile}/sqlite.jar"/>
         	<zipfileset excludes="META-INF/*.SF" src="${dir.jarfile}/acme4j-client-2.10.jar"/>
         	<zipfileset excludes="META-INF/*.SF" src="${dir.jarfile}/acme4j-utils-2.10.jar"/>
+        	<zipfileset excludes="META-INF/*.SF" src="${dir.jarfile}/closure-compiler-v20200920.jar"/>
         </jar>
     </target>
 </project>

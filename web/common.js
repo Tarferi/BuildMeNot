@@ -71,25 +71,25 @@ var Common = function() {
 	  "class": "txtHeader"
 	}
 	
-	self.JSONstringify = function(data, safeCodes) {
-		if (!safeCodes) {
+	self.JSONstringify = function(data) {
+		if (!self.safeCodes) {
 			var safe = [];
 			safe.push([ 'a', 'z' ]);
 			safe.push([ 'A', 'Z' ]);
 			safe.push([ '9', '9' ]);
 			safe.push(' <>@&#:.;=()');
-			var safeCodes = [];
+			self.safeCodes = [];
 			for (var i = 0; i < safe.legnth; i++) {
 				var d = safe[i];
 				if (d.length == 2) {
-					from = d[0].charCodeAt(0);
-					to = d[1].charCodeAt(0);
+					var from = d[0].charCodeAt(0);
+					var to = d[1].charCodeAt(0);
 					for (var x = from; x <= to; x++) {
-						safeCodes.push(x);
+						self.safeCodes.push(x);
 					}
 				} else {
 					for (var x = 0; x < d.length; x++) {
-						safeCodes.push(d.charCodeAt(i));
+						self.safeCodes.push(d.charCodeAt(i));
 					}
 				}
 			}
@@ -104,7 +104,7 @@ var Common = function() {
 			var n = [];
 			for (var i = 0; i < data.length; i++) {
 				var xc = data.charCodeAt(i);
-				if (safeCodes.includes(xc)) {
+				if (self.safeCodes.includes(xc)) {
 					n.push(data.charAt(i))
 				} else {
 					n.push(esc(xc));
@@ -115,18 +115,18 @@ var Common = function() {
 			var res = [];
 			for ( var key in data) {
 				if (data.hasOwnProperty(key)) {
-					res.push(self.JSONstringify(key, safeCodes) + ":"  + self.JSONstringify(data[key], safeCodes));
+					res.push(self.JSONstringify(key) + ":"  + self.JSONstringify(data[key]));
 				}
 			}
 			return "{" + res.join(",") + "}";
 		} else if (typeof (data) == typeof ([])) {
 			var res = [];
 			for (var i = 0; i < data.length; i++) {
-				res.push(self.JSONstringify(data[i], safeCodes));
+				res.push(self.JSONstringify(data[i]));
 			}
 			return "[" + res.join(",") + "]";
 		} else {
-			return JSON.stringify(data, safeCodes);
+			return JSON.stringify(data);
 		}
 	}
 	
@@ -341,6 +341,70 @@ var Common = function() {
 		}
 		return [el, ids];
 	}
+	
+	self.convertDateTime = function(value) {
+		return self.convertDate(value) + " " +self.convertOnlyTime(value);
+	}
+	
+	self.convertDate = function(value) {
+		var dd = function(x) {
+			if (x <= 9) {
+				return "0" + x
+			} else {
+				return "" + x;
+			}
+		}
+		value = value * 1;
+		var date = new Date(value);
+		var parts = [];
+		parts.push(dd(date.getDate()));
+		parts.push(dd(date.getMonth() + 1));
+		parts.push(dd(date.getFullYear()));
+	
+		var dmy = parts.join(". ");
+		return dmy
+	};
+	
+	self.convertOnlyTime = function(value) {
+		var dd = function(x) {
+			if (x <= 9) {
+				return "0" + x
+			} else {
+				return "" + x;
+			}
+		}
+		value = value * 1;
+		var date = new Date(value);
+		var parts = [];
+		parts.push(dd(date.getHours()));
+		parts.push(dd(date.getMinutes()));
+		parts.push(dd(date.getSeconds()));
+		return parts.join(":");
+	}
+	
+	self.convertTime = function(value) {
+		var dd = function(x) {
+			if (x <= 9) {
+				return "0" + x
+			} else {
+				return "" + x;
+			}
+		}
+		value = Math.floor((value * 1)/1000); // sec
+		var s = value % 60;
+		value = Math.floor((value)/60);
+		var m = value % 60;
+		value = Math.floor((value)/60);
+		var h = value; 
+		
+		var parts = [];
+		parts.push(dd(h));
+		parts.push(dd(m));
+		parts.push(dd(s));
+
+		var tm = parts.join(":");
+		return tm
+	};
 
 	self.init = function() {
 		

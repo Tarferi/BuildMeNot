@@ -58,6 +58,8 @@ public class Settings {
 	private final SettingsValue JWTApp = new SettingsValue("JWTApp", ValueType.STRING, "");
 	private final SettingsValue JWTSecret = new SettingsValue("JWTSecret", ValueType.STRING, "");
 
+	private final SettingsValue CompressJS = new SettingsValue("CompressJS", ValueType.BOOLEAN, 0);
+
 	private List<SettingsValue> settings;
 
 	private Settings() {
@@ -343,6 +345,10 @@ public class Settings {
 
 	public static String getJWTSecret() {
 		return instance.JWTSecret.asString();
+	}
+
+	public static boolean DoJSCompression() {
+		return instance.CompressJS.asBoolean();
 	}
 
 }
