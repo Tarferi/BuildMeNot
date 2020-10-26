@@ -8,3 +8,6 @@ body > .txtHeader {
 	right:0px;
 	padding:7px;
 }
+.katex {
+	font-size: 1em !important;
+} 

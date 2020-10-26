@@ -25,12 +25,30 @@ var RadioRespose = function(data, permutation, readOnly) {
 	self.optionLabels = [];
 
 	self.appendOption = function(optionID, optDescr, getLabelCB, setLabelCB, alignTop) {
+		var row = document.createElement("tr");
+		
+		var leftCell = document.createElement("td");
+		var rightCell = document.createElement("td");
+		row.appendChild(leftCell);
+		row.appendChild(rightCell);
+		
+		leftCell.style.width = "20px";
+		
+		leftCell.style.paddingBottom = "10px";
+		rightCell.style.paddingBottom= "10px";
+		
+		if(alignTop) {
+			leftCell.style.verticalAlign = "top";
+		}
+		
 		var optNode = self.createOption(optionID);
 		self.options.push(optNode);
 		self.optionLabels.push([optDescr, getLabelCB, setLabelCB]);
-		self.node.appendChild(optNode);
-		self.node.appendChild(optDescr);
-		self.node.appendChild(document.createElement("br"));
+		
+		leftCell.appendChild(optNode);
+		rightCell.appendChild(optDescr);
+		
+		self.node.appendChild(row);		
 		optNode.style.verticalAlign = "top";
 	}
 	
@@ -86,14 +104,17 @@ var RadioRespose = function(data, permutation, readOnly) {
 	}
 	
 	self.materialize = function() {
-		self.node = document.createElement("div");
+		self.node = document.createElement("table");
+		self.node.style.width = "100%";
+		self.node.style.border = "0px";
+		var outFormat = new CommonFormats();
 		
 		for(var i = 0; i < data.options.length; i++) {
-			var opt = data.options[self.mapping[i]];
+			var opt = outFormat.format(data.options[self.mapping[i]]);
 			var optDescr = document.createElement("span");
 			optDescr.innerHTML = opt;
 			var getLabelCB = function(labelObj) {return labelObj.innerHTML;};
-			var setLabelCB = function(labelObj, label) {labelObj.innerHTML = label;};
+			var setLabelCB = function(labelObj, label) {labelObj.innerHTML = outFormat.format(label);};
 			self.appendOption(self.mapping[i], optDescr, getLabelCB, setLabelCB);
 		}
 	}
@@ -187,7 +208,7 @@ var TextAreaResponse = function(data, initialContents, readOnly) {
 	return this
 };
 
-var ExamQuestion = function(data, index, readOnly) {
+var ExamQuestion = function(data, index, readOnly, fromAdmin) {
 	var self = this;
 	self.ID = data.ID;
 	
@@ -214,14 +235,19 @@ var ExamQuestion = function(data, index, readOnly) {
 		return {"ID": self.ID, "Permutations": data.Permutations, "Value": self.responder.getValue()};
 	}
 	
+	self.collectEval = function(cb) {
+		return {"ID": self.ID, "eval": self.evalPoints.value+"", "comment": self.evalComment.value};
+	}
+	
 	self.materialize = function() {
+		var outFormat = new CommonFormats(); 
 		var d = self.common.reconstructUI(self.templates.QuestionUI);
 		self.node = d[0];
 		
 		var ids = d[1];
 		
-		ids.question_id.innerHTML = "Otázka " + (index + 1);
-		ids.question_contents.innerHTML = data.Config.description;
+		ids.question_id.innerHTML = outFormat.format("Otázka " + (index + 1));
+		ids.question_contents.innerHTML = outFormat.format(data.Config.description);
 		
 		if(data.Config.type >= 0 && data.Config.type < responseTemplates.length) {
 			self.responder = new responseTemplates[data.Config.type](data.Config, data.Permutations, readOnly);
@@ -229,7 +255,39 @@ var ExamQuestion = function(data, index, readOnly) {
 			ids.pnl_resp_cont.appendChild(self.responder.node);
 		}
 		
-		ids.qb_points.innerHTML = self.pointsFmt(data.Evaluation);
+		self.evalPoints = ids.pln_eval_pints_edit;
+		self.evalComment = ids.pln_comment_edit;
+		
+		ids.qb_points.innerHTML = outFormat.format(self.pointsFmt(data.Evaluation));
+		ids.pnl_eval_row.style.display = "none";
+		ids.pnl_eval_commentrow.style.display = "none";
+		ids.pln_eval_pints_view.style.display = "none";
+		ids.pln_eval_pints_edit.style.display = "none";
+		ids.pln_comment_view.style.display = "none";
+		ids.pln_comment_edit.style.display = "none";
+		
+		if (data.EvaluationData && data.EvaluationData.points) {
+			ids.pnl_eval_row.style.display = "";
+			ids.pln_eval_pints_view.innerHTML = data.EvaluationData.points;
+			ids.pln_eval_pints_edit.value = data.EvaluationData.points;
+			var el = fromAdmin ? ids.pln_eval_pints_edit : ids.pln_eval_pints_view;
+			el.style.display = "";
+			if (data.EvaluationData.comment != "") {
+				ids.pnl_eval_commentrow.style.display = "";
+				ids.pln_comment_view.innerHTML = data.EvaluationData.comment;
+				ids.pln_comment_edit.value= data.EvaluationData.comment;	
+				el = fromAdmin ? ids.pln_comment_edit : ids.pln_comment_view;
+				el.style.display = "";
+			}
+		}
+		if(fromAdmin) {
+			ids.pln_eval_pints_edit.style.display = "";
+			ids.pln_eval_pints_view.style.display = "none";
+			ids.pln_comment_edit.style.display = "";
+			ids.pln_comment_view.style.display = "none";
+			ids.pnl_eval_row.style.display = "";
+			ids.pnl_eval_commentrow.style.display = "";
+		}
 	}
 	
 	
@@ -242,7 +300,7 @@ var ExamQuestion = function(data, index, readOnly) {
 }
 
 
-var ExamMainHeader = function(data, startCB, turnCB, fromAdmin) {
+var ExamMainHeader = function(data, startCB, turnCB, saveCB, fromAdmin) {
 	var self = this;
 	
 	if(fromAdmin) {
@@ -275,16 +333,21 @@ var ExamMainHeader = function(data, startCB, turnCB, fromAdmin) {
 		setTimeout(self.tick, 750);
 	}
 	
+	self.publishEval = function() {
+		return !!self.publishEvalPnl.checked
+	}
+	
 	self.pointsFmt = function(bodu) {
 		return bodu +" bod" + (bodu == 1 ? "" : bodu >= 2 && bodu <= 4 ? "y" : "ů");
 	}
 	
 	self.materialize = function() {
+		var outFormat = new CommonFormats();
 		var d = self.common.reconstructUI(self.templates.HeaderUI);
 		self.node = d[0];
 		var ids = d[1];
 		
-		ids.pnl_ex_name.innerHTML = data.ExamName;
+		ids.pnl_ex_name.innerHTML = outFormat.format(data.ExamName);
 		if(fromAdmin) {
 			ids.pnl_name.innerHTML = fromAdmin.name;
 		} else {
@@ -305,10 +368,38 @@ var ExamMainHeader = function(data, startCB, turnCB, fromAdmin) {
 		self.btnStart.addEventListener("click", function(){startCB(data.ExamID)});
 		self.btnTurn.addEventListener("click", function(){turnCB(data.ExamID)});
 		
+		ids.eval_headerrow.style.display = "none";
+		
+		if(data.EvaluatedAt) {
+			ids.eval_headerrow_evaltime.innerHTML = self.common.convertDateTime(data.EvaluatedAt);
+		}
+		if(data.EvaluationAvailable) {
+			ids.eval_headerrow.style.display = "";
+			var points = 0;
+			for(var i = 0; i < data.Questions.length; i++) {
+				var q = data.Questions[i];
+				if(q.EvaluationData && q.EvaluationData.points) {
+					var p = q.EvaluationData.points*1;
+					points += p;
+				}
+			}
+			points = (Math.floor(points*100))/100;
+			ids.eval_headerrow_points.innerHTML = points + " " + (points == 1 ? "bod" : points >= 2 && points <= 4 ? "body" : "bodů");
+		}
+		
+		self.publishEvalPnl = ids.eval_headerrow_publish_eval;
+		
 		if(fromAdmin) {
 			ids.btn_back.addEventListener("click", fromAdmin.close);
+			ids.btn_save.addEventListener("click", function() {saveCB(fromAdmin);});
+			ids.eval_headerrow2.style.display = "";
+			if(data.EvaluationAvailable) {
+				self.publishEvalPnl.checked = true;
+			}
 		} else {
+			ids.eval_headerrow2.style.display = "none";
 			ids.btn_back.style.display = "none";
+			ids.btn_save.style.display = "none";
 		}
 		
 		if(data.ReadOnly) {
@@ -397,9 +488,18 @@ var ExamExamer = function(initLoad) {
 		self.common.async(asyncData, cbOK, cbFail, true);	
 	}
 	
+	self.saveExam = function(fromAdmin) {
+		var data = [];
+		for(var i = 0; i < self.questions.length; i++) {
+			data.push(self.questions[i].collectEval());
+		}
+		var save = self.mainHeader.publishEval();
+		fromAdmin.save({"evals": data, "save": save});
+	}
+	
 	self.materialize = function(data, fromAdmin) {
 		self.root.innerHTML = "";
-		self.mainHeader = new ExamMainHeader(data, self.startExam, self.turnExam, fromAdmin);
+		self.mainHeader = new ExamMainHeader(data, self.startExam, self.turnExam, self.saveExam, fromAdmin);
 		self.root.appendChild(self.mainHeader.node);
 			
 		if(data.Questions) {
@@ -468,4 +568,5 @@ function exam_load() {
 
 $INJECT(exams/templates.js)$
 $INJECT(common.js)$
+$INJECT(formats.js)$
 $INJECT(WEB.ADMIN, admin.js)$

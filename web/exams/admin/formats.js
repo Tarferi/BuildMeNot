@@ -1,10 +1,11 @@
 var ExamsAdminFormats = function() {
 	var selfFormats = this;
+	var outFormats = new CommonFormats();
 	
 	selfFormats.init = function() {
 		
 	}
-	
+
 	selfFormats.Generic = function() {
 		var self = this;
 		

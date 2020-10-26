@@ -11,6 +11,7 @@ import cz.rion.buildserver.db.layers.staticDB.LayeredExamDB.Exam;
 import cz.rion.buildserver.db.layers.staticDB.LayeredExamDB.ExamCache;
 import cz.rion.buildserver.db.layers.staticDB.LayeredExamDB.Generated;
 import cz.rion.buildserver.db.layers.staticDB.LayeredExamDB.GeneratedQuestionConfig;
+import cz.rion.buildserver.db.layers.staticDB.LayeredExamDB.GeneratedQuestionEvaluation;
 import cz.rion.buildserver.db.layers.staticDB.LayeredExamDB.Question;
 import cz.rion.buildserver.db.layers.staticDB.LayeredExamDB.QuestionGroup;
 import cz.rion.buildserver.db.layers.staticDB.LayeredExamDB.QuestionType;
@@ -80,6 +81,10 @@ public class StatelessExamClient extends StatelessGraphProviderClient {
 				if (isExamRunning(gen)) {
 					obj.add("StartedAt", gen.Config.Response.getNumber("Started"));
 				}
+				if (gen.Config.EvaluationPublished) {
+					obj.add("Evaluated", true);
+					obj.add("EvaluatedAt", gen.Config.EvaluationPublishedTime);
+				}
 				if (gen.Config.Response.containsBoolean("Answered")) {
 					if (gen.Config.Response.getBoolean("Answered").Value) {
 						obj.add("Finished", true);
@@ -101,9 +106,23 @@ public class StatelessExamClient extends StatelessGraphProviderClient {
 		return ar;
 	}
 
+	private Generated getGenerated(List<Generated> gens, int generatedID) {
+		for (Generated gen : gens) {
+			if (gen.ID == generatedID) {
+				return gen;
+			}
+		}
+		return null;
+	}
+
 	private Generated getExam(List<Generated> gens, int examID) {
 		for (Generated gen : gens) {
 			if (examID == gen.Exam.ID || (examID == -1 && isExamRunning(gen))) {
+				return gen;
+			}
+		}
+		for (Generated gen : gens) {
+			if (examID == -1 && !isExamRunning(gen) && !isExamFinished(gen)) {
 				return gen;
 			}
 		}
@@ -115,8 +134,9 @@ public class StatelessExamClient extends StatelessGraphProviderClient {
 		return null;
 	}
 
-	private JsonObject getGenerated(ProcessState state, Generated gen, boolean includeQuestionsByDefault) {
+	private JsonObject getGenerated(ProcessState state, Generated gen, boolean includeQuestionsByDefault, boolean includeUnpublishedEvaluation) {
 		boolean includeQuestions = includeQuestionsByDefault;
+		boolean includeEvaluation = gen.Config.EvaluationPublished || includeUnpublishedEvaluation;
 		JsonObject obj = new JsonObject();
 		obj.add("Available", true);
 		obj.add("ExamID", gen.Exam.ID);
@@ -138,6 +158,10 @@ public class StatelessExamClient extends StatelessGraphProviderClient {
 				obj.add("AnswerTime", gen.Config.Response.getNumber("AnswerTime"));
 				obj.add("Answers", gen.Config.Response.getArray("Answer"));
 			}
+			obj.add("EvaluationAvailable", gen.Config.EvaluationPublished);
+			if (includeEvaluation) {
+				obj.add("EvaluatedAt", gen.Config.EvaluationPublishedTime);
+			}
 			includeQuestions = true;
 		} else if (isExamRunning(gen)) {
 			obj.add("StartedAt", gen.Config.Response.getNumber("Started"));
@@ -153,6 +177,9 @@ public class StatelessExamClient extends StatelessGraphProviderClient {
 				qobj.add("Evaluation", question.Group.Config.evaluation);
 				qobj.add("Config", question.Question.Config.get());
 				qobj.add("Permutations", question.OptionsPermutation);
+				if (includeEvaluation) {
+					qobj.add("EvaluationData", question.Evaluation.get());
+				}
 				qarr.add(qobj);
 			}
 			obj.add("Questions", qarr);
@@ -164,7 +191,7 @@ public class StatelessExamClient extends StatelessGraphProviderClient {
 		StaticDB sdb = state.Data.StaticDB;
 		for (Generated gen : sdb.getExamsData(state.Toolchain).Generated) {
 			if (gen.ID == generatedID) {
-				return getGenerated(state, gen, includeQuestionsByDefault);
+				return getGenerated(state, gen, includeQuestionsByDefault, true);
 			}
 		}
 		JsonObject obj = new JsonObject();
@@ -178,7 +205,7 @@ public class StatelessExamClient extends StatelessGraphProviderClient {
 		if (lst != null) {
 			Generated gen = getExam(lst, examID);
 			if (gen != null) {
-				return getGenerated(state, gen, false);
+				return getGenerated(state, gen, false, false);
 			}
 		}
 		JsonObject obj = new JsonObject();
@@ -200,6 +227,99 @@ public class StatelessExamClient extends StatelessGraphProviderClient {
 			}
 		}
 		return false;
+	}
+
+	private static boolean isInt(String str) {
+		try {
+			Integer.parseInt(str);
+			return true;
+		} catch (Exception e) {
+		}
+		return false;
+	}
+
+	private JsonValue saveEvaluation(ProcessState state, int generatedID, JsonArray evals, boolean publish) {
+		int code = 1;
+		boolean error = false;
+		String description = "No such exam";
+		Generated gen = getGenerated(state.Data.StaticDB.getExamsData(state.Toolchain).Generated, generatedID);
+		if (gen != null) {
+			int totalQuestionsCount = gen.Config.GeneratedQuestions.length;
+			int totalEvaluatedCount = 0;
+
+			for (JsonValue eval : evals.Value) {
+				if (eval.isObject()) {
+					JsonObject o = eval.asObject();
+					if (o.containsString("eval") && o.containsString("comment") && o.containsNumber("ID")) {
+						String pointStr = o.getString("eval").Value.trim();
+						String comment = o.getString("comment").Value;
+						int ID = o.getNumber("ID").Value;
+						if (pointStr.isEmpty()) {
+							continue;
+						}
+						if (pointStr.indexOf('.') >= 0) {
+							String pre = pointStr.split("\\.")[0];
+							String post = pointStr.split("\\.")[1];
+							if (!isInt(pre) || !isInt(post)) {
+								code = 1;
+								description = "Invalid evaluation for question " + ID;
+								error = true;
+								break;
+							} else {
+								int postI = Integer.parseInt(post);
+								int preI = Integer.parseInt(pre);
+								pointStr = postI == 0 ? preI + "" : preI + "," + postI;
+							}
+						} else {
+							if (!isInt(pointStr)) {
+								code = 1;
+								description = "Invalid evaluation for question " + ID;
+								error = true;
+								break;
+							} else {
+								pointStr = Integer.parseInt(pointStr) + "";
+							}
+						}
+
+						GeneratedQuestionEvaluation data = gen.Config.getEvaluation(ID);
+						if (data == null) {
+							code = 1;
+							description = "Evaluating question (" + ID + ") that is not a part of generated exam";
+							error = true;
+							break;
+						}
+						GeneratedQuestionEvaluation newData = data.getUpdatedInstance(state.getPermissions().Login, pointStr, comment);
+						if (!gen.Config.update(ID, newData)) {
+							code = 1;
+							description = "Evaluating question (" + ID + ") that is not a part of generated exam";
+							error = true;
+							break;
+						}
+						totalEvaluatedCount++;
+					}
+				}
+			}
+
+			if (!error) {
+				description = "Saved";
+			}
+			if (!error && publish && totalQuestionsCount != totalEvaluatedCount) {
+				code = 0;
+				description = "Saved, but not published. Missing " + (totalQuestionsCount - totalEvaluatedCount) + " evaluated questions";
+				publish = false;
+			}
+			if (!error) {
+				gen = gen.getUpdatedInstance(publish);
+				if (!state.Data.StaticDB.updateGenerated(state.Toolchain, gen)) {
+					code = 1;
+					description = "Database error";
+				}
+			}
+		}
+		JsonObject obj = new JsonObject();
+		obj.add("code", code);
+		obj.add("details", description);
+		return obj;
 	}
 
 	private JsonArray collectExams(StaticDB sdb, Toolchain toolchain) {
@@ -262,158 +382,171 @@ public class StatelessExamClient extends StatelessGraphProviderClient {
 
 	private static final PermissionBranch pbSee = new PermissionBranch("WEB.EXAMS.SEE");
 
+	private final Object syncer = new Object();
+
 	protected JsonObject handleExamsEvent(ProcessState state, JsonObject obj) {
-		String tc = state.Toolchain.getName();
-		PermissionBranch requiredPermissions;
-		if (!reqPerms.containsKey(tc)) {
-			requiredPermissions = new PermissionBranch(tc + ".EXAMS");
-			reqPerms.put(tc, requiredPermissions);
-		} else {
-			requiredPermissions = reqPerms.get(tc);
-		}
+		synchronized (syncer) {
+			String tc = state.Toolchain.getName();
+			PermissionBranch requiredPermissions;
+			if (!reqPerms.containsKey(tc)) {
+				requiredPermissions = new PermissionBranch(tc + ".EXAMS");
+				reqPerms.put(tc, requiredPermissions);
+			} else {
+				requiredPermissions = reqPerms.get(tc);
+			}
 
-		JsonObject result = new JsonObject();
-		result.add("code", new JsonNumber(1));
-		result.add("result", new JsonString("Invalid exam command"));
+			JsonObject result = new JsonObject();
+			result.add("code", new JsonNumber(1));
+			result.add("result", new JsonString("Invalid exam command"));
 
-		boolean canAdmin = state.getPermissions().can(requiredPermissions);
-		boolean canUser = state.getPermissions().can(pbSee);
+			boolean canAdmin = state.getPermissions().can(requiredPermissions);
+			boolean canUser = state.getPermissions().can(pbSee);
 
-		if (obj.containsString("exam_data")) {
-			String exam_data = obj.getString("exam_data").Value;
-			if (canAdmin && exam_data.equals("getData")) {
-				result.add("code", new JsonNumber(0));
-				result.add("result", new JsonString(collectData(state.Data.StaticDB, state.Toolchain, state.getPermissions()).getJsonString()));
-			} else if (canAdmin && exam_data.equals("create_exam") && obj.containsString("name")) {
-				if (state.Data.StaticDB.addExam(state.Toolchain, obj.getString("name").Value, new JsonObject())) {
-					result.add("code", 0);
-					result.add("result", "created");
-				} else {
-					result.add("code", 1);
-					result.add("result", "Exam could not be created");
-				}
-			} else if (canAdmin && exam_data.equals("create_group") && obj.containsString("name")) {
-				if (state.Data.StaticDB.addQuestionGroup(state.Toolchain, obj.getString("name").Value, new JsonObject())) {
-					result.add("code", 0);
-					result.add("result", "created");
-				} else {
-					result.add("code", 1);
-					result.add("result", "Exam could not be created");
-				}
-			} else if (canAdmin && exam_data.equals("create_question") && obj.containsString("name")) {
-				if (state.Data.StaticDB.addQuestion(state.Toolchain, obj.getString("name").Value, new JsonObject())) {
-					result.add("code", 0);
-					result.add("result", "created");
-				} else {
-					result.add("code", 1);
-					result.add("result", "Exam could not be created");
-				}
-			} else if (canAdmin && exam_data.equals("edit_exam") && obj.containsObject("data")) {
-				JsonObject data = obj.getObject("data");
-				if (data.containsNumber("ID") && data.containsString("name") && data.containsObject("config")) {
-					if (state.Data.StaticDB.updateExam(state.Toolchain, data.getNumber("ID").Value, data.getString("name").Value, data.getObject("config"))) {
-						result.add("code", 0);
-						result.add("result", "created");
-					} else {
-						result.add("code", 1);
-						result.add("result", "Question group could not be created");
-					}
-				} else {
-					result.add("code", 1);
-					result.add("result", "Question group could not be created");
-				}
-			} else if (canAdmin && exam_data.equals("edit_group") && obj.containsObject("data")) {
-				JsonObject data = obj.getObject("data");
-				if (data.containsNumber("ID") && data.containsString("name") && data.containsObject("config")) {
-					if (state.Data.StaticDB.updateQuestionGroup(state.Toolchain, data.getNumber("ID").Value, data.getString("name").Value, data.getObject("config"))) {
+			if (obj.containsString("exam_data")) {
+				String exam_data = obj.getString("exam_data").Value;
+				if (canAdmin && exam_data.equals("getData")) {
+					result.add("code", new JsonNumber(0));
+					result.add("result", new JsonString(collectData(state.Data.StaticDB, state.Toolchain, state.getPermissions()).getJsonString()));
+				} else if (canAdmin && exam_data.equals("create_exam") && obj.containsString("name")) {
+					if (state.Data.StaticDB.addExam(state.Toolchain, obj.getString("name").Value, new JsonObject())) {
 						result.add("code", 0);
 						result.add("result", "created");
 					} else {
 						result.add("code", 1);
 						result.add("result", "Exam could not be created");
 					}
-				} else {
-					result.add("code", 1);
-					result.add("result", "Exam could not be created");
-				}
-			} else if (canAdmin && exam_data.equals("edit_question") && obj.containsObject("data")) {
-				JsonObject data = obj.getObject("data");
-				if (data.containsNumber("ID") && data.containsString("name") && data.containsObject("config")) {
-					if (state.Data.StaticDB.updateQuestion(state.Toolchain, data.getNumber("ID").Value, data.getString("name").Value, data.getObject("config"))) {
+				} else if (canAdmin && exam_data.equals("create_group") && obj.containsString("name")) {
+					if (state.Data.StaticDB.addQuestionGroup(state.Toolchain, obj.getString("name").Value, new JsonObject())) {
 						result.add("code", 0);
 						result.add("result", "created");
 					} else {
 						result.add("code", 1);
+						result.add("result", "Exam could not be created");
+					}
+				} else if (canAdmin && exam_data.equals("create_question") && obj.containsString("name")) {
+					if (state.Data.StaticDB.addQuestion(state.Toolchain, obj.getString("name").Value, new JsonObject())) {
+						result.add("code", 0);
+						result.add("result", "created");
+					} else {
+						result.add("code", 1);
+						result.add("result", "Exam could not be created");
+					}
+				} else if (canAdmin && exam_data.equals("edit_exam") && obj.containsObject("data")) {
+					JsonObject data = obj.getObject("data");
+					if (data.containsNumber("ID") && data.containsString("name") && data.containsObject("config")) {
+						if (state.Data.StaticDB.updateExam(state.Toolchain, data.getNumber("ID").Value, data.getString("name").Value, data.getObject("config"))) {
+							result.add("code", 0);
+							result.add("result", "created");
+						} else {
+							result.add("code", 1);
+							result.add("result", "Question group could not be created");
+						}
+					} else {
+						result.add("code", 1);
+						result.add("result", "Question group could not be created");
+					}
+				} else if (canAdmin && exam_data.equals("edit_group") && obj.containsObject("data")) {
+					JsonObject data = obj.getObject("data");
+					if (data.containsNumber("ID") && data.containsString("name") && data.containsObject("config")) {
+						if (state.Data.StaticDB.updateQuestionGroup(state.Toolchain, data.getNumber("ID").Value, data.getString("name").Value, data.getObject("config"))) {
+							result.add("code", 0);
+							result.add("result", "created");
+						} else {
+							result.add("code", 1);
+							result.add("result", "Exam could not be created");
+						}
+					} else {
+						result.add("code", 1);
+						result.add("result", "Exam could not be created");
+					}
+				} else if (canAdmin && exam_data.equals("edit_question") && obj.containsObject("data")) {
+					JsonObject data = obj.getObject("data");
+					if (data.containsNumber("ID") && data.containsString("name") && data.containsObject("config")) {
+						if (state.Data.StaticDB.updateQuestion(state.Toolchain, data.getNumber("ID").Value, data.getString("name").Value, data.getObject("config"))) {
+							result.add("code", 0);
+							result.add("result", "created");
+						} else {
+							result.add("code", 1);
+							result.add("result", "Question could not be created");
+						}
+					} else {
+						result.add("code", 1);
 						result.add("result", "Question could not be created");
 					}
-				} else {
-					result.add("code", 1);
-					result.add("result", "Question could not be created");
-				}
-			} else if (canAdmin && exam_data.equals("del_exam") && obj.containsObject("data")) {
-				JsonObject data = obj.getObject("data");
-				if (data.containsNumber("ID")) {
-					if (state.Data.StaticDB.deleteExam(state.Toolchain, data.getNumber("ID").Value)) {
-						result.add("code", 0);
-						result.add("result", "deleted");
+				} else if (canAdmin && exam_data.equals("del_exam") && obj.containsObject("data")) {
+					JsonObject data = obj.getObject("data");
+					if (data.containsNumber("ID")) {
+						if (state.Data.StaticDB.deleteExam(state.Toolchain, data.getNumber("ID").Value)) {
+							result.add("code", 0);
+							result.add("result", "deleted");
+						} else {
+							result.add("code", 1);
+							result.add("result", "Exam could not be deleted");
+						}
 					} else {
 						result.add("code", 1);
 						result.add("result", "Exam could not be deleted");
 					}
-				} else {
-					result.add("code", 1);
-					result.add("result", "Exam could not be deleted");
-				}
-			} else if (canAdmin && exam_data.equals("del_group") && obj.containsObject("data")) {
-				JsonObject data = obj.getObject("data");
-				if (data.containsNumber("ID")) {
-					if (state.Data.StaticDB.deleteQuestionGroup(state.Toolchain, data.getNumber("ID").Value)) {
-						result.add("code", 0);
-						result.add("result", "deleted");
+				} else if (canAdmin && exam_data.equals("del_group") && obj.containsObject("data")) {
+					JsonObject data = obj.getObject("data");
+					if (data.containsNumber("ID")) {
+						if (state.Data.StaticDB.deleteQuestionGroup(state.Toolchain, data.getNumber("ID").Value)) {
+							result.add("code", 0);
+							result.add("result", "deleted");
+						} else {
+							result.add("code", 1);
+							result.add("result", "Question group could not be deleted");
+						}
 					} else {
 						result.add("code", 1);
 						result.add("result", "Question group could not be deleted");
 					}
-				} else {
-					result.add("code", 1);
-					result.add("result", "Question group could not be deleted");
-				}
-			} else if (canAdmin && exam_data.equals("del_question") && obj.containsObject("data")) {
-				JsonObject data = obj.getObject("data");
-				if (data.containsNumber("ID")) {
-					if (state.Data.StaticDB.deleteQuestion(state.Toolchain, data.getNumber("ID").Value)) {
-						result.add("code", 0);
-						result.add("result", "deleted");
+				} else if (canAdmin && exam_data.equals("del_question") && obj.containsObject("data")) {
+					JsonObject data = obj.getObject("data");
+					if (data.containsNumber("ID")) {
+						if (state.Data.StaticDB.deleteQuestion(state.Toolchain, data.getNumber("ID").Value)) {
+							result.add("code", 0);
+							result.add("result", "deleted");
+						} else {
+							result.add("code", 1);
+							result.add("result", "Question could not be deleted");
+						}
 					} else {
 						result.add("code", 1);
 						result.add("result", "Question could not be deleted");
 					}
-				} else {
-					result.add("code", 1);
-					result.add("result", "Question could not be deleted");
-				}
-			} else if (canUser && exam_data.equals("get_exam")) {
-				result.add("code", 0);
-				result.add("result", new JsonString(getExamForMe(state, -1).getJsonString()));
-			} else if (canUser && exam_data.equals("begin_exam") && obj.containsNumber("ID")) {
-				if (startExam(state, obj.getNumber("ID").Value)) {
+				} else if (canUser && exam_data.equals("get_exam")) {
 					result.add("code", 0);
-					result.add("result", new JsonString(getExamForMe(state, obj.getNumber("ID").Value).getJsonString()));
-				}
-			} else if (canUser && exam_data.equals("finish_exam") && obj.containsNumber("ID") && obj.containsArray("Data")) {
-				JsonArray data = obj.getArray("Data");
-				if (finishExam(state, obj.getNumber("ID").Value, data)) {
+					result.add("result", new JsonString(getExamForMe(state, -1).getJsonString()));
+				} else if (canUser && exam_data.equals("begin_exam") && obj.containsNumber("ID")) {
+					if (startExam(state, obj.getNumber("ID").Value)) {
+						result.add("code", 0);
+						result.add("result", new JsonString(getExamForMe(state, obj.getNumber("ID").Value).getJsonString()));
+					}
+				} else if (canUser && exam_data.equals("finish_exam") && obj.containsNumber("ID") && obj.containsArray("Data")) {
+					JsonArray data = obj.getArray("Data");
+					if (finishExam(state, obj.getNumber("ID").Value, data)) {
+						result.add("code", 0);
+						result.add("result", new JsonString(getExamForMe(state, obj.getNumber("ID").Value).getJsonString()));
+					}
+				} else if (canAdmin && exam_data.equals("get_results") && obj.containsNumber("ID")) {
 					result.add("code", 0);
-					result.add("result", new JsonString(getExamForMe(state, obj.getNumber("ID").Value).getJsonString()));
+					result.add("result", new JsonString(getResultsFor(state, obj.getNumber("ID").Value).getJsonString()));
+				} else if (canAdmin && exam_data.equals("get_result_by_id") && obj.containsNumber("ID")) {
+					result.add("code", 0);
+					result.add("result", new JsonString(getGenerated(state, obj.getNumber("ID").Value, true).getJsonString()));
+				} else if (canAdmin && exam_data.equals("eval_results") && obj.containsObject("data") && obj.containsNumber("ID")) {
+					int id = obj.getNumber("ID").Value; // ID of generated entry
+					JsonObject data = obj.getObject("data");
+					if (data.containsBoolean("save") && data.containsArray("evals")) {
+						boolean publish = data.getBoolean("save").Value;
+						JsonArray evals = data.getArray("evals");
+						result.add("code", 0);
+						result.add("result", new JsonString(saveEvaluation(state, id, evals, publish).getJsonString()));
+					}
 				}
-			} else if (canAdmin && exam_data.equals("get_results") && obj.containsNumber("ID")) {
-				result.add("code", 0);
-				result.add("result", new JsonString(getResultsFor(state, obj.getNumber("ID").Value).getJsonString()));
-			} else if (canAdmin && exam_data.equals("get_result_by_id") && obj.containsNumber("ID")) {
-				result.add("code", 0);
-				result.add("result", new JsonString(getGenerated(state, obj.getNumber("ID").Value, true).getJsonString()));
 			}
+			return result;
 		}
-		return result;
 	}
 }

@@ -449,15 +449,55 @@ public abstract class LayeredExamDB extends LayeredStaticEndpointDB {
 		}
 	}
 
+	public static final class GeneratedQuestionEvaluation extends JsonConfig {
+
+		public final String EvaluatorLogin;
+		public final Long EvaluatedAt;
+		public final String Points;
+		public final String Comment;
+
+		private GeneratedQuestionEvaluation(String evaluatorLogin, Long evaluatedAt, String points, String comment) {
+			this.EvaluatedAt = evaluatedAt;
+			this.EvaluatorLogin = evaluatorLogin;
+			this.Points = points;
+			this.Comment = comment;
+		}
+
+		public static GeneratedQuestionEvaluation get(JsonObject evalStr) {
+			String login = evalStr.containsString("login") ? evalStr.getString("login").Value : "";
+			long evalAt = evalStr.containsNumber("time") ? evalStr.getNumber("time").Value : 0;
+			String points = evalStr.containsString("points") ? evalStr.getString("points").Value : "0";
+			String comment = evalStr.containsString("comment") ? evalStr.getString("comment").Value : "";
+			return new GeneratedQuestionEvaluation(login, evalAt, points, comment);
+		}
+
+		@Override
+		public JsonValue get() {
+			JsonObject obj = new JsonObject();
+			obj.add("login", EvaluatorLogin);
+			obj.add("time", EvaluatedAt);
+			obj.add("points", Points);
+			obj.add("comment", Comment);
+			return obj;
+		}
+
+		public GeneratedQuestionEvaluation getUpdatedInstance(String login, String points, String comment) {
+			return new GeneratedQuestionEvaluation(login, System.currentTimeMillis(), points, comment);
+		}
+
+	}
+
 	public static final class GeneratedQuestionConfig extends JsonConfig {
 		public final Question Question;
 		public final QuestionGroup Group;
 		public final String OptionsPermutation;
+		public final GeneratedQuestionEvaluation Evaluation;
 
-		private GeneratedQuestionConfig(Question question, QuestionGroup questionGroup, String permutation) {
+		private GeneratedQuestionConfig(Question question, QuestionGroup questionGroup, String permutation, GeneratedQuestionEvaluation evaluation) {
 			this.Question = question;
 			this.Group = questionGroup;
 			this.OptionsPermutation = permutation;
+			this.Evaluation = evaluation;
 		}
 
 		public static GeneratedQuestionConfig get(JsonValue val, Map<Integer, Question> qmap, Map<Integer, QuestionGroup> qgmap) {
@@ -469,7 +509,11 @@ public abstract class LayeredExamDB extends LayeredStaticEndpointDB {
 				if (qmap.containsKey(qi) && qgmap.containsKey(qgi)) {
 					Question q = qmap.get(qi);
 					QuestionGroup qg = qgmap.get(qgi);
-					return new GeneratedQuestionConfig(q, qg, permutation);
+
+					JsonObject evalStr = val.asObject().containsObject("evaluation") ? val.asObject().getObject("evaluation") : new JsonObject();
+					GeneratedQuestionEvaluation eval = GeneratedQuestionEvaluation.get(evalStr);
+
+					return new GeneratedQuestionConfig(q, qg, permutation, eval);
 				}
 			}
 			return null;
@@ -477,21 +521,36 @@ public abstract class LayeredExamDB extends LayeredStaticEndpointDB {
 
 		@Override
 		public JsonValue get() {
+			return get(true);
+		}
+
+		private JsonValue get(boolean addEvaluation) {
 			JsonObject obj = new JsonObject();
 			get(obj, "question", Question.ID);
 			get(obj, "group", Group.ID);
 			get(obj, "permutation", OptionsPermutation);
+			if (addEvaluation) {
+				obj.add("evaluation", Evaluation.get());
+			}
 			return obj;
+		}
+
+		public GeneratedQuestionConfig getUpdatedInstance(GeneratedQuestionEvaluation newData) {
+			return new GeneratedQuestionConfig(Question, Group, OptionsPermutation, newData);
 		}
 	}
 
 	public static final class GeneratedConfig extends JsonConfig {
 		public final GeneratedQuestionConfig[] GeneratedQuestions;
 		public final JsonObject Response;
+		public final boolean EvaluationPublished;
+		public final Long EvaluationPublishedTime;
 
-		private GeneratedConfig(GeneratedQuestionConfig[] generatedQuestions, JsonObject response) {
+		private GeneratedConfig(GeneratedQuestionConfig[] generatedQuestions, JsonObject response, boolean evaluationPublished, Long evaluationPublishedTime) {
 			this.GeneratedQuestions = generatedQuestions;
 			this.Response = response;
+			this.EvaluationPublished = evaluationPublished;
+			this.EvaluationPublishedTime = evaluationPublishedTime;
 		}
 
 		private static GeneratedConfig get(JsonValue val, Map<Integer, Question> qmap, Map<Integer, QuestionGroup> qgmap) {
@@ -509,7 +568,9 @@ public abstract class LayeredExamDB extends LayeredStaticEndpointDB {
 						i++;
 					}
 					JsonObject resp = obj.getObject("responses");
-					return new GeneratedConfig(qc, resp);
+					boolean publish = obj.containsBoolean("publish") ? obj.getBoolean("publish").Value : false;
+					long pubTime = obj.containsNumber("publishedAt") ? obj.getNumber("publishedAt").asLong() : 0;
+					return new GeneratedConfig(qc, resp, publish, pubTime);
 				}
 			}
 			return null;
@@ -517,14 +578,48 @@ public abstract class LayeredExamDB extends LayeredStaticEndpointDB {
 
 		@Override
 		public JsonValue get() {
+			return get(true);
+		}
+
+		private JsonValue get(boolean addEvaluation) {
 			JsonObject obj = new JsonObject();
 			JsonArray arr = new JsonArray();
 			for (GeneratedQuestionConfig conf : GeneratedQuestions) {
-				arr.add(conf.get());
+				arr.add(conf.get(addEvaluation));
 			}
 			obj.add("questions", arr);
 			obj.add("responses", Response);
+			if (addEvaluation) {
+				obj.add("publish", EvaluationPublished);
+				obj.add("publishedAt", EvaluationPublishedTime);
+			}
 			return obj;
+		}
+
+		public GeneratedQuestionEvaluation getEvaluation(int ID) {
+			for (int i = 0; i < GeneratedQuestions.length; i++) {
+				GeneratedQuestionConfig q = GeneratedQuestions[i];
+				if (q.Question.ID == ID) {
+					return q.Evaluation;
+				}
+			}
+			return null;
+		}
+
+		public boolean update(int ID, GeneratedQuestionEvaluation newData) {
+			for (int i = 0; i < GeneratedQuestions.length; i++) {
+				GeneratedQuestionConfig q = GeneratedQuestions[i];
+				if (q.Question.ID == ID) {
+					q = q.getUpdatedInstance(newData);
+					GeneratedQuestions[i] = q;
+					return true;
+				}
+			}
+			return false;
+		}
+
+		public GeneratedConfig getUpdateInstance(boolean publish) {
+			return new GeneratedConfig(GeneratedQuestions, Response, publish, System.currentTimeMillis());
 		}
 	}
 
@@ -539,6 +634,10 @@ public abstract class LayeredExamDB extends LayeredStaticEndpointDB {
 			this.Login = login;
 			this.Exam = exam;
 			this.Config = config;
+		}
+
+		public Generated getUpdatedInstance(boolean publish) {
+			return new Generated(ID, Exam, Login, Config.getUpdateInstance(publish));
 		}
 
 	}
@@ -842,7 +941,7 @@ public abstract class LayeredExamDB extends LayeredStaticEndpointDB {
 								permutation = randomizedOrder(options.length, rnd);
 							}
 						}
-						generated.get(login).add(new GeneratedQuestionConfig(question, group, permutation));
+						generated.get(login).add(new GeneratedQuestionConfig(question, group, permutation, GeneratedQuestionEvaluation.get(new JsonObject())));
 					}
 				}
 
@@ -853,7 +952,8 @@ public abstract class LayeredExamDB extends LayeredStaticEndpointDB {
 					for (int i = 0; i < cfg.length; i++) {
 						cfg[i] = entry.getValue().get(i);
 					}
-					GeneratedConfig config = new GeneratedConfig(cfg, new JsonObject());
+					Long x = (long) 0;
+					GeneratedConfig config = new GeneratedConfig(cfg, new JsonObject(), false, x);
 					if (!addGenerated(login, exam, config)) {
 						log.append("# Failed to generate entry for " + login + "\n");
 						return false;

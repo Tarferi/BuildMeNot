@@ -13,16 +13,25 @@ var ExamAdminEditableField = function(data, id, viewNode, editableNode, fmt) {
 	self.ID = id;
 	self.fmt = fmt;
 	var defaultData = "";
+	var outFormat = new CommonFormats();
 
 	defaultData = fmt.getDefaultValue(data, id);
 
+	
+	self.formatNone = function(data) {
+		return data;
+	}
+	
 	self.viewValueMemberName = "innerHTML"
+	self.viewValueFormat = outFormat.format;
 	if(viewNode.tagName.toLowerCase() == "input"){
+		self.viewValueFormat = self.formatNone;
 		self.viewValueMemberName = "value"
 		if(viewNode.type == "checkbox") {
 			self.viewValueMemberName = "checked"
 		}
 	}
+
 
 	self.valueMemberName = editableNode.type == "checkbox" ? "checked" : "value"
 	
@@ -36,7 +45,7 @@ var ExamAdminEditableField = function(data, id, viewNode, editableNode, fmt) {
 
 	self.init = function() {
 		self.setEditingEnabled(false);
-		viewNode[self.viewValueMemberName] = fmt.format(data, id);
+		viewNode[self.viewValueMemberName] =  self.viewValueFormat(fmt.format(data, id));
 	};
 
 	self.getEditValue = function(data) {
@@ -278,22 +287,51 @@ var ExamAdminQuestion = function(data, types, stopQuestionEditing, saveCB, delCB
 
 var ExamAdminOpenedTest = function(data, closeEverythingElseCB, closeCB) {
 	var self = this;
+	self.ID = data.ID;
 	self.common = new Common();
 	
-	self.materialize = function() {
-		closeEverythingElseCB();
+	self.materialize = function(hasFrameReady) {
+		if(hasFrameReady !== true) {
+			closeEverythingElseCB();
+		}
 		
-		var examer = new ExamExamer(false);
+		self.examer = new ExamExamer(false);
 		self.common.showLoader();
 		var exData = {
 			 "name": data.FullName, 
-			 "close": function() {
-				// close
-				document.body.removeChild(examer.root);
-				closeCB();
-			}
+			 "close": self.close,
+			 "save": self.save
 		}
-		examer.loadExam(data.ID, exData);
+		self.examer.loadExam(data.ID, exData);
+	}
+
+	self.close = function(keepUIFrame) {
+		// close
+		document.body.removeChild(self.examer.root);
+		if(keepUIFrame !== true) {
+			closeCB();
+		}
+	}
+
+	self.save = function(data) {
+		self.common.showLoader();
+		var cbOK = function() {
+			self.common.hideLoader();
+			self.close(true);
+			self.materialize(true);
+		}
+		var cbFail = function(err) {
+			self.common.hideLoader();
+			alert("Nepodařilo se uložit hodnocení:\r\n" + err);
+		}
+		var asyncData = {
+			"action" : "HANDLE_EXAMS",
+			"exam_data" : "eval_results",
+			"ID": self.ID,
+			"data" : data
+		};
+		self.common.showLoader();
+		self.common.async(asyncData, cbOK, cbFail, false);
 	}
 	
 	self.init = function() {
@@ -352,7 +390,7 @@ var ExamAdminExam = function(data, stopExamEditing, saveCB, delCB, setRenderedTa
 		var ids = d[1];
 		
 		
-		
+		var evaluated = [];
 		var finished = [];
 		var timeouted = [];
 		var running = [];
@@ -360,7 +398,9 @@ var ExamAdminExam = function(data, stopExamEditing, saveCB, delCB, setRenderedTa
 		
 		for(var i = 0; i < data.length; i++) {
 			var item = data[i];
-			if(item.Finished) {
+			if(item.Evaluated) {
+				evaluated.push(item);
+			} else if(item.Finished) {
 				finished.push(item);
 			} else if (item.Timeouted) {
 				timeouted.push(item);
@@ -385,11 +425,21 @@ var ExamAdminExam = function(data, stopExamEditing, saveCB, delCB, setRenderedTa
 			var details1 = [];
 			var details2 = [];
 			
-			if(data.Finished) {
-				status = "Ukončeno";
+			if(data.Evaluated) {
+				status = "Ohodnoceno";
 				details1.push("Zahájeno");
 				details2.push(self.common.convertDateTime(data.StartedAt));
-				details1.push("Ukončeno");
+				if(data.FinishedAt){
+					details1.push("Odevzdáno");
+					details2.push(self.common.convertDateTime(data.FinishedAt));
+				}
+				details1.push("Ohodnoceno");
+				details2.push(self.common.convertDateTime(data.EvaluatedAt));		
+			} else if(data.Finished) {
+				status = "Odevzdáno";
+				details1.push("Zahájeno");
+				details2.push(self.common.convertDateTime(data.StartedAt));
+				details1.push("Odevzdáno");
 				details2.push(self.common.convertDateTime(data.FinishedAt));
 			} else if (data.Timeouted) {
 				status = "Ukončeno vypršením času";
@@ -425,6 +475,7 @@ var ExamAdminExam = function(data, stopExamEditing, saveCB, delCB, setRenderedTa
 			return node;
 		}
 		
+		evaluated.map(materializeRow).map(appendMaterializedNode);
 		finished.map(materializeRow).map(appendMaterializedNode);
 		timeouted.map(materializeRow).map(appendMaterializedNode);
 		running.map(materializeRow).map(appendMaterializedNode);
@@ -804,6 +855,7 @@ function adm_load() {
 }
 
 $INJECT(common.js)$
+$INJECT(formats.js)$
 $INJECT(exams/admin/templates.js)$
 $INJECT(exams/admin/formats.js)$
 $INJECT(WEB.ADMIN, admin.js)$

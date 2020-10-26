@@ -316,7 +316,7 @@ var Common = function() {
 			el.colSpan = data.colSpan;
 		}
 		if (data.rowSpan) {
-			el.rowSpan = data.colspan;
+			el.rowSpan = data.rowSpan;
 		}
 		if (data.name) {
 			el.name = data.name;
