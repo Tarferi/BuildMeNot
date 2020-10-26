@@ -15,6 +15,11 @@ public final class HTTPRequest {
 	public final String remoteAddress;
 	public final boolean isSSL;
 
+	/**
+	 * "http" for non-ssl and "https" for ssl
+	 */
+	public final String protocol_norm;
+
 	public HTTPRequest(String method, String host, String protocol, String path, byte[] data, Map<String, String> headers, List<String> cookiesLines, String remoteAddress, boolean isSSL) {
 		String authData = null;
 		if (path.contains("/auth/")) {
@@ -37,5 +42,6 @@ public final class HTTPRequest {
 		this.cookiesLines = cookiesLines;
 		this.remoteAddress = remoteAddress;
 		this.isSSL = isSSL;
+		this.protocol_norm = isSSL ? "https" : "http";
 	}
 }

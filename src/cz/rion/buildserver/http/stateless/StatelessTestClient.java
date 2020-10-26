@@ -115,7 +115,7 @@ public class StatelessTestClient extends StatelessTermClient {
 			e.printStackTrace();
 			returnValue.add("code", new JsonNumber(53));
 			returnValue.add("result", new JsonString("Not logged in"));
-			returnValue.add("authUrl", new JsonString(Settings.getAuthURL(state.Request.protocol, state.Request.host)));
+			returnValue.add("authUrl", new JsonString(Settings.getAuthURL(state.Request.protocol_norm, state.Request.host)));
 			return returnValue;
 		}
 		boolean canBypassTimeout = canBypassTimeout(state);
@@ -241,7 +241,7 @@ public class StatelessTestClient extends StatelessTermClient {
 			e.printStackTrace();
 			returnValue.add("code", new JsonNumber(53));
 			returnValue.add("result", new JsonString("Not logged in"));
-			returnValue.add("authUrl", new JsonString(Settings.getAuthURL(state.Request.protocol, state.Request.host)));
+			returnValue.add("authUrl", new JsonString(Settings.getAuthURL(state.Request.protocol_norm, state.Request.host)));
 			return returnValue;
 		}
 
@@ -287,7 +287,7 @@ public class StatelessTestClient extends StatelessTermClient {
 			JsonObject returnValue = new JsonObject();
 			returnValue.add("code", new JsonNumber(53));
 			returnValue.add("result", new JsonString("Not logged in"));
-			returnValue.add("authUrl", new JsonString(Settings.getAuthURL(state.Request.protocol, state.Request.host)));
+			returnValue.add("authUrl", new JsonString(Settings.getAuthURL(state.Request.protocol_norm, state.Request.host)));
 			return returnValue;
 		}
 		if (input.containsString("asm") && input.containsString("id")) {

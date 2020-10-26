@@ -29,7 +29,7 @@ public class StatelessAuthClient extends StatelessTestClient {
 		cookieLines.add("token=deleted; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT");
 
 		HTTPResponse resp = new HTTPResponse(state.Request.protocol, 307, "Logout", new byte[0], null, cookieLines);
-		resp.addAdditionalHeaderField("Location", Settings.getAuthURL(state.Request.protocol, state.Request.host) + "&action=logout");
+		resp.addAdditionalHeaderField("Location", Settings.getAuthURL(state.Request.protocol_norm, state.Request.host) + "&action=logout");
 		return resp;
 	}
 
@@ -114,7 +114,7 @@ public class StatelessAuthClient extends StatelessTestClient {
 			}
 		}
 
-		String redirectLocation = Settings.getAuthURL(state.Request.protocol, state.Request.host) + "&cache=" + RuntimeDB.randomstr(32);
+		String redirectLocation = Settings.getAuthURL(state.Request.protocol_norm, state.Request.host) + "&cache=" + RuntimeDB.randomstr(32);
 
 		String redirectMessage = "OK but login first";
 		List<String> cookieLines = state.Request.cookiesLines;
@@ -138,7 +138,7 @@ public class StatelessAuthClient extends StatelessTestClient {
 				if (session != null) { // Logged in, set cookie and redirect once more to here
 					String host = state.Request.headers.containsKey("host") ? state.Request.headers.get("host") : null;
 					if (host != null) {
-						redirectLocation = state.Request.protocol.split("/")[0].toLowerCase().trim() + "://" + host + "/" + state.Request.path;
+						redirectLocation = state.Request.protocol_norm + "://" + host + "/" + state.Request.path;
 						redirectMessage = "Logged in, redirect once more";
 						// Create new cookies
 						cookieLines = new ArrayList<>();
