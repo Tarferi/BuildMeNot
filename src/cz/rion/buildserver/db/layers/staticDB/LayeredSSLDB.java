@@ -149,6 +149,11 @@ public abstract class LayeredSSLDB extends LayeredDBFileWrapperDB {
 			return "ssl/config.cfg";
 		}
 
+		@Override
+		public String getToolchain() {
+			return Settings.getRootToolchain();
+		}
+
 	};
 
 	private final VirtualFile vfProcess = new VirtualFile() {
@@ -187,11 +192,16 @@ public abstract class LayeredSSLDB extends LayeredDBFileWrapperDB {
 			return "ssl/gen.exe";
 		}
 
+		@Override
+		public String getToolchain() {
+			return Settings.getRootToolchain();
+		}
+
 	};
 
 	public LayeredSSLDB(DatabaseInitData initData) throws DatabaseException {
 		super(initData);
-		this.makeTable("ssl", KEY("ID"), TEXT("name"), TEXT("domain"), BIGTEXT("public_key"), BIGTEXT("private_key"), BIGTEXT("certificate"), DATE("creation_date"), DATE("expiration"), NUMBER("valid"));
+		this.makeTable("ssl", true, KEY("ID"), TEXT("name"), TEXT("domain"), BIGTEXT("public_key"), BIGTEXT("private_key"), BIGTEXT("certificate"), DATE("creation_date"), DATE("expiration"), NUMBER("valid"));
 		this.registerVirtualFile(vfPrehled);
 		this.registerVirtualFile(vfProcess);
 		try {

@@ -380,7 +380,7 @@ public class JsonTestManager {
 		if (sdb == null) {
 			return;
 		}
-		List<DatabaseFile> files = sdb.getFiles();
+		List<DatabaseFile> files = sdb.getFiles(toolchain);
 		for (DatabaseFile file : files) {
 			String fname = file.FileName;
 			if (fname.startsWith("tests/") && fname.endsWith(".json")) {

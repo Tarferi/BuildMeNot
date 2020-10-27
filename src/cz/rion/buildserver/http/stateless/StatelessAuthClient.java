@@ -52,7 +52,7 @@ public class StatelessAuthClient extends StatelessTestClient {
 					if (kv.length == 2) {
 						String name = kv[0].trim();
 						String value = kv[1].trim();
-						if (name.equals(Settings.getCookieName())) { // Session value exists, check if it's still valid
+						if (name.equals(Settings.getCookieName(state.Toolchain))) { // Session value exists, check if it's still valid
 							vl.add(value);
 						}
 					}
@@ -86,9 +86,9 @@ public class StatelessAuthClient extends StatelessTestClient {
 			for (String cookieSession : cookieSeessions) {
 				if (goodCookie == null) {
 					try {
-						String login = state.Data.RuntimeDB.getLogin(state.Request.remoteAddress, cookieSession);
+						String login = state.Data.RuntimeDB.getLogin(state.Request.remoteAddress, cookieSession, state.Toolchain);
 						if (login != null) { // Valid session
-							int session_id = state.Data.RuntimeDB.getSessionIDFromSession(state.Request.remoteAddress, cookieSession, false);
+							int session_id = state.Data.RuntimeDB.getSessionIDFromSession(state.Request.remoteAddress, cookieSession, false, state.Toolchain);
 							loadPermissions(state, session_id, login);
 							goodCookie = cookieSession;
 							continue;
@@ -122,8 +122,8 @@ public class StatelessAuthClient extends StatelessTestClient {
 		try {
 			BypassedClient bypass = state.Data.RuntimeDB.getBypassedClientData(state.Request.remoteAddress);
 			if (bypass != null) {
-				String cookieSession = state.Data.RuntimeDB.storeSessionKnownLogin(state.Request.remoteAddress, "Bypassed", bypass.Login, true);
-				int session_id = state.Data.RuntimeDB.getSessionIDFromSession(state.Request.remoteAddress, cookieSession, true);
+				String cookieSession = state.Data.RuntimeDB.storeSessionKnownLogin(state.Request.remoteAddress, "Bypassed", bypass.Login, true, state.Toolchain);
+				int session_id = state.Data.RuntimeDB.getSessionIDFromSession(state.Request.remoteAddress, cookieSession, true, state.Toolchain);
 				loadPermissions(state, session_id, bypass.Login);
 				return null;
 			}
@@ -134,7 +134,7 @@ public class StatelessAuthClient extends StatelessTestClient {
 		// Validate token session (right after login)
 		if (state.Request.authData != null) {
 			try {
-				String session = state.Data.RuntimeDB.storeSession(state.Request.remoteAddress, state.Request.authData);
+				String session = state.Data.RuntimeDB.storeSession(state.Request.remoteAddress, state.Request.authData, state.Toolchain);
 				if (session != null) { // Logged in, set cookie and redirect once more to here
 					String host = state.Request.headers.containsKey("host") ? state.Request.headers.get("host") : null;
 					if (host != null) {
@@ -142,8 +142,8 @@ public class StatelessAuthClient extends StatelessTestClient {
 						redirectMessage = "Logged in, redirect once more";
 						// Create new cookies
 						cookieLines = new ArrayList<>();
-						cookieLines.add(Settings.getCookieName() + "=" + session + "; Max-Age=2592000; Domain=" + host + "; Path=/");
-						return getJSRedirect(state, cookieLines, Settings.getCookieName(), session);
+						cookieLines.add(Settings.getCookieName(state.Toolchain) + "=" + session + "; Max-Age=2592000; Domain=" + host + "; Path=/");
+						return getJSRedirect(state, cookieLines, Settings.getCookieName(state.Toolchain), session);
 					}
 				}
 			} catch (Exception e) {

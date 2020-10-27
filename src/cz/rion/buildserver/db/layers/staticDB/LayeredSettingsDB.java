@@ -40,6 +40,11 @@ public abstract class LayeredSettingsDB extends LayeredToolchainMappingDB {
 				return SettingsFileName;
 			}
 
+			@Override
+			public String getToolchain() {
+				return Settings.getRootToolchain();
+			}
+
 		});
 	}
 

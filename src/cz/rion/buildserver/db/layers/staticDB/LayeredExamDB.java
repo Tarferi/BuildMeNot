@@ -40,14 +40,42 @@ public abstract class LayeredExamDB extends LayeredStaticEndpointDB {
 
 	public LayeredExamDB(DatabaseInitData dbData) throws DatabaseException {
 		super(dbData);
-		this.makeTable("ex_terms", KEY("ID"), TEXT("name"), BIGTEXT("config"), BIGTEXT("participants"), NUMBER("valid"), TEXT("toolchain"));
-		this.makeTable("ex_question_groups", KEY("ID"), TEXT("name"), BIGTEXT("config"), NUMBER("valid"), TEXT("toolchain"));
-		this.makeTable("ex_questions", KEY("ID"), TEXT("name"), BIGTEXT("config"), NUMBER("valid"), TEXT("toolchain"));
-		this.makeTable("ex_generated", KEY("ID"), NUMBER("exam_id"), TEXT("login"), BIGTEXT("config"), NUMBER("valid"), TEXT("toolchain"));
-		this.registerVirtualFile(generateExamsVF);
+		this.makeTable("ex_terms", false, KEY("ID"), TEXT("name"), BIGTEXT("config"), BIGTEXT("participants"), NUMBER("valid"), TEXT("toolchain"));
+		this.makeTable("ex_question_groups", false, KEY("ID"), TEXT("name"), BIGTEXT("config"), NUMBER("valid"), TEXT("toolchain"));
+		this.makeTable("ex_questions", false, KEY("ID"), TEXT("name"), BIGTEXT("config"), NUMBER("valid"), TEXT("toolchain"));
+		this.makeTable("ex_generated", false, KEY("ID"), NUMBER("exam_id"), TEXT("login"), BIGTEXT("config"), NUMBER("valid"), TEXT("toolchain"));
+
+		final Map<String, VirtualFile> vf = new HashMap<>();
+		this.registerToolchainListener(new ToolchainCallback() {
+
+			@Override
+			public void toolchainAdded(Toolchain t) {
+				if (!vf.containsKey(t.getName())) {
+					VirtualFile f = new generateExamsVF(t.getName());
+					vf.put(t.getName(), f);
+					registerVirtualFile(f);
+				}
+			}
+
+			@Override
+			public void toolchainRemoved(Toolchain t) {
+				if (vf.containsKey(t.getName())) {
+					VirtualFile f = vf.get(t.getName());
+					vf.remove(t.getName());
+					unregisterVirtualFile(f);
+				}
+			}
+
+		});
 	}
 
-	private final VirtualFile generateExamsVF = new VirtualFile() {
+	private final class generateExamsVF implements VirtualFile {
+
+		private final String toolchain;
+
+		public generateExamsVF(String toolchain) {
+			this.toolchain = toolchain;
+		}
 
 		private String lastcontents = "";
 
@@ -55,7 +83,6 @@ public abstract class LayeredExamDB extends LayeredStaticEndpointDB {
 			StringBuilder sb = new StringBuilder();
 			sb.append("# Generovani zadani\n\n");
 			sb.append("# Nasledujici radky je treba odkomentovat a doplnit spravne hodnoty\n\n");
-			sb.append("#toolchain:<nazev_toolchainu>\n");
 			sb.append("#exam_id:<id_exam>\n");
 			sb.append("#generate");
 			lastcontents = sb.toString();
@@ -75,7 +102,6 @@ public abstract class LayeredExamDB extends LayeredStaticEndpointDB {
 				setDefaultContents();
 			} else {
 				String exam_id = null;
-				String toolchain = null;
 				boolean generate = false;
 				for (String line : data.split("\n")) {
 					line = line.trim();
@@ -84,8 +110,6 @@ public abstract class LayeredExamDB extends LayeredStaticEndpointDB {
 					}
 					if (line.startsWith("exam_id:")) {
 						exam_id = line.split(":", 2)[1].trim();
-					} else if (line.startsWith("toolchain:")) {
-						toolchain = line.split(":", 2)[1].trim();
 					} else if (line.equals("generate")) {
 						generate = true;
 					}
@@ -124,6 +148,11 @@ public abstract class LayeredExamDB extends LayeredStaticEndpointDB {
 		@Override
 		public String getName() {
 			return "exams/generate.exe";
+		}
+
+		@Override
+		public String getToolchain() {
+			return toolchain;
 		}
 
 	};

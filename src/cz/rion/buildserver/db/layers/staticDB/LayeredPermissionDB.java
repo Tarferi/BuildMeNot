@@ -23,6 +23,7 @@ import cz.rion.buildserver.utils.CachedDataWrapper2;
 import cz.rion.buildserver.utils.CachedToolchainData2;
 import cz.rion.buildserver.utils.CachedToolchainDataGetter2;
 import cz.rion.buildserver.utils.CachedToolchainDataWrapper2;
+import cz.rion.buildserver.utils.ToolchainedPermissionCache;
 
 public abstract class LayeredPermissionDB extends LayeredTestDB {
 
@@ -109,7 +110,7 @@ public abstract class LayeredPermissionDB extends LayeredTestDB {
 
 		private void handleInit() {
 			if (permissions == null) {
-				permissions = new Permission("");
+				permissions = new Permission(Toolchain, "");
 				primaries = new ArrayList<>();
 				db.getPermissionsFor(Login, permissions, primaries, Toolchain);
 				if (primaries.size() > 1 && primaries.contains("Everyone")) {
@@ -125,7 +126,7 @@ public abstract class LayeredPermissionDB extends LayeredTestDB {
 			}
 			if (userID == -1) {
 				try {
-					userID = rdb.getUserIDFromLogin(Login);
+					userID = rdb.getUserIDFromLogin(Login, Toolchain);
 				} catch (DatabaseException e) {
 					e.printStackTrace();
 				}
@@ -142,7 +143,7 @@ public abstract class LayeredPermissionDB extends LayeredTestDB {
 		}
 
 		public boolean can(PermissionBranch action) {
-			if(!Settings.isAuth()) {
+			if (!Settings.isAuth()) {
 				return true;
 			}
 			if (Login == null) {
@@ -152,16 +153,16 @@ public abstract class LayeredPermissionDB extends LayeredTestDB {
 			return permissions.covers(action);
 		}
 
-		public boolean allowSeeSecretTests() {
-			return can(WebPermission.SeeSecretTests);
+		public boolean allowSeeSecretTests(Toolchain tc) {
+			return can(WebPermission.SeeSecretTests.toBranch(tc));
 		}
 
-		public boolean allowBypassTimeout() {
-			return can(WebPermission.BypassTimeout);
+		public boolean allowBypassTimeout(Toolchain tc) {
+			return can(WebPermission.BypassTimeout.toBranch(tc));
 		}
 
-		public boolean allowSeeWebAdmin() {
-			return can(WebPermission.SeeAdminAdmin);
+		public boolean allowSeeWebAdmin(Toolchain tc) {
+			return can(WebPermission.SeeAdminAdmin.toBranch(tc));
 		}
 
 		public int getSessionID() {
@@ -191,7 +192,7 @@ public abstract class LayeredPermissionDB extends LayeredTestDB {
 		if (groups != null) {
 			for (InternalUserGroupMemberShip group : groups) {
 				for (String perm : group.Group.getPermissions(true)) {
-					permissions.add(new PermissionBranch(perm));
+					permissions.add(new PermissionBranch(toolchain, perm));
 				}
 				if (group.isPrimary) {
 					primaries.add(group.Group.Name);
@@ -354,10 +355,11 @@ public abstract class LayeredPermissionDB extends LayeredTestDB {
 
 	protected LayeredPermissionDB(DatabaseInitData dbName) throws DatabaseException {
 		super(dbName);
-		this.makeTable("groups", KEY("ID"), NUMBER("parent_group_id"), TEXT("name"), BIGTEXT("permissions"), TEXT("toolchain"));
-		this.makeTable("users_group", KEY("ID"), NUMBER("user_id"), NUMBER("group_id"), NUMBER("primary_group"), TEXT("toolchain"));
+		this.makeTable("groups", false, KEY("ID"), NUMBER("parent_group_id"), TEXT("name"), BIGTEXT("permissions"), TEXT("toolchain"));
+		this.makeTable("users_group", false, KEY("ID"), NUMBER("user_id"), NUMBER("group_id"), NUMBER("primary_group"), TEXT("toolchain"));
 	}
 
+	@SuppressWarnings("deprecation")
 	@Override
 	public boolean clearUsers(Toolchain toolchain) {
 		if (super.clearUsers(toolchain)) {

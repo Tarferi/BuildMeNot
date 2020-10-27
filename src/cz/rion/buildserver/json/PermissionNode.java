@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map.Entry;
 
+import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.permissions.Permission;
 import cz.rion.buildserver.permissions.PermissionBranch;
 
@@ -13,6 +14,7 @@ public class PermissionNode {
 	private final List<PermissionNode> children = new ArrayList<>();
 	private boolean isRoot = false;
 	private boolean hasStar = false;
+	private Toolchain toolchain;
 
 	public PermissionBranch toBranch() {
 		List<Integer> path = new ArrayList<>();
@@ -30,7 +32,7 @@ public class PermissionNode {
 			perms[index] = p;
 			index++;
 		}
-		return new PermissionBranch(perms);
+		return new PermissionBranch(toolchain, perms);
 	}
 
 	private void propagate() {
@@ -43,6 +45,7 @@ public class PermissionNode {
 	public PermissionNode(Permission perm) {
 		this(0, perm);
 		this.isRoot = true;
+		this.toolchain = perm.toolchain;
 	}
 
 	private PermissionNode(int value, Permission perm) {

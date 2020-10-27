@@ -365,7 +365,7 @@ public abstract class SQLiteDB {
 				if (i > 0 || joins.length > 0) {
 					sb.append(" AND ");
 				}
-				sb.append(conjunctions[i].field.field.name + " " + conjunctions[i].comparator.code + " ");
+				sb.append(conjunctions[i].field.table + "." + conjunctions[i].field.field.name + " " + conjunctions[i].comparator.code + " ");
 				sb.append(conjunctions[i].field.field.isStoredAsString ? "'?'" : '?');
 				params[i] = conjunctions[i].value;
 			}
@@ -397,7 +397,7 @@ public abstract class SQLiteDB {
 		}
 	}
 
-	protected void makeTable(String name, Field... fields) throws DatabaseException {
+	protected void makeTable(String name, boolean isRootOnly, Field... fields) throws DatabaseException {
 		StringBuilder sb = new StringBuilder("CREATE TABLE IF NOT EXISTS " + name + " (\r\n");
 		if (fields.length >= 1) {
 			sb.append(fields[0].toString());
@@ -463,7 +463,7 @@ public abstract class SQLiteDB {
 					colCompressed[i] = fieldsMap.containsKey(colNames[i].toLowerCase()) ? fieldsMap.get(colNames[i].toLowerCase()).field.IsBigString() : false;
 				}
 
-				int toolchainColumnIndex = toolchain == null ? -1 : resToolchainIndex;
+				int toolchainColumnIndex = toolchain == null ? -1 : toolchain.IsRoot ? -1 : resToolchainIndex;
 
 				while (rs.next()) {
 					JsonObject obj = new JsonObject();

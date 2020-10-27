@@ -29,7 +29,7 @@ import cz.rion.buildserver.utils.CachedToolchainData2;
 import cz.rion.buildserver.utils.CachedToolchainDataGetter2;
 import cz.rion.buildserver.utils.CachedToolchainDataWrapper2;
 
-public class StatelessTestClient extends StatelessTermClient {
+public class StatelessTestClient extends StatelessPresenceClient {
 
 	private final StatelessInitData data;
 
@@ -83,7 +83,7 @@ public class StatelessTestClient extends StatelessTermClient {
 	});
 
 	private boolean canBypassTimeout(ProcessState state) {
-		return state.getPermissions().allowBypassTimeout() || !Settings.getForceTimeoutOnErrors();
+		return state.getPermissions().allowBypassTimeout(state.Toolchain) || !Settings.getForceTimeoutOnErrors();
 	}
 
 	private JsonObject decode(HTTPRequest request) {
@@ -107,10 +107,10 @@ public class StatelessTestClient extends StatelessTermClient {
 		returnValue.add("code", new JsonNumber(1));
 		returnValue.add("result", new JsonString("Internal error"));
 
-		List<CompletedTest> completed = state.Data.RuntimeDB.getCompletedTests(state.getPermissions().Login, state.Toolchain.getName());
+		List<CompletedTest> completed = state.Data.RuntimeDB.getCompletedTests(state.getPermissions().Login, state.Toolchain);
 		BadResults badResults = null;
 		try {
-			badResults = state.Data.RuntimeDB.GetBadResultsForUser(state.getPermissions().getUserID());
+			badResults = state.Data.RuntimeDB.GetBadResultsForUser(state.getPermissions().getUserID(), state.Toolchain);
 		} catch (DatabaseException e) {
 			e.printStackTrace();
 			returnValue.add("code", new JsonNumber(53));
@@ -148,7 +148,7 @@ public class StatelessTestClient extends StatelessTermClient {
 		}
 
 		try {
-			state.Data.RuntimeDB.storeCompilation(completed, state.Request.remoteAddress, new Date(), code, state.getPermissions().getSessionID(), testID, res.ResultCode, returnValue.getJsonString(), res.ResultDescription, state.getPermissions().getUserID(), state.Toolchain.getName(), res.Details == null ? "" : res.Details, res.GoodTests, res.BadTests);
+			state.Data.RuntimeDB.storeCompilation(completed, state.Request.remoteAddress, new Date(), code, state.getPermissions().getSessionID(), testID, res.ResultCode, returnValue.getJsonString(), res.ResultDescription, state.getPermissions().getUserID(), state.Toolchain, res.Details == null ? "" : res.Details, res.GoodTests, res.BadTests);
 		} catch (DatabaseException e1) {
 			e1.printStackTrace();
 		}
@@ -163,7 +163,7 @@ public class StatelessTestClient extends StatelessTermClient {
 
 		if (Settings.getForceTimeoutOnErrors()) {
 			try {
-				badResults.store(newlyFinished);
+				badResults.store(newlyFinished, state.Toolchain);
 			} catch (DatabaseException e) {
 				e.printStackTrace();
 			}
@@ -203,7 +203,7 @@ public class StatelessTestClient extends StatelessTermClient {
 				}
 			}
 		});
-		List<CompletedTest> completed = state.Data.RuntimeDB.getCompletedTests(state.getPermissions().Login, state.Toolchain.getName());
+		List<CompletedTest> completed = state.Data.RuntimeDB.getCompletedTests(state.getPermissions().Login, state.Toolchain);
 		List<JsonValue> d = new ArrayList<>();
 		Map<String, CompletedTest> finishedByTestID = new HashMap<>();
 		for (CompletedTest test : completed) {
@@ -214,7 +214,7 @@ public class StatelessTestClient extends StatelessTermClient {
 			if (!state.getPermissions().allowSee(tst.getID())) {
 				continue;
 			}
-			if (tst.isSecret() && !state.getPermissions().allowSeeSecretTests()) {
+			if (tst.isSecret() && !state.getPermissions().allowSeeSecretTests(state.Toolchain)) {
 				continue;
 			}
 			JsonObject tobj = new JsonObject();
@@ -236,7 +236,7 @@ public class StatelessTestClient extends StatelessTermClient {
 
 		BadResults badResults = null;
 		try {
-			badResults = state.Data.RuntimeDB.GetBadResultsForUser(state.getPermissions().getUserID());
+			badResults = state.Data.RuntimeDB.GetBadResultsForUser(state.getPermissions().getUserID(), state.Toolchain);
 		} catch (DatabaseException e) {
 			e.printStackTrace();
 			returnValue.add("code", new JsonNumber(53));
@@ -303,7 +303,7 @@ public class StatelessTestClient extends StatelessTermClient {
 				return execute_collect(state);
 			} else if (act.equals("GRAPHS")) {
 				return execute_graphs(state);
-			} else if (act.equals("ADMIN") && state.getPermissions().allowSeeWebAdmin()) {
+			} else if (act.equals("ADMIN") && state.getPermissions().allowSeeWebAdmin(state.Toolchain)) {
 				return execute_admin(state, input);
 			} else if (act.equals("HANDLE_TERMS")) {
 				return execute_terms(state, input);
@@ -323,7 +323,15 @@ public class StatelessTestClient extends StatelessTermClient {
 			byte[] data = new byte[0];
 			JsonObject req = decode(state.Request);
 			if (req != null) {
-				JsonObject resp = execute(state, req);
+				JsonObject resp;
+				try {
+					resp = execute(state, req);
+				} catch (Exception e) {
+					e.printStackTrace();
+					resp = new JsonObject();
+					resp.add("code", 1);
+					resp.add("result", e.toString());
+				}
 				if (resp != null) {
 					data = resp.getJsonString().getBytes(Settings.getDefaultCharset());
 				}

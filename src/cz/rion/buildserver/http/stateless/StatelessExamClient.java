@@ -16,12 +16,14 @@ import cz.rion.buildserver.db.layers.staticDB.LayeredExamDB.Question;
 import cz.rion.buildserver.db.layers.staticDB.LayeredExamDB.QuestionGroup;
 import cz.rion.buildserver.db.layers.staticDB.LayeredExamDB.QuestionType;
 import cz.rion.buildserver.db.layers.staticDB.LayeredPermissionDB.UsersPermission;
+import cz.rion.buildserver.db.layers.staticDB.LayeredUserDB.LocalUser;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonNumber;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.json.JsonValue.JsonString;
 import cz.rion.buildserver.permissions.PermissionBranch;
+import cz.rion.buildserver.utils.ToolchainedPermissionCache;
 
 public class StatelessExamClient extends StatelessGraphProviderClient {
 
@@ -77,7 +79,11 @@ public class StatelessExamClient extends StatelessGraphProviderClient {
 				JsonObject obj = new JsonObject();
 				obj.add("ID", gen.ID);
 				obj.add("Login", gen.Login);
-				obj.add("FullName", sdb.getUser(state.Toolchain.getName(), gen.Login).FullName);
+				LocalUser user = sdb.getUser(state.Toolchain.getName(), gen.Login);
+				if (user == null) { // Should never happen
+					continue;
+				}
+				obj.add("FullName", user.FullName);
 				if (isExamRunning(gen)) {
 					obj.add("StartedAt", gen.Config.Response.getNumber("Started"));
 				}
@@ -380,7 +386,7 @@ public class StatelessExamClient extends StatelessGraphProviderClient {
 
 	private static Map<String, PermissionBranch> reqPerms = new HashMap<>();
 
-	private static final PermissionBranch pbSee = new PermissionBranch("WEB.EXAMS.SEE");
+	private static final ToolchainedPermissionCache pbMap = new ToolchainedPermissionCache("WEB.EXAMS.SEE");
 
 	private final Object syncer = new Object();
 
@@ -389,7 +395,7 @@ public class StatelessExamClient extends StatelessGraphProviderClient {
 			String tc = state.Toolchain.getName();
 			PermissionBranch requiredPermissions;
 			if (!reqPerms.containsKey(tc)) {
-				requiredPermissions = new PermissionBranch(tc + ".EXAMS");
+				requiredPermissions = new PermissionBranch(state.Toolchain, tc + ".EXAMS");
 				reqPerms.put(tc, requiredPermissions);
 			} else {
 				requiredPermissions = reqPerms.get(tc);
@@ -400,7 +406,7 @@ public class StatelessExamClient extends StatelessGraphProviderClient {
 			result.add("result", new JsonString("Invalid exam command"));
 
 			boolean canAdmin = state.getPermissions().can(requiredPermissions);
-			boolean canUser = state.getPermissions().can(pbSee);
+			boolean canUser = state.getPermissions().can(pbMap.toBranch(state.Toolchain));
 
 			if (obj.containsString("exam_data")) {
 				String exam_data = obj.getString("exam_data").Value;

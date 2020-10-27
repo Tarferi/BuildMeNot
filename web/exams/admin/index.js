@@ -1,5 +1,7 @@
+$INJECT(common.js)$
+
 function ExamAdminNoAccess() {
-	alert("Nemáte dostatečná práva k přístupu k tomuto dokumentu");
+	self.common.showError("Chyba", "Nemáte dostatečná práva k přístupu k tomuto dokumentu", false);
 }
 
 $INJECT_CODE_NOPERMS(WEB.EXAMS.ADMIN, window.adm_load = ExamAdminNoAccess;)$
@@ -322,7 +324,7 @@ var ExamAdminOpenedTest = function(data, closeEverythingElseCB, closeCB) {
 		}
 		var cbFail = function(err) {
 			self.common.hideLoader();
-			alert("Nepodařilo se uložit hodnocení:\r\n" + err);
+			self.common.showError("Chyba při ukládání hodnocení", "Nepodařilo se uložit hodnocení", true, err);
 		}
 		var asyncData = {
 			"action" : "HANDLE_EXAMS",
@@ -504,8 +506,12 @@ var ExamAdminExam = function(data, stopExamEditing, saveCB, delCB, setRenderedTa
 				"exam_data" : "get_results",
 				"ID" : self.ID
 			};
+			var cbFail = function(err) {
+				self.common.hideLoader();
+				self.common.showError("Chyba", "Nepodařilo se načíst výsledeky", true, err);
+			}
 			self.common.showLoader();
-			self.common.async(asyncData, self.materializeShownResults, self.mainReloadCB);
+			self.common.async(asyncData, self.materializeShownResults, cbFail);
 		}
 	}
 	
@@ -594,9 +600,9 @@ var ExamAdminAdminer = function() {
 			self.common.hideLoader();
 			self.reload();
 		};
-		var cbFail = function(data) {
+		var cbFail = function(err) {
 			self.common.hideLoader();
-			self.reload();
+			self.common.showError("Chyba", "Nepodařilo se upravit skupinu", true, err);
 		}
 		var asyncData = {
 			"action" : "HANDLE_EXAMS",
@@ -614,8 +620,12 @@ var ExamAdminAdminer = function() {
 				"exam_data" : "del_group",
 				"data" : data
 			};
+			var cbFail = function(err) {
+				self.common.hideLoader();
+				self.common.showError("Chyba", "Nepodařilo se smazat skupinu", true, err).then(self.reload, self.reload);
+			}
 			self.common.showLoader();
-			self.common.async(asyncData, self.reload, self.reload, false);
+			self.common.async(asyncData, self.reload, cbFail, false);
 		}
 	}
 
@@ -625,8 +635,12 @@ var ExamAdminAdminer = function() {
 			"exam_data" : "edit_exam",
 			"data" : data
 		};
+		var cbFail = function(err) {
+			self.common.hideLoader();
+			self.common.showError("Chyba", "Nepodařilo se editovat termín", true, err).then(self.reload, self.reload);
+		}
 		self.common.showLoader();
-		self.common.async(asyncData, self.reload, self.reload, false);
+		self.common.async(asyncData, self.reload, cbFail, false);
 	}
 
 	self.delExam = function(data) {
@@ -636,8 +650,12 @@ var ExamAdminAdminer = function() {
 				"exam_data" : "del_exam",
 				"data" : data
 			};
+			var cbFail = function(err) {
+				self.common.hideLoader();
+				self.common.showError("Chyba", "Nepodařilo se smazat termín", true, err).then(self.reload, self.reload);
+			}
 			self.common.showLoader();
-			self.common.async(asyncData, self.reload, self.reload, false);
+			self.common.async(asyncData, self.reload, cbFail, false);
 		}
 	}
 
@@ -647,8 +665,12 @@ var ExamAdminAdminer = function() {
 			"exam_data" : "edit_question",
 			"data" : data
 		};
+		var cbFail = function(err) {
+			self.common.hideLoader();
+			self.common.showError("Chyba", "Nepodařilo se editovat otázku", true, err).then(self.reload, self.reload);
+		}
 		self.common.showLoader();
-		self.common.async(asyncData, self.reload, self.reload, false);
+		self.common.async(asyncData, self.reload, cbFail, false);
 	}
 
 	self.delQuestion = function(data) {
@@ -658,8 +680,12 @@ var ExamAdminAdminer = function() {
 				"exam_data" : "del_question",
 				"data" : data
 			};
+			var cbFail = function(err) {
+				self.common.hideLoader();
+				self.common.showError("Chyba", "Nepodařilo se smazat otázku", true, err).then(self.reload, self.reload);
+			}
 			self.common.showLoader();
-			self.common.async(asyncData, self.reload, self.reload, false);
+			self.common.async(asyncData, self.reload, cbFail, false);
 		}
 	}
 
@@ -669,7 +695,7 @@ var ExamAdminAdminer = function() {
 			self.common.hideLoader();
 			self.common.hideInitLoader();
 			self.clearMaterializedData();
-			alert("Nepodařilo se nahrát data");
+			self.common.showError("Chyba", "Nepodařilo se nahrát data", true, data);
 		};
 		var cbOk = function(data) {
 			self.common.hideLoader();
@@ -678,7 +704,7 @@ var ExamAdminAdminer = function() {
 			if (data && data.exams && data.questions && data.groups) {
 				self.materialize(data);
 			} else {
-				cbFail(("Nepodařilo se nahrát termíny kvůli špatné struktuře ze serveru"));
+				cbFail("Nepodařilo se nahrát termíny kvůli špatné struktuře ze serveru");
 			}
 		};
 		var asyncData = {
@@ -854,7 +880,6 @@ function adm_load() {
 	}
 }
 
-$INJECT(common.js)$
 $INJECT(formats.js)$
 $INJECT(exams/admin/templates.js)$
 $INJECT(exams/admin/formats.js)$

@@ -269,7 +269,7 @@ public class UIDriver {
 			String contents = inBuffer.readString();
 			byte[] cnt = contents.getBytes(Settings.getDefaultCharset());
 			contents = new String(cnt, Charset.forName("UTF-8"));
-			return new FileInfo(id, name, contents);
+			return new FileInfo(id, name, contents, null);
 		} else {
 			return null;
 		}
@@ -281,7 +281,7 @@ public class UIDriver {
 		for (int i = 0; i < totalSize; i++) {
 			int id = inBuffer.readInt();
 			String name = inBuffer.readString();
-			lst.add(new DatabaseFile(id, name));
+			lst.add(new DatabaseFile(id, name, null));
 		}
 		return lst;
 	}

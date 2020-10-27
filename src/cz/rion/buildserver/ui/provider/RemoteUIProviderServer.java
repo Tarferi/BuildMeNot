@@ -5,16 +5,20 @@ import java.net.SocketException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 
 import cz.rion.buildserver.BuildThread;
+import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.RuntimeDB;
 import cz.rion.buildserver.db.RuntimeDB.RuntimeUserStats;
 import cz.rion.buildserver.db.layers.common.LayeredDBFileWrapperDB;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.db.layers.staticDB.LayeredFilesDB.DatabaseFile;
+import cz.rion.buildserver.db.layers.staticDB.LayeredStaticDB.ToolchainCallback;
 import cz.rion.buildserver.db.layers.staticDB.LayeredUserDB.LocalUser;
 import cz.rion.buildserver.db.StaticDB;
 import cz.rion.buildserver.exceptions.DatabaseException;
@@ -145,13 +149,13 @@ public class RemoteUIProviderServer {
 			JsonObject obj = val.asObject();
 			FileInfo f;
 			try {
-				f = this.sdb.getFile(fileID, false, null);
+				f = this.sdb.getFile(fileID, false, sdb.getRootToolchain());
 				if (f != null) { // SDB database
 					if (LayeredDBFileWrapperDB.editRow(sdb, f, obj)) {
 						returnCode = 42;
 					}
 				} else { // DB database ?
-					f = LayeredDBFileWrapperDB.getFile(db, fileID, false, null);
+					f = LayeredDBFileWrapperDB.getFile(db, fileID, false, sdb.getRootToolchain());
 					if (f != null) {
 						if (LayeredDBFileWrapperDB.editRow(db, f, obj)) {
 							returnCode = 42;
@@ -166,11 +170,13 @@ public class RemoteUIProviderServer {
 		outBuffer.writeInt(returnCode);
 	}
 
+	private Map<String, Toolchain> toolchains = new HashMap<>();
+
 	private void createFile(InputPacketRequest inBuffer, MemoryBuffer outBuffer) throws IOException {
 		String newName = inBuffer.readString();
 		outBuffer.writeInt(FileCreatedEvent.ID);
 		try {
-			FileInfo fo = sdb.createFile(newName, "", false);
+			FileInfo fo = sdb.createFile(sdb.getRootToolchain(), newName, "", false);
 			if (fo == null) {
 				outBuffer.writeInt(0);
 				return;
@@ -192,13 +198,13 @@ public class RemoteUIProviderServer {
 		String newContents = inBuffer.readString();
 		outBuffer.writeInt(FileSavedEvent.ID);
 		try {
-			FileInfo fo = sdb.getFile(fileID, false, null);
+			FileInfo fo = sdb.getFile(fileID, false, sdb.getRootToolchain());
 			if (fo == null) {
 				outBuffer.writeInt(0);
 				return;
 			} else {
 				sdb.storeFile(fo, newFileName, newContents);
-				fo = sdb.getFile(fileID, false, null);
+				fo = sdb.getFile(fileID, false, sdb.getRootToolchain());
 				if (fo == null) { // Check the write operation
 					outBuffer.writeInt(0);
 				} else {
@@ -217,13 +223,13 @@ public class RemoteUIProviderServer {
 	private FileInfo getFile(int fileID) {
 		FileInfo fo = null;
 		try {
-			fo = sdb.getFile(fileID, false, null);
+			fo = sdb.getFile(fileID, false, sdb.getRootToolchain());
 		} catch (DatabaseException e1) {
 			e1.printStackTrace();
 		}
 		if (fo == null) {
 			try {
-				fo = LayeredDBFileWrapperDB.getFile(db, fileID, false, null);
+				fo = LayeredDBFileWrapperDB.getFile(db, fileID, false, sdb.getRootToolchain());
 			} catch (DatabaseException e) {
 				e.printStackTrace();
 			}
@@ -234,7 +240,7 @@ public class RemoteUIProviderServer {
 	private void writeFile(InputPacketRequest inBuffer, MemoryBuffer outBuffer) throws IOException {
 		int fileID = inBuffer.readInt();
 		outBuffer.writeInt(FileLoadedEvent.ID);
-		FileInfo fo = LayeredDBFileWrapperDB.processPostLoadedFile(db, LayeredDBFileWrapperDB.processPostLoadedFile(sdb, getFile(fileID), false, null), false, null);
+		FileInfo fo = LayeredDBFileWrapperDB.processPostLoadedFile(db, LayeredDBFileWrapperDB.processPostLoadedFile(sdb, getFile(fileID), false, sdb.getRootToolchain()), false, sdb.getRootToolchain());
 		if (fo == null) {
 			outBuffer.writeInt(0);
 			return;
@@ -247,45 +253,52 @@ public class RemoteUIProviderServer {
 	}
 
 	private void writeFileList(InputPacketRequest inBuffer, MemoryBuffer outBuffer) {
-		List<DatabaseFile> lst = sdb.getFiles();
-		LayeredDBFileWrapperDB.loadDatabaseFiles(db, lst);
+		List<DatabaseFile> lst = sdb.getFiles(sdb.getRootToolchain());
+		LayeredDBFileWrapperDB.loadDatabaseFiles(db, lst, sdb.getRootToolchain());
 		outBuffer.writeInt(FileListLoadedEvent.ID);
 		outBuffer.writeInt(lst.size());
 		for (DatabaseFile file : lst) {
 			outBuffer.writeInt(file.ID);
-			outBuffer.writeString(file.FileName);
+			if (file.ToolchainName.equals(Settings.getRootToolchain())) {
+				outBuffer.writeString(file.FileName);
+			} else {
+				outBuffer.writeString("data/" + file.ToolchainName + "/" + file.FileName);
+			}
 		}
 	}
 
 	private void writeUserList(InputPacketRequest inBuffer, MemoryBuffer outBuffer) {
-		for (Toolchain toolchain : sdb.getAllToolchains()) {
-			List<RuntimeUserStats> stats = this.db.getUserStats(toolchain.getName());
-			Map<String, LocalUser> statics = this.sdb.getLoadedUsersByLogin(toolchain);
+		synchronized (toolchains) {
+			for (Entry<String, Toolchain> entry : toolchains.entrySet()) {
+				Toolchain toolchain = entry.getValue();
+				List<RuntimeUserStats> stats = this.db.getUserStats(toolchain);
+				Map<String, LocalUser> statics = this.sdb.getLoadedUsersByLogin(toolchain);
 
-			outBuffer.writeInt(UsersLoadedEvent.ID);
-			outBuffer.writeInt(stats.size());
-			for (RuntimeUserStats stat : stats) {
-				LocalUser usr = statics.get(stat.Login);
-				String fullName = "???";
-				String group = "???";
-				String permGroup = "??";
-				if (usr != null) {
-					fullName = usr.FullName;
-					group = usr.Group;
-					permGroup = usr.PrimaryPermGroup;
+				outBuffer.writeInt(UsersLoadedEvent.ID);
+				outBuffer.writeInt(stats.size());
+				for (RuntimeUserStats stat : stats) {
+					LocalUser usr = statics.get(stat.Login);
+					String fullName = "???";
+					String group = "???";
+					String permGroup = "??";
+					if (usr != null) {
+						fullName = usr.FullName;
+						group = usr.Group;
+						permGroup = usr.PrimaryPermGroup;
+					}
+					outBuffer.writeInt(stat.UserID);
+					outBuffer.writeString(stat.Login);
+					outBuffer.writeDate(stat.RegistrationDate);
+					outBuffer.writeDate(stat.LastActiveDate);
+					outBuffer.writeDate(stat.lastLoginDate);
+					outBuffer.writeInt(stat.TotalTestsSubmitted);
+					outBuffer.writeString(stat.LastTestID);
+					outBuffer.writeDate(stat.LastTestDate);
+					outBuffer.writeString(fullName);
+					outBuffer.writeString(group);
+					outBuffer.writeString(permGroup);
+					outBuffer.writeString(toolchain.getName());
 				}
-				outBuffer.writeInt(stat.UserID);
-				outBuffer.writeString(stat.Login);
-				outBuffer.writeDate(stat.RegistrationDate);
-				outBuffer.writeDate(stat.LastActiveDate);
-				outBuffer.writeDate(stat.lastLoginDate);
-				outBuffer.writeInt(stat.TotalTestsSubmitted);
-				outBuffer.writeString(stat.LastTestID);
-				outBuffer.writeDate(stat.LastTestDate);
-				outBuffer.writeString(fullName);
-				outBuffer.writeString(group);
-				outBuffer.writeString(permGroup);
-				outBuffer.writeString(toolchain.getName());
 			}
 		}
 	}
@@ -428,6 +441,26 @@ public class RemoteUIProviderServer {
 	}
 
 	private void async() {
+		sdb.registerToolchainListener(new ToolchainCallback() {
+
+			@Override
+			public void toolchainAdded(Toolchain t) {
+				synchronized (toolchains) {
+					toolchains.put(t.getName(), t);
+				}
+			}
+
+			@Override
+			public void toolchainRemoved(Toolchain t) {
+				synchronized (toolchains) {
+					if (toolchains.containsKey(t.getName())) {
+						toolchains.remove(t.getName());
+					}
+				}
+			}
+
+		});
+
 		while (true) {
 			try {
 				selector.select(500);

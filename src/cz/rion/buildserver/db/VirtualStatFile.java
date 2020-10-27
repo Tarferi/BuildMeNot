@@ -25,4 +25,6 @@ public abstract class VirtualStatFile {
 	public abstract JsonArray getData();
 
 	public abstract String getQueryString();
+
+	public abstract String getToolchain();
 }

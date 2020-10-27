@@ -18,7 +18,6 @@ import cz.rion.buildserver.db.layers.staticDB.LayeredPermissionDB.PermissionMana
 import cz.rion.buildserver.db.layers.staticDB.LayeredPermissionDB.UsersPermission;
 import cz.rion.buildserver.db.layers.staticDB.LayeredStaticEndpointDB.StaticEndpoint;
 import cz.rion.buildserver.exceptions.DatabaseException;
-import cz.rion.buildserver.exceptions.NoSuchToolchainException;
 import cz.rion.buildserver.http.HTTPRequest;
 import cz.rion.buildserver.http.HTTPResponse;
 
@@ -109,7 +108,7 @@ public class AbstractStatelessClient {
 
 	};
 
-	public HTTPResponse getResponse(HTTPRequest request) {
+	public final HTTPResponse getResponse(HTTPRequest request) {
 		if (!request.isSSL && Settings.ForceSSL()) {
 			HTTPResponse resp = new HTTPResponse(request.protocol, 307, "HTTPS Forced", new byte[0], null, request.cookiesLines);
 			resp.addAdditionalHeaderField("Location", "https://" + request.host + request.path);
@@ -131,19 +130,12 @@ public class AbstractStatelessClient {
 			return new HTTPResponse(request.protocol, 200, "OK", staticEndpoints.get(request.path).contents, "text/html", request.cookiesLines);
 		}
 
-		String toolchainStr = Data.StaticDB.getToolchainMapping(request.host);
-		if (toolchainStr != null) {
-			Toolchain t = null;
-			try {
-				t = Data.StaticDB.getToolchain(toolchainStr);
-			} catch (NoSuchToolchainException e) {
-			}
-			if (t != null) {
-				ProcessState state = new ProcessState(Data, request, t, cachedDefaultPermissions.get(t), 0);
-				HTTPResponse response = handle(state);
-				log(state);
-				return response;
-			}
+		Toolchain t = Data.StaticDB.getToolchainMapping(request.host);
+		if (t != null) {
+			ProcessState state = new ProcessState(Data, request, t, cachedDefaultPermissions.get(t), 0);
+			HTTPResponse response = handle(state);
+			log(state);
+			return response;
 		}
 		return new HTTPResponse(request.protocol, 200, "OK", "No such toolchain is known", "text/html", request.cookiesLines);
 	}

@@ -28,6 +28,7 @@ import cz.rion.buildserver.utils.CachedDataWrapper;
 import cz.rion.buildserver.utils.CachedToolchainData2;
 import cz.rion.buildserver.utils.CachedToolchainDataGetter2;
 import cz.rion.buildserver.utils.CachedToolchainDataWrapper2;
+import cz.rion.buildserver.utils.ToolchainedPermissionCache;
 import cz.rion.buildserver.wrappers.FileReadException;
 import cz.rion.buildserver.wrappers.MyFS;
 
@@ -79,7 +80,7 @@ public class StatelessFileProviderClient extends StatelessAdminClient {
 			return jwtToken;
 		}
 
-		private static final PermissionBranch pb = new PermissionBranch("MEET.ADMIN");
+		private static final ToolchainedPermissionCache permBTC = new ToolchainedPermissionCache("MEET.ADMIN");
 
 		private static String getJWT(ProcessState state) {
 			JsonObject obj = new JsonObject();
@@ -97,7 +98,7 @@ public class StatelessFileProviderClient extends StatelessAdminClient {
 			obj.add("iss", Settings.getJWTApp());
 			obj.add("sub", "meet.jitsi");
 			obj.add("room", "TEST");
-			obj.add("moderator", perms.can(pb));
+			obj.add("moderator", perms.can(permBTC.toBranch(state.Toolchain)));
 			return EncodeHMAC(obj.getJsonString());
 		}
 
@@ -113,7 +114,7 @@ public class StatelessFileProviderClient extends StatelessAdminClient {
 	private static final Pattern pattern_inject = Pattern.compile("\\$INJECT\\(([a-zA-Z0-9\\.]+,){0,1} *([a-zA-Z0-9_\\.\\/]+)\\)\\$", Pattern.MULTILINE);
 	private static final Pattern pattern_code = Pattern.compile("\\$INJECT_CODE_NOPERMS\\(([a-zA-Z0-9\\.]+), *([a-zA-Z0-9; =_\\.\\/]+)\\)\\$", Pattern.MULTILINE);
 
-	private String handleReplacements(String content, UsersPermission perms, Toolchain toolchain, Set<String> included) {
+	private String handleReplacements(ProcessState state, String content, UsersPermission perms, Toolchain toolchain, Set<String> included) {
 		if (included == null) {
 			included = new HashSet<>();
 		}
@@ -125,7 +126,7 @@ public class StatelessFileProviderClient extends StatelessAdminClient {
 			if (matchResult.groupCount() == 2) {
 				String permsStr = matchResult.group(1);
 				String code = matchResult.group(2);
-				if (!perms.can(new PermissionBranch(permsStr))) {
+				if (!perms.can(new PermissionBranch(toolchain, permsStr))) {
 					replacement = code;
 				}
 			} else {
@@ -149,7 +150,7 @@ public class StatelessFileProviderClient extends StatelessAdminClient {
 				name = matchResult.group(2);
 				String permsD = matchResult.group(1);
 				if (permsD != null) {
-					if (!perms.can(new PermissionBranch(permsD))) {
+					if (!perms.can(new PermissionBranch(toolchain, permsD))) {
 						name = null;
 					}
 				}
@@ -161,13 +162,13 @@ public class StatelessFileProviderClient extends StatelessAdminClient {
 				if (included.contains(name)) {
 					replacement = null;
 				} else {
-					replacement = readFileOrDBFile(name, toolchain);
+					replacement = readFileOrDBFile(state, name);
 					included.add(name);
 				}
 				if (replacement == null) {
 					replacement = "";
 				} else {
-					replacement = handleReplacements(replacement, perms, toolchain, included);
+					replacement = handleReplacements(state, replacement, perms, toolchain, included);
 				}
 			}
 			content = content.substring(0, matchResult.start()) + replacement + content.substring(matchResult.end());
@@ -178,7 +179,7 @@ public class StatelessFileProviderClient extends StatelessAdminClient {
 	}
 
 	protected String handleJSManipulation(ProcessState state, String path, String content) {
-		content = handleReplacements(content, state.getPermissions(), state.Toolchain, null);
+		content = handleReplacements(state, content, state.getPermissions(), state.Toolchain, null);
 
 		{
 			int index = content.indexOf("$INJECT_JWT$");
@@ -213,7 +214,7 @@ public class StatelessFileProviderClient extends StatelessAdminClient {
 	}
 
 	protected String handleCSSManipulation(ProcessState state, String path, String content) {
-		content = handleReplacements(content, state.getPermissions(), state.Toolchain, null);
+		content = handleReplacements(state, content, state.getPermissions(), state.Toolchain, null);
 		return content;
 	}
 
@@ -255,7 +256,7 @@ public class StatelessFileProviderClient extends StatelessAdminClient {
 		public FileMappingManager(StaticDB sdb, Toolchain toolchain) {
 			List<FileMapping> lst = new ArrayList<>();
 			try {
-				FileInfo fo = sdb.loadFile("file_mapping.ini", true, toolchain);
+				FileInfo fo = sdb.loadFile("file_mapping.ini", true, sdb.getRootToolchain());
 				if (fo != null) {
 					for (String line : fo.Contents.split("\n")) {
 						line = line.trim();
@@ -304,12 +305,12 @@ public class StatelessFileProviderClient extends StatelessAdminClient {
 		}
 	});
 
-	private String readFileOrDBFile(String endPoint, Toolchain toolchain) {
+	private String readFileOrDBFile(ProcessState state, String endPoint) {
 		try {
 			String fileContents = MyFS.readFile("./web/" + endPoint);
 			return fileContents;
 		} catch (FileReadException e) {
-			FileInfo dbf = data.StaticDB.loadFile("web/" + endPoint, true, toolchain);
+			FileInfo dbf = data.StaticDB.loadFile("web/" + endPoint, true, state.Data.StaticDB.getRootToolchain());
 			if (dbf != null) {
 				return dbf.Contents;
 			}
@@ -335,7 +336,7 @@ public class StatelessFileProviderClient extends StatelessAdminClient {
 				FileMappingManager mapping = fileMappings.get(state.Toolchain);
 				String allowed = mapping.getRemappedEndpoint(endPoint, state.Request.host);
 				if (allowed != null) {
-					String contents = readFileOrDBFile(allowed, state.Toolchain);
+					String contents = readFileOrDBFile(state, allowed);
 					if (contents != null) {
 						data = contents.getBytes(Settings.getDefaultCharset());
 						state.setIntention(Intention.GET_RESOURCE);

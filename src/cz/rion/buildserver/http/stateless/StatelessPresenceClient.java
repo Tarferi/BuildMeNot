@@ -16,9 +16,9 @@ import cz.rion.buildserver.json.JsonValue.JsonNumber;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.json.JsonValue.JsonString;
 
-public class StatelessTermClient extends StatelessExamClient {
+public class StatelessPresenceClient extends StatelessExamClient {
 
-	protected StatelessTermClient(StatelessInitData data) {
+	protected StatelessPresenceClient(StatelessInitData data) {
 		super(data);
 	}
 

@@ -10,6 +10,7 @@ import javax.net.ssl.SSLSocketFactory;
 
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.DatabaseInitData;
+import cz.rion.buildserver.db.StaticDB;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.exceptions.HTTPClientException;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
@@ -19,9 +20,12 @@ import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 public abstract class LayeredPHPAuthDB extends LayeredPresenceDB {
 
 	private static final String AuthFileName = "auth/index.php";
+	private final StaticDB sdb;
 
 	public LayeredPHPAuthDB(DatabaseInitData dbName) throws DatabaseException {
 		super(dbName);
+		StaticDB sdb = (StaticDB) this;
+		this.sdb = sdb;
 		this.registerVirtualFile(new VirtualFile() {
 
 			@Override
@@ -56,11 +60,16 @@ public abstract class LayeredPHPAuthDB extends LayeredPresenceDB {
 				return AuthFileName;
 			}
 
+			@Override
+			public String getToolchain() {
+				return Settings.getRootToolchain();
+			}
+
 		});
 	}
 
 	private String getKeyHash() {
-		FileInfo fo = this.loadFile("enc.key", true, null);
+		FileInfo fo = this.loadFile("enc.key", true, sdb.getRootToolchain());
 		if (fo != null) {
 			try {
 				java.security.MessageDigest md = java.security.MessageDigest.getInstance("MD5");

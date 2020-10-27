@@ -37,21 +37,24 @@ public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
 		private String value = "";
 		private final Object syncer;
 		private final boolean realFile;
-		private final LayeredFilesDB fdb;
+		private final StaticDB fdb;
 		private DatabaseFile realFileObj = null;
 		private WritableData onReady;
+		private final Toolchain toolchain;
 
-		public ImportMetaFile(Object syncer, String name, boolean addRealFile, LayeredFilesDB fdb) {
+		public ImportMetaFile(Object syncer, String name, boolean addRealFile, StaticDB fdb, Toolchain toolchain) {
 			this.name = name;
 			this.syncer = syncer;
 			this.realFile = addRealFile;
 			this.fdb = fdb;
+			this.toolchain = toolchain;
 			if (realFile) {
 				loadedVirtualFiles.put(name, this);
+				ensureFile(fdb.getFiles(toolchain), toolchain);
 			}
 		}
 
-		private boolean ensureFile(List<DatabaseFile> files) {
+		private boolean ensureFile(List<DatabaseFile> files, Toolchain toolchain) {
 			if (realFile) {
 				if (realFileObj != null) {
 					return true;
@@ -67,7 +70,7 @@ public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
 						}
 					}
 					try {
-						fdb.createFile(name, "", true);
+						fdb.createFile(toolchain, name, "", true);
 					} catch (DatabaseException e) {
 						e.printStackTrace();
 					}
@@ -98,7 +101,7 @@ public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
 						return "Failed to read file";
 					}
 					try {
-						return JsonValue.getPrettyJsonString(fdb.getFile(realFileObj.ID, true, null).Contents);
+						return JsonValue.getPrettyJsonString(fdb.getFile(realFileObj.ID, true, fdb.getRootToolchain()).Contents);
 					} catch (DatabaseException e) {
 						e.printStackTrace();
 						return "Failed to read file";
@@ -125,6 +128,11 @@ public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
 		@Override
 		public String getName() {
 			return name;
+		}
+
+		@Override
+		public String getToolchain() {
+			return toolchain.getName();
 		}
 
 	}
@@ -441,8 +449,8 @@ public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
 			}
 		}
 
-		public ImportMetaFunctioningFile(Object syncer, String name, ImportMetaFile users, ImportMetaFile groups, ImportMetaFile defaultPermissionsFile, ImportMetaFile defaultSettingsFile, LayeredFilesDB fdb) {
-			super(syncer, name, false, fdb);
+		public ImportMetaFunctioningFile(Object syncer, String name, ImportMetaFile users, ImportMetaFile groups, ImportMetaFile defaultPermissionsFile, ImportMetaFile defaultSettingsFile, StaticDB fdb, Toolchain toolchain) {
+			super(syncer, name, false, fdb, toolchain);
 			this.users = users;
 			this.groups = groups;
 			this.perms = defaultPermissionsFile;
@@ -593,50 +601,54 @@ public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
 		}
 	}
 
-	private void addVirtualImporterForToolchain(String toolchain) {
-		ImportMetaFile UsersFile = new ImportMetaFile(syncer, "importy/" + toolchain + "/Users.db", true, this);
-		ImportMetaFile GroupsFile = new ImportMetaFile(syncer, "importy/" + toolchain + "/Groups.db", true, this);
-		ImportMetaFile DefaultPermissionsFile = new ImportMetaFile(syncer, "importy/" + toolchain + "/DefaultPermissions.db", true, this);
-		ImportMetaFile DefaultSettings = new ImportMetaFile(syncer, "importy/" + toolchain + "/Configuration.db", true, this);
-		ImportMetaFunctioningFile ImportFile = new ImportMetaFunctioningFile(syncer, "importy/" + toolchain + "/Import.exe", UsersFile, GroupsFile, DefaultPermissionsFile, DefaultSettings, this);
-		super.registerVirtualFile(ImportFile);
-
+	private VirtualFile addVirtualImporterForToolchain(Toolchain toolchain) {
+		StaticDB sdb = (StaticDB) this;
+		ImportMetaFile UsersFile = new ImportMetaFile(syncer, "importy/" + toolchain.getName() + "/Users.db", true, sdb, toolchain);
+		ImportMetaFile GroupsFile = new ImportMetaFile(syncer, "importy/" + toolchain.getName() + "/Groups.db", true, sdb, toolchain);
+		ImportMetaFile DefaultPermissionsFile = new ImportMetaFile(syncer, "importy/" + toolchain.getName() + "/DefaultPermissions.db", true, sdb, toolchain);
+		ImportMetaFile DefaultSettings = new ImportMetaFile(syncer, "importy/" + toolchain.getName() + "/Configuration.db", true, sdb, toolchain);
+		ImportMetaFunctioningFile ImportFile = new ImportMetaFunctioningFile(syncer, "importy/" + toolchain.getName() + "/Import.exe", UsersFile, GroupsFile, DefaultPermissionsFile, DefaultSettings, sdb, toolchain);
+		return ImportFile;
 	}
-
-	private boolean toolchainsAdded = false;
 
 	public LayeredImportDB(DatabaseInitData fileName) throws DatabaseException {
 		super(fileName);
-	}
 
-	private void handleInitToolchains() {
-		if (!toolchainsAdded) {
-			toolchainsAdded = true;
-			StaticDB sdb = (StaticDB) this;
-			for (Toolchain tc : sdb.getAllToolchains()) {
-				addVirtualImporterForToolchain(tc.getName());
+		final Map<String, VirtualFile> map = new HashMap<>();
+
+		this.registerToolchainListener(new ToolchainCallback() {
+
+			@Override
+			public void toolchainAdded(Toolchain t) {
+				synchronized (map) {
+					if (!map.containsKey(t.getName())) {
+						VirtualFile vf = addVirtualImporterForToolchain(t);
+						registerVirtualFile(vf);
+						map.put(t.getName(), vf);
+					}
+				}
 			}
-		}
+
+			@Override
+			public void toolchainRemoved(Toolchain t) {
+				synchronized (map) {
+					if (map.containsKey(t.getName())) {
+						VirtualFile vf = map.get(t.getName());
+						map.remove(t.getName());
+						unregisterVirtualFile(vf);
+					}
+				}
+			}
+
+		});
 	}
 
 	@Override
-	public List<DatabaseFile> getFiles() {
-		handleInitToolchains();
-		synchronized (syncer) {
-			List<DatabaseFile> files = super.getFiles();
-			for (ImportMetaFile myFile : loadedVirtualFiles.values()) {
-				myFile.ensureFile(files);
-			}
-			return files;
-		}
-	}
-
-	@Override
-	public FileInfo loadFile(String name, boolean decodeBigString,Toolchain toolchain) {
+	public FileInfo loadFile(String name, boolean decodeBigString, Toolchain toolchain) {
 		FileInfo fo = super.loadFile(name, decodeBigString, toolchain);
 		if (fo != null) {
 			if (loadedVirtualFiles.containsKey(fo.FileName)) {
-				return new FileInfo(fo.ID, fo.FileName, JsonValue.getPrettyJsonString(fo.Contents));
+				return new FileInfo(fo.ID, fo.FileName, JsonValue.getPrettyJsonString(fo.Contents), fo.ToolchainName);
 			}
 		}
 		return fo;
@@ -647,7 +659,7 @@ public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
 		FileInfo fo = super.getFile(fileID, decodeBigString, toolchain);
 		if (fo != null) {
 			if (loadedVirtualFiles.containsKey(fo.FileName)) {
-				return new FileInfo(fo.ID, fo.FileName, JsonValue.getPrettyJsonString(fo.Contents));
+				return new FileInfo(fo.ID, fo.FileName, JsonValue.getPrettyJsonString(fo.Contents), fo.ToolchainName);
 			}
 		}
 		return fo;

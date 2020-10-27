@@ -26,7 +26,7 @@ public abstract class LayeredDBFileWrapperDB extends LayeredImportDB {
 
 	private static final String dbDirPrefix = "database/";
 	private static final String dbFileSuffix = ".table";
-	private static final String viewFileSuffix = ".view";
+	public static final String viewFileSuffix = ".view";
 	public final String dbFilePrefix;
 
 	public LayeredDBFileWrapperDB(DatabaseInitData fileName) throws DatabaseException {
@@ -51,7 +51,9 @@ public abstract class LayeredDBFileWrapperDB extends LayeredImportDB {
 						if (columns != null) {
 							List<JsonValue> columnsjsn = new ArrayList<>();
 							for (TableField column : columns) {
-								columnsjsn.add(new JsonString(column.field.getDecodableRepresentation()));
+								if (!column.field.name.equals("toolchain") || toolchain.IsRoot) { // No toolchain columns for non roots
+									columnsjsn.add(new JsonString(column.field.getDecodableRepresentation()));
+								}
 							}
 							JsonValue first = arr.Value.get(0);
 							if (first.isObject()) {
@@ -63,8 +65,10 @@ public abstract class LayeredDBFileWrapperDB extends LayeredImportDB {
 										List<JsonValue> values = new ArrayList<>();
 										JsonObject vobj = val.asObject();
 										for (TableField col : columns) {
-											JsonValue colValue = vobj.get(col.field.name);
-											values.add(colValue);
+											if (!col.field.name.equals("toolchain") || toolchain.IsRoot) { // No toolchain columns for non roots
+												JsonValue colValue = vobj.get(col.field.name);
+												values.add(colValue);
+											}
 										}
 										resultData.add(new JsonArray(values));
 									}
@@ -74,7 +78,7 @@ public abstract class LayeredDBFileWrapperDB extends LayeredImportDB {
 					}
 				}
 			}
-			return new FileInfo(id, getDBFilePrefix(db) + tableName + dbFileSuffix, result.getJsonString());
+			return new FileInfo(id, getDBFilePrefix(db) + tableName + dbFileSuffix, result.getJsonString(), toolchain.getName());
 		} catch (DatabaseException e) {
 			e.printStackTrace();
 			return null;
@@ -82,15 +86,15 @@ public abstract class LayeredDBFileWrapperDB extends LayeredImportDB {
 	}
 
 	@Override
-	public FileInfo createFile(String name, String contents, boolean overwriteExisting) throws DatabaseException {
+	public FileInfo createFile(Toolchain toolchain, String name, String contents, boolean overwriteExisting) throws DatabaseException {
 		if (name.startsWith(dbFilePrefix)) {
 			if (name.endsWith(viewFileSuffix)) {
-				return super.createFile(name, contents, overwriteExisting);
+				return super.createFile(toolchain, name, contents, overwriteExisting);
 			} else {
 				return null;
 			}
 		} else {
-			return super.createFile(name, contents, overwriteExisting);
+			return super.createFile(toolchain, name, contents, overwriteExisting);
 		}
 	}
 
@@ -125,23 +129,25 @@ public abstract class LayeredDBFileWrapperDB extends LayeredImportDB {
 		return null;
 	}
 
-	public static final void loadDatabaseFiles(LayeredMetaDB db, List<DatabaseFile> files) {
+	public static final void loadDatabaseFiles(LayeredMetaDB db, List<DatabaseFile> files, Toolchain toolchain) {
 		if (files != null) {
 			int index = 0;
 			for (String name : db.getTables()) {
-				files.add(new DatabaseFile(index + db.DB_FILE_FIRST_ID, dbDirPrefix + db.metaDatabaseName + "/" + name + dbFileSuffix));
+				if (toolchain.IsRoot || !db.isRootOnly(name)) {
+					files.add(new DatabaseFile(index + db.DB_FILE_FIRST_ID, dbDirPrefix + db.metaDatabaseName + "/" + name + dbFileSuffix, toolchain.getName()));
+				}
 				index++;
 			}
 			if (db instanceof RuntimeDB) {
-				((RuntimeDB) db).addSpecialFiles(files, index, dbDirPrefix + db.metaDatabaseName + "/", viewFileSuffix);
+				((RuntimeDB) db).addSpecialFiles(files, index, dbDirPrefix + db.metaDatabaseName + "/", viewFileSuffix, toolchain);
 			}
 		}
 	}
 
 	@Override
-	public List<DatabaseFile> getFiles() {
-		List<DatabaseFile> lst = super.getFiles();
-		loadDatabaseFiles(this, lst);
+	public List<DatabaseFile> getFiles(Toolchain toolchain) {
+		List<DatabaseFile> lst = super.getFiles(toolchain);
+		loadDatabaseFiles(this, lst, toolchain);
 		return lst;
 	}
 
@@ -149,11 +155,20 @@ public abstract class LayeredDBFileWrapperDB extends LayeredImportDB {
 		return editRow(null, null, null, db, file, contents);
 	}
 
+	public static final String getTableNameForFile(LayeredMetaDB db, FileInfo file) {
+		if (file.ID >= db.DB_FILE_FIRST_ID && file.ID < db.DB_FILE_FIRST_ID + DB_FILE_SIZE) { // Owned by the DB -> table exists in db
+			String tableName = db.getTables().get(file.ID - db.DB_FILE_FIRST_ID);
+			return tableName;
+		}
+		return null;
+	}
+
 	public static final boolean editRow(StaticDB sdb, String login, String address, LayeredMetaDB db, FileInfo file, JsonObject contents) {
 		try {
 			if (file.ID >= db.DB_FILE_FIRST_ID && file.ID < db.DB_FILE_FIRST_ID + DB_FILE_SIZE) { // Owned by the DB -> table exists in db
 				if (contents.containsNumber("ID")) {
 					String tableName = db.getTables().get(file.ID - db.DB_FILE_FIRST_ID);
+
 					if (!db.tableWriteable(tableName)) {
 						return false;
 					}
@@ -295,7 +310,7 @@ public abstract class LayeredDBFileWrapperDB extends LayeredImportDB {
 		robj.add("freeSQL", new JsonString(freeSQL));
 		robj.add("code", new JsonNumber(code));
 		robj.add("result", result);
-		return new FileInfo(sqlFile.ID, sqlFile.FileName, robj.getJsonString());
+		return new FileInfo(sqlFile.ID, sqlFile.FileName, robj.getJsonString(), toolchain.getName());
 	}
 
 	@Override

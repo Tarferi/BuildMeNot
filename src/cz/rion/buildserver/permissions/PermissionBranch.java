@@ -3,6 +3,8 @@ package cz.rion.buildserver.permissions;
 import java.util.HashMap;
 import java.util.Map;
 
+import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
+
 public class PermissionBranch {
 
 	private static int kwSz = 10;
@@ -13,16 +15,19 @@ public class PermissionBranch {
 
 	private final int[] branch;
 
+	public final Toolchain toolchain;
+
 	public final int[] getBranch() {
 		return branch;
 	}
 
-	public PermissionBranch(String permission) {
-		this(parse(permission));
+	public PermissionBranch(Toolchain toolchain, String permission) {
+		this(toolchain, parse(permission));
 	}
 
-	public PermissionBranch(int[] perms) {
+	public PermissionBranch(Toolchain toolchain, int[] perms) {
 		this.branch = perms;
+		this.toolchain = toolchain;
 	}
 
 	private static String getKw(int value) {

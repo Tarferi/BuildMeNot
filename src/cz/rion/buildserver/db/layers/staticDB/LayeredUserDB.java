@@ -74,7 +74,7 @@ public abstract class LayeredUserDB extends LayeredSSLDB {
 
 	public LayeredUserDB(DatabaseInitData dbName) throws DatabaseException {
 		super(dbName);
-		this.makeTable("users", KEY("ID"), TEXT("name"), TEXT("usergroup"), TEXT("login"), BIGTEXT("permissions"), TEXT("toolchain"));
+		this.makeTable("users", false, KEY("ID"), TEXT("name"), TEXT("usergroup"), TEXT("login"), BIGTEXT("permissions"), TEXT("toolchain"));
 	}
 
 	public static class RemoteUser {
@@ -164,7 +164,7 @@ public abstract class LayeredUserDB extends LayeredSSLDB {
 					if (pev.isArray()) {
 						for (JsonValue v : pev.asArray().Value) {
 							if (v.isString()) {
-								permissions.add(new PermissionBranch(v.asString().Value));
+								permissions.add(new PermissionBranch(toolchain, v.asString().Value));
 							}
 						}
 					}
@@ -177,6 +177,7 @@ public abstract class LayeredUserDB extends LayeredSSLDB {
 		return new Object[] { login, Settings.GetDefaultGroup(), 0, "" };
 	}
 
+	@SuppressWarnings("deprecation")
 	@Override
 	public boolean clearUsers(Toolchain toolchain) {
 		try {
@@ -185,13 +186,13 @@ public abstract class LayeredUserDB extends LayeredSSLDB {
 			e.printStackTrace();
 			return false;
 		}
-		if (mappings.containsKey(toolchain)) {
-			mappings.get(toolchain).reload();
+		if (mappings.containsKey(toolchain.getName())) {
+			mappings.get(toolchain.getName()).reload();
 		}
 		return true;
 	}
 
-	public List<RemoteUser> getUserIDsWhoCanByGroup(String toolchain, PermissionBranch branch) throws DatabaseException {
+	public List<RemoteUser> getUserIDsWhoCanByGroup(Toolchain toolchain, PermissionBranch branch) throws DatabaseException {
 		List<RemoteUser> lst = new ArrayList<>();
 		final String usersTableName = "users";
 		final String groupsTableName = "groups";
@@ -201,14 +202,14 @@ public abstract class LayeredUserDB extends LayeredSSLDB {
 		final Set<String> foundGoodPermissions = new HashSet<>();
 
 		TableField[] fields = new TableField[] { getField(groupsTableName, "toolchain"), getField(usersTableName, "name"), getField(usersTableName, "login"), getField(groupsTableName, "permissions"), getField(groupsTableName, "name").getRenamedInstance("group_name") };
-		ComparisionField[] comparators = new ComparisionField[] {};
+		ComparisionField[] comparators = new ComparisionField[] { new ComparisionField(getField(groupsTableName, "toolchain"), toolchain.getName()) };
 
 		TableJoin[] joins = new TableJoin[] { new TableJoin(getField(usersTableName, "ID"), getField(userGroupsTableName, "user_id")), new TableJoin(getField(groupsTableName, "ID"), getField(userGroupsTableName, "group_id")) };
 		JsonArray data = select(usersTableName, fields, comparators, joins, true);
 		for (JsonValue item : data.Value) {
 			String perm = item.asObject().getString("permissions").Value;
 			String ctoolchain = item.asObject().getString("toolchain").Value;
-			if (ctoolchain.equals(toolchain)) {
+			if (ctoolchain.equals(toolchain.getName())) {
 				if (!foundBadPermissions.contains(perm)) {
 					String login = item.asObject().getString("login").Value;
 					String name = item.asObject().getString("name").Value;
@@ -219,7 +220,7 @@ public abstract class LayeredUserDB extends LayeredSSLDB {
 						if (val.isArray()) {
 							for (JsonValue v : val.asArray().Value) {
 								if (v.isString()) {
-									add |= new Permission(v.asString().Value).covers(branch);
+									add |= new Permission(toolchain, v.asString().Value).covers(branch);
 								}
 							}
 						}

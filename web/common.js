@@ -1,3 +1,47 @@
+var CommonPromise = function() {
+	var self = this;
+	self.finished = false;
+	self.finishedData = null;
+	self.finishedOK = false;
+	
+	self.callbacks = [];
+	
+	self.then = function(callbackOK, callbackFail) {
+		if(self.finished) {
+			if(self.finishedOK) {
+				callbackOK(self.finishedData);
+			} else {
+				callbackFail(self.finishedData);
+			} 
+		} else {
+			self.callbacks.push([callbackOK, callbackFail]);
+		}
+		return self;
+	}
+	
+	self.link = function(anotherPromise) {
+		anotherPromise.then(self.doOK, self.doFail);
+	}
+	
+	self.doFail = function(data) {
+		self.finished = true;
+		self.finishedOK = false;
+		for(var i = 0; i < self.callbacks.length; i++) {
+			self.callbacks[i][1](data);
+		}
+	}
+	
+	self.doOK = function(data) {
+		self.finished = true;
+		self.finishedOK = true;
+		for(var i = 0; i < self.callbacks.length; i++) {
+			self.callbacks[i][0](data);
+		}
+	}
+	
+	return this;
+}
+
 var Common = function() {
 	if(window.RionCommon) {
 		return window.RionCommon;
@@ -13,6 +57,221 @@ var Common = function() {
 	
 	self.getRemoteNow = function() {
 		return new Date().getTime() + diff;
+	}
+	
+	self.showError = function(title, message, showBtnOK, detailsToShow) {
+		var errorUI = {
+			"type": "div",
+			"style": "position: fixed; left: calc(50% - 150px); top: 80px; width: 300px; height: 200px; display: block; padding: 0px; margin: 0px; border: 2px solid black; background: #ffaaaa;",
+			"contents": [
+				{
+					"type": "div",
+					"id": "pnl_title",
+					"style": "display: block;width:100%;margin:0px;border-bottom: 2px solid black;height: 30px; background: #ff8888;cursor: default;",
+					"contents": [
+						{
+							"type": "span",
+							"style": "padding-left: 10px;display: inline-block;margin-top: 5px; margin-bottom: 5px;font-family: Verdana; font-size: 12pt;",
+							"id": "titlePnl"
+						},
+						{
+							"type": "span",
+							"style": ";display: inline-block;float: right;padding-right: 5px; border-left: 2px solid black;line-height: 30px; padding-left: 5px",
+							"innerHTML":"v1"
+						}
+					]
+				},
+				{
+					"type": "div",
+					"style": "display: block; width: 100%; height: calc(100% - 32px);",
+					"contents": [
+						{
+							"type": "textarea",
+							"id": "txtMessage",
+							"style": "min-width: 250px; min-height: 120px; width: calc(100% - 6px) ; height: calc(100% - 41px); resize: both; outline: none; border: 0px;text-align: center;font-family: Verdana; font-size: 12pt; background: transparent",
+							"innerHTML": message
+						},
+						{
+							"type": "div",
+							"style": "height: 35px;line-height: 35px; padding-left: 5px; border-top: 2px solid black",
+							"contents": [
+								{
+									"type": "span",
+									"id": "pnlOKPnl"
+								},
+								{
+									"type": "button",
+									"id": "btnOK",
+									"style": "float: right; margin-top: 5px; margin-right: 6px;width: 80px",
+									"innerHTML": "OK"
+								},
+								{
+									"type": "button",
+									"id": "btnDetails",
+									"style": "float: right; margin-top: 5px; margin-right: 6px;width: 80px",
+									"innerHTML": "Detaily"
+								}
+							]
+						}
+					]
+				}
+			]
+		};
+		
+		
+		var p = new CommonPromise();
+		
+		var d = self.reconstructUI(errorUI);
+		
+		var node = d[0];
+		var ids = d[1];
+		
+		ids.titlePnl.innerHTML = title;
+		ids.txtMessage.readOnly = true;
+		
+		if(showBtnOK === true) {
+			ids.pnlOKPnl.display = "none";
+			ids.btnOK.addEventListener("click", function(){
+				document.body.removeChild(node);
+				document.body.removeChild(el);
+				p.doOK()
+			});
+			
+		} else {
+			ids.pnlOKPnl.innerHTML = "Nelze pokračovat"	
+			ids.btnOK.style.display = "none";
+		}
+		if(detailsToShow === undefined) {
+			ids.btnDetails.style.display = "none";
+		} else {
+			var tabStr = function(str) {
+				if(str.stack) {
+					str = str.stack;
+				} else if(str.toString) {
+					str = str.toString();
+				}
+				return str.split("\n").map(function(x){return "\t"+x}).join("\n");
+			}
+			var showingDetails = false;
+			ids.btnDetails.addEventListener("click", function(){
+				if(showingDetails){
+					showingDetails = false;
+					ids.btnDetails.innerHTML = "Detaily";
+					ids.txtMessage.innerHTML = message;
+					ids.txtMessage.style.textAlign = "center";
+				} else {
+					showingDetails = true;
+					ids.btnDetails.innerHTML = "Skrýt";
+					ids.txtMessage.innerHTML = "Popis chyby:\r\n"+tabStr(message) + "\r\n\r\nDetaily:\r\n" + tabStr(detailsToShow);
+					ids.txtMessage.style.textAlign = "left";
+				}
+			});
+		}
+		
+		var el = document.createElement("div");
+		el.style.position = "fixed";
+		el.style.left = "0px";
+		el.style.right = "0px";
+		el.style.top = "0px";
+		el.style.bottom = "0px";
+		el.style.backgroundColor = "#00000044";
+		
+		document.body.appendChild(el);
+		document.body.appendChild(node);
+		
+		// Moving
+		{
+			var setPos = function(node, pos, getterAttr, setterAttr) {
+				node.style[setterAttr] = pos + "px";
+				var ns = node[getterAttr];
+				node.style[setterAttr] = (pos - (ns - pos)) + "px";
+			}
+			
+			var mdMove = false;
+			var originalNodePosition = null;
+			var originalPointerPosition = null;
+			ids.pnl_title.addEventListener("mousedown", function(e) {
+				mdMove = true;
+				originalNodePosition = [node.offsetLeft, node.offsetTop];
+				originalPointerPosition = [e.clientX, e.clientY];
+			});
+			node.addEventListener("mouseup", function() {
+				mdMove = false;
+			});
+			el.addEventListener("mouseup", function() {
+				mdMove = false;
+			})
+			var fnMove = function(e){
+				if(mdMove) {
+					var newCursorPoisition = [e.clientX, e.clientY];
+					
+					var newPosX = originalNodePosition[0] + (newCursorPoisition[0] - originalPointerPosition[0]);
+					var newPosY= originalNodePosition[1] + (newCursorPoisition[1] - originalPointerPosition[1]);
+					
+					if(newPosX < 0) {
+						newPosX = 0;
+					} else if(newPosX + node.offsetWidth > el.offsetWidth) {
+						newPosX = el.offsetWidth - node.offsetWidth;
+					}
+					if(newPosY < 0) {
+						newPosY = 0;
+					} else if(newPosY + node.offsetHeight > el.offsetHeight) {
+						newPosY = el.offsetHeight - node.offsetHeight;
+					}
+					
+					setPos(node, newPosX, "offsetLeft", "left");
+					setPos(node, newPosY, "offsetTop", "top");
+					
+				}
+			};
+			el.addEventListener("mousemove", fnMove)
+			node.addEventListener("mousemove", fnMove)
+		}
+		
+		
+		// Resizing
+		{	
+			var mdSize = false;
+			var originalSizesNode = null;
+			var originalSizesArea = null;
+			var lastAreaSize = [ids.txtMessage.offsetWidth, ids.txtMessage.offsetHeight];
+			
+			ids.txtMessage.addEventListener("mousedown", function() {
+				mdSize = true;
+			});
+			ids.txtMessage.addEventListener("mouseup", function() {
+				mdSize = false;
+			});
+			
+			var moveFN = function() {
+				
+				var setDim = function(node, size, getterAttr, setterAttr) {
+					node.style[setterAttr] = size + "px";
+					var ns = node[getterAttr];
+					node.style[setterAttr] = (size - (ns -size)) + "px";
+				}
+				
+				if(mdSize) {
+					if(originalSizesArea === null) {
+						 originalSizesArea = [ids.txtMessage.offsetWidth, ids.txtMessage.offsetHeight];
+						 originalSizesNode = [node.offsetWidth, node.offsetHeight];
+					}
+					var newAreaSizes = [ids.txtMessage.offsetWidth, ids.txtMessage.offsetHeight];
+					if(newAreaSizes[0] != lastAreaSize[0] || newAreaSizes[1] != lastAreaSize[1] ) {
+						lastAreaSize = newAreaSizes;
+						var newWidth = originalSizesNode[0] + (lastAreaSize[0] - originalSizesArea[0]);
+						var newHeight = originalSizesNode[1] + (lastAreaSize[1] - originalSizesArea[1]);
+						setDim(node, newWidth, "offsetWidth", "width");
+						setDim(node, newHeight, "offsetHeight", "height");
+					}
+				}
+			};
+			el.addEventListener("mousemove", moveFN);
+			node.addEventListener("mousemove", moveFN);
+			ids.txtMessage.addEventListener("mousemove", moveFN);
+		}
+		
+		return p;
 	}
 	
 	self.logout = function() {
@@ -131,6 +390,8 @@ var Common = function() {
 	}
 	
 	self.async = function(data, callbackOK, callbackFail, parseResult) {
+		var promise = new CommonPromise();
+		promise.then(callbackOK, callbackFail);
 		if(parseResult === undefined) {
 			parseResult = true;
 		}
@@ -145,27 +406,39 @@ var Common = function() {
 						if (deco !== false) {
 							var jsn = JSON.parse(deco);
 							if (jsn !== false) {
-								if (jsn.code === 0 && jsn.result) {
+								if (jsn.code === 0 && jsn.result !== undefined) {
 									var result = parseResult ? JSON.parse(jsn.result) : jsn.result;
-									if(result) {
-										callbackOK(result);
+									if(result !== undefined) {
+										try {
+											promise.doOK(result);
+										} catch(e) {
+											self.showError("Chyba", "Nastala chyba při zpracování příkazu", true, e);
+										}
 										return;
+									} else {
+										promise.doFail("Nepodařilo se dekódovat odpověď serveru");	
 									}
+								} else {
+									promise.doFail("Interní chyba serveru" + (jsn.result ? ": "+jsn.result : ""));
 								}
+							} else {
+								promise.doFail("Server odpověděl ve špatném formátu");	
 							}
+						} else {
+							promise.doFail("Nesprávná odpověď serveru");
 						}
-						callbackFail(self.getErrorSolution(0));
 					}
 				}
 			};
 			http.onerror = function(e) {
-				callbackFail(self.getErrorSolution(0));
+				promise.doFail("Nepodařilo se kontaktovat server");
 			};
 			http.open("POST", url, true);
 			http.send(data);
 		} catch (e) {
-			callbackFail(self.getErrorSolution(0));
+			promise.doFail("Nastala neočekávaná chyba při komunikaci se serverem" + e);
 		}
+		return promise;
 	}
 
 	self.generateRandomString = function(length) {
@@ -320,6 +593,9 @@ var Common = function() {
 		}
 		if (data.name) {
 			el.name = data.name;
+		}
+		if (data.style) {
+			el.style = data.style;
 		}
 		if (data.value) {
 			el.value = data.value

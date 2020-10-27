@@ -142,7 +142,18 @@ public abstract class LayeredPresenceDB extends LayeredExamDB {
 		}
 	}
 
-	private final VirtualFile vfCreaterTerm = new VirtualFile() {
+	private final class vfCreaterTerm implements VirtualFile {
+
+		private final String toolchain;
+
+		private vfCreaterTerm(String toolchain) {
+			this.toolchain = toolchain;
+		}
+
+		@Override
+		public String getToolchain() {
+			return toolchain;
+		}
 
 		@Override
 		public String read() throws DatabaseException {
@@ -229,7 +240,18 @@ public abstract class LayeredPresenceDB extends LayeredExamDB {
 
 	};
 
-	private final VirtualFile vfDuplicateTerm = new VirtualFile() {
+	private final class vfDuplicateTerm implements VirtualFile {
+
+		private final Toolchain toolchain;
+
+		private vfDuplicateTerm(Toolchain toolchain) {
+			this.toolchain = toolchain;
+		}
+
+		@Override
+		public String getToolchain() {
+			return toolchain.getName();
+		}
 
 		@Override
 		public String read() throws DatabaseException {
@@ -301,7 +323,18 @@ public abstract class LayeredPresenceDB extends LayeredExamDB {
 
 	};
 
-	private final VirtualFile vfPresenceTypes = new VirtualFile() {
+	private final class vfPresenceTypes implements VirtualFile {
+
+		private final Toolchain toolchain;
+
+		private vfPresenceTypes(Toolchain toolchain) {
+			this.toolchain = toolchain;
+		}
+
+		@Override
+		public String getToolchain() {
+			return toolchain.getName();
+		}
 
 		@Override
 		public String read() throws DatabaseException {
@@ -311,7 +344,7 @@ public abstract class LayeredPresenceDB extends LayeredExamDB {
 			sb.append("# Pozn: ZOBRAZIT je buï \"true\" nebo \"false\"\n");
 			sb.append("# Pozn2: KOD_TYPU je text\n\n");
 			final String tableName = "presence_types";
-			for (JsonValue val : select(tableName, new TableField[] { getField(tableName, "name"), getField(tableName, "title"), getField(tableName, "show") }, true).Value) {
+			for (JsonValue val : select(tableName, new TableField[] { getField(tableName, "name"), getField(tableName, "title"), getField(tableName, "show") }, true, new ComparisionField(getField(tableName, "toolchain"), toolchain.getName())).Value) {
 				if (val.isObject()) {
 					JsonObject obj = val.asObject();
 					if (obj.containsString("name") && obj.containsString("title") && obj.containsNumber("show")) {
@@ -325,12 +358,13 @@ public abstract class LayeredPresenceDB extends LayeredExamDB {
 			return sb.toString();
 		}
 
+		@SuppressWarnings("deprecation")
 		@Override
 		public void write(String data) throws DatabaseException {
 			try {
 				Map<String, Pair<Integer, Pair<String, Boolean>>> typesByName = new HashMap<>();
 				final String tableName = "presence_types";
-				for (JsonValue val : select(tableName, new TableField[] { getField(tableName, "ID"), getField(tableName, "name"), getField(tableName, "title"), getField(tableName, "show") }, true).Value) {
+				for (JsonValue val : select(tableName, new TableField[] { getField(tableName, "ID"), getField(tableName, "name"), getField(tableName, "title"), getField(tableName, "show") }, true, new ComparisionField(getField(tableName, "toolchain"), toolchain.getName())).Value) {
 					if (val.isObject()) {
 						JsonObject obj = val.asObject();
 						if (obj.containsString("name") && obj.containsString("title") && obj.containsNumber("ID") && obj.containsNumber("show")) {
@@ -360,11 +394,11 @@ public abstract class LayeredPresenceDB extends LayeredExamDB {
 								int id = typesByName.get(name).Key;
 								Pair<String, Boolean> savedLabelOpt = typesByName.get(name).Value;
 								if (!savedLabelOpt.Key.equals(title) || savedLabelOpt.Value != show) { // Update and remove -> no duplicates
-									update(tableName, id, new ValuedField[] { new ValuedField(getField(tableName, "title"), title), new ValuedField(getField(tableName, "show"), show ? 1 : 0) });
+									update(tableName, id, new ValuedField[] { new ValuedField(getField(tableName, "title"), title), new ValuedField(getField(tableName, "toolchain"), toolchain.getName()), new ValuedField(getField(tableName, "show"), show ? 1 : 0) });
 								}
 								typesByName.remove(name);
 							} else {
-								insert(tableName, new ValuedField[] { new ValuedField(getField(tableName, "name"), name), new ValuedField(getField(tableName, "title"), title), new ValuedField(getField(tableName, "show"), show ? 1 : 0) });
+								insert(tableName, new ValuedField[] { new ValuedField(getField(tableName, "name"), name), new ValuedField(getField(tableName, "toolchain"), toolchain.getName()), new ValuedField(getField(tableName, "title"), title), new ValuedField(getField(tableName, "show"), show ? 1 : 0) });
 							}
 						}
 					}
@@ -400,7 +434,7 @@ public abstract class LayeredPresenceDB extends LayeredExamDB {
 						}
 					}
 					if (!skip) {
-						execute_raw("DELETE FROM presence_types WHERE name = ?", nameToDelete);
+						execute_raw("DELETE FROM presence_types WHERE name = ? AND toolchain = ?", nameToDelete, toolchain.getName());
 					}
 				}
 				presence.clear(); // Clear
@@ -421,13 +455,46 @@ public abstract class LayeredPresenceDB extends LayeredExamDB {
 
 	public LayeredPresenceDB(DatabaseInitData dbName) throws DatabaseException {
 		super(dbName);
-		this.makeTable("presence_types", KEY("ID"), TEXT("name"), TEXT("title"), NUMBER("show"));
-		this.makeTable("presence_slots", KEY("ID"), TEXT("name"), BIGTEXT("description"), TEXT("title"), BIGTEXT("settings"), NUMBER("valid"), TEXT("owner_login"), TEXT("toolchain"), DATE("odkdy_zobrazit"), DATE("odkdy_nezobrazit"), DATE("odkdy_prihlasovani"), DATE("dokdy_prihlasovani"));
-		this.makeTable("presence_users", KEY("ID"), NUMBER("user_id"), NUMBER("slot_id"), NUMBER("valid"), TEXT("type"), DATE("creation_time"));
+		this.makeTable("presence_types", false, KEY("ID"), TEXT("name"), TEXT("title"), NUMBER("show"), TEXT("toolchain"));
+		this.makeTable("presence_slots", false, KEY("ID"), TEXT("name"), BIGTEXT("description"), TEXT("title"), BIGTEXT("settings"), NUMBER("valid"), TEXT("owner_login"), TEXT("toolchain"), DATE("odkdy_zobrazit"), DATE("odkdy_nezobrazit"), DATE("odkdy_prihlasovani"), DATE("dokdy_prihlasovani"));
+		this.makeTable("presence_users", false, KEY("ID"), NUMBER("user_id"), NUMBER("slot_id"), NUMBER("valid"), TEXT("type"), DATE("creation_time"), TEXT("toolchain"));
 
-		this.registerVirtualFile(vfCreaterTerm);
-		this.registerVirtualFile(vfDuplicateTerm);
-		this.registerVirtualFile(vfPresenceTypes);
+		final Map<String, List<VirtualFile>> files = new HashMap<>();
+
+		registerToolchainListener(new ToolchainCallback() {
+
+			@Override
+			public void toolchainAdded(Toolchain toolchain) {
+				synchronized (files) {
+					List<VirtualFile> lst = files.get(toolchain.getName());
+					if (lst == null) {
+						lst = new ArrayList<>();
+						lst.add(new vfCreaterTerm(toolchain.getName()));
+						lst.add(new vfDuplicateTerm(toolchain));
+						lst.add(new vfPresenceTypes(toolchain));
+						for (VirtualFile vs : lst) {
+							registerVirtualFile(vs);
+						}
+						files.put(toolchain.getName(), lst);
+					}
+				}
+
+			}
+
+			@Override
+			public void toolchainRemoved(Toolchain toolchain) {
+				synchronized (files) {
+					List<VirtualFile> lst = files.get(toolchain.getName());
+					if (lst != null) {
+						for (VirtualFile vf : lst) {
+							unregisterVirtualFile(vf);
+						}
+						files.remove(toolchain.getName());
+					}
+				}
+			}
+
+		});
 	}
 
 	public static class PresenceSlot {
@@ -462,11 +529,11 @@ public abstract class LayeredPresenceDB extends LayeredExamDB {
 		}
 
 		public boolean canSign(UsersPermission perm) {
-			return perm.can(new PermissionBranch(Toolchain.getName() + ".SIGN." + Name));
+			return perm.can(new PermissionBranch(Toolchain, Toolchain.getName() + ".SIGN." + Name));
 		}
 
 		public boolean canSee(UsersPermission perm) {
-			return perm.can(new PermissionBranch(Toolchain.getName() + ".SEE." + Name));
+			return perm.can(new PermissionBranch(Toolchain, Toolchain.getName() + ".SEE." + Name));
 		}
 	}
 
@@ -563,7 +630,7 @@ public abstract class LayeredPresenceDB extends LayeredExamDB {
 
 		private PresenceData(LayeredPresenceDB db, Toolchain toolchain) throws DatabaseException {
 			this.Toolchain = toolchain;
-			presenceTypes.addAll(db.getPresenceTypes());
+			presenceTypes.addAll(db.getPresenceTypes(toolchain));
 			for (PresenceType type : presenceTypes) {
 				typesByCode.put(type.Code, type);
 			}
@@ -594,7 +661,7 @@ public abstract class LayeredPresenceDB extends LayeredExamDB {
 		}
 
 		public List<PresentUserDetails> getAllUsers(UsersPermission perms) {
-			if (perms.can(new PermissionBranch(this.Toolchain.getName() + ".ADMIN"))) {
+			if (perms.can(new PermissionBranch(Toolchain, this.Toolchain.getName() + ".ADMIN"))) {
 				List<PresentUserDetails> lst = new ArrayList<>();
 				for (Entry<Integer, List<PresentUserDetails>> entry : presencesByUserID.entrySet()) {
 					for (PresentUserDetails user : entry.getValue()) {
@@ -690,7 +757,7 @@ public abstract class LayeredPresenceDB extends LayeredExamDB {
 
 		final String tableName = "presence_users";
 		TableField[] fields = new TableField[] { getField(tableName, "ID"), getField(tableName, "user_id"), getField(tableName, "slot_id"), getField(tableName, "type"), getField(tableName, "creation_time") };
-		JsonArray res = this.select(tableName, fields, true, new ComparisionField(getField(tableName, "valid"), 1));
+		JsonArray res = this.select(tableName, fields, true, new ComparisionField(getField(tableName, "valid"), 1), new ComparisionField(getField(tableName, "toolchain"), toolchain.getName()));
 
 		for (JsonValue val : res.Value) {
 			if (val.isObject()) {
@@ -708,11 +775,11 @@ public abstract class LayeredPresenceDB extends LayeredExamDB {
 		return lst;
 	}
 
-	private List<PresenceType> getPresenceTypes() throws DatabaseException {
+	private List<PresenceType> getPresenceTypes(Toolchain toolchain) throws DatabaseException {
 		List<PresenceType> lst = new ArrayList<PresenceType>();
 
 		final String tableName = "presence_types";
-		for (JsonValue val : select(tableName, new TableField[] { getField(tableName, "ID"), getField(tableName, "name"), getField(tableName, "title"), getField(tableName, "show") }, true).Value) {
+		for (JsonValue val : select(tableName, new TableField[] { getField(tableName, "ID"), getField(tableName, "name"), getField(tableName, "title"), getField(tableName, "show") }, true, new ComparisionField(getField(tableName, "toolchain"), toolchain.getName())).Value) {
 			if (val.isObject()) {
 				JsonObject obj = val.asObject();
 				if (obj.containsString("name") && obj.containsString("title") && obj.containsNumber("ID") && obj.containsNumber("show")) {
@@ -740,7 +807,7 @@ public abstract class LayeredPresenceDB extends LayeredExamDB {
 		try {
 			if (getPresence(toolchain).slotsByID.containsKey(slotID)) {
 				String slotName = getPresence(toolchain).slotsByID.get(slotID).Name;
-				List<RemoteUser> users = this.getUserIDsWhoCanByGroup(toolchain.getName(), new PermissionBranch(toolchain.getName() + ".SEE." + slotName));
+				List<RemoteUser> users = this.getUserIDsWhoCanByGroup(toolchain, new PermissionBranch(toolchain, toolchain.getName() + ".SEE." + slotName));
 				if (users != null) {
 					return users;
 				}
@@ -835,11 +902,12 @@ public abstract class LayeredPresenceDB extends LayeredExamDB {
 						try {
 							final String tableName = "presence_users";
 							ValuedField vuid = new ValuedField(getField(tableName, "user_id"), userID);
+							ValuedField vtlc = new ValuedField(getField(tableName, "toolchain"), toolchain.getName());
 							ValuedField vsid = new ValuedField(getField(tableName, "slot_id"), slotID);
 							ValuedField vval = new ValuedField(getField(tableName, "valid"), 1);
 							ValuedField vpid = new ValuedField(getField(tableName, "type"), presenceTypeCode);
 							ValuedField vct = new ValuedField(getField(tableName, "creation_time"), System.currentTimeMillis());
-							ValuedField[] fields = new ValuedField[] { vuid, vsid, vpid, vct, vval };
+							ValuedField[] fields = new ValuedField[] { vuid, vtlc, vsid, vpid, vct, vval };
 							if (hasRecord) {
 								return this.update(tableName, presenceRowID, fields);
 							} else {

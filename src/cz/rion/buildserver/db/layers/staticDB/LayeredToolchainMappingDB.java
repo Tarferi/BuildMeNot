@@ -3,21 +3,28 @@ package cz.rion.buildserver.db.layers.staticDB;
 import java.util.HashMap;
 import java.util.Map;
 
+import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.DatabaseInitData;
+import cz.rion.buildserver.db.StaticDB;
+import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.exceptions.DatabaseException;
+import cz.rion.buildserver.exceptions.NoSuchToolchainException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 
 public abstract class LayeredToolchainMappingDB extends LayeredPHPAuthDB {
 
-	private final Map<String, String> mapping = new HashMap<>();
+	private final Map<String, Toolchain> mapping = new HashMap<>();
 
 	private static final String SettingsFileName = "toolchains.ini";
 
 	private void refresh() throws DatabaseException {
 		synchronized (mapping) {
 			mapping.clear();
+
+			Map<String, Toolchain> cache = new HashMap<>();
+
 			final String tableName = "hostname_mapping";
 			JsonArray res = this.select(tableName, new TableField[] { getField(tableName, "host"), getField(tableName, "toolchain") }, false, new ComparisionField(getField(tableName, "valid"), 1));
 			for (JsonValue val : res.Value) {
@@ -26,14 +33,25 @@ public abstract class LayeredToolchainMappingDB extends LayeredPHPAuthDB {
 					if (obj.containsString("host") && obj.containsString("toolchain")) {
 						String host = obj.getString("host").Value;
 						String toolchain = obj.getString("toolchain").Value;
-						mapping.put(host, toolchain);
+
+						Toolchain tc = cache.get(toolchain);
+						if (tc == null) {
+							StaticDB sdb = (StaticDB) this;
+							try {
+								tc = sdb.getToolchain(toolchain);
+							} catch (NoSuchToolchainException e) {
+								continue;
+							}
+							cache.put(toolchain, tc);
+						}
+						mapping.put(host, tc);
 					}
 				}
 			}
 		}
 	}
 
-	public String getToolchainMapping(String host) {
+	public Toolchain getToolchainMapping(String host) {
 		if (mapping.containsKey(host.toLowerCase())) {
 			return mapping.get(host.toLowerCase());
 		}
@@ -42,8 +60,7 @@ public abstract class LayeredToolchainMappingDB extends LayeredPHPAuthDB {
 
 	public LayeredToolchainMappingDB(DatabaseInitData dbName) throws DatabaseException {
 		super(dbName);
-		this.makeTable("hostname_mapping", KEY("ID"), TEXT("host"), TEXT("toolchain"), NUMBER("valid"));
-		refresh();
+		this.makeTable("hostname_mapping", true, KEY("ID"), TEXT("host"), TEXT("toolchain"), NUMBER("valid"));
 		this.registerVirtualFile(new VirtualFile() {
 
 			@Override
@@ -68,6 +85,7 @@ public abstract class LayeredToolchainMappingDB extends LayeredPHPAuthDB {
 				return str;
 			}
 
+			@SuppressWarnings("deprecation")
 			@Override
 			public void write(String data) throws DatabaseException {
 				final String tableName = "hostname_mapping";
@@ -105,7 +123,22 @@ public abstract class LayeredToolchainMappingDB extends LayeredPHPAuthDB {
 			public String getName() {
 				return SettingsFileName;
 			}
-			
+
+			@Override
+			public String getToolchain() {
+				return Settings.getRootToolchain();
+			}
+
 		});
+	}
+
+	@Override
+	public void afterInit() {
+		try {
+			refresh();
+		} catch (DatabaseException e) {
+			e.printStackTrace();
+		}
+		super.afterInit();
 	}
 }

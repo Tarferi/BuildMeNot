@@ -282,7 +282,7 @@ var Admin = function(givenCommon) {
 			self.navigator.reloadFiles();
 			self.txtNewPath.value = "";
 		}, function(err) {
-			alert(err);
+			self.common.showError("Chyba", "Nepodařilo se kontaktovat server", true, err);
 		}, false)
 	}
 
@@ -394,7 +394,7 @@ var Admin = function(givenCommon) {
 		self.async("load", {"fileID": fl["ID"]}, function(data) {
 			self.editor.editFile(data);
 		}, function(err) {
-			alert(err);
+			self.common.showError("Chyba", "Nepodařilo se kontaktovat server", true, err);
 		}, true)
 	}
 
@@ -584,8 +584,8 @@ var AdminNavigator = function(adminer) {
 			self.currentWorkingDir = "";
 			self.putFiles(data);
 		};
-		var cbFail = function(data) {
-			alert(data);
+		var cbFail = function(err) {
+			self.common.showError("Chyba", "Nepodařilo se kontaktovat server", true, err);
 		};
 		adminer.async("getFiles", {}, cbOK, cbFail);
 	}
@@ -750,10 +750,10 @@ var AdminEditor = function(adminer) {
 						self.close();
 					}
 				}, function(err) {
-					alert(err);
+					self.common.showError("Chyba", "Nepodařilo se kontaktovat server", true, err);
 				}, false);
 			} else { // Details? Not allowed
-				alert("Not allowed");
+				self.common.showError("Chyba", "Nepovolená operace", true);
 			}
 		} else if (ext == "table") {
 			// Collect currently editing fields
@@ -770,7 +770,7 @@ var AdminEditor = function(adminer) {
 					self.close();
 				}
 			}, function(err) {
-				alert(err);
+				self.common.showError("Chyba", "Nepodařilo se kontaktovat server", true, err);
 			}, false)
 		} else {
 			var changed = self.editArea.value;
@@ -779,7 +779,7 @@ var AdminEditor = function(adminer) {
 					self.close();
 				}
 			}, function(err) {
-				alert(err);
+				self.common.showError("Chyba", "Nepodařilo se kontaktovat server", true, err);
 			}, false)
 		}
 	}
@@ -1129,9 +1129,11 @@ var AdminEditor = function(adminer) {
 			row.addEventListener("dblclick", editCB);
 		}
 
-		for (var rowI = 0; rowI < data.length; rowI++) {
-			var rowObj = data[rowI];
-			materializeRow(rowObj);
+		if(data && data.length) {
+			for (var rowI = 0; rowI < data.length; rowI++) {
+				var rowObj = data[rowI];
+				materializeRow(rowObj);
+			}
 		}
 	}
 
@@ -1153,17 +1155,18 @@ var AdminEditor = function(adminer) {
 		var c = JSON.parse(contents);
 		var columns = [];
 		var colTypes = [ "INT", "TEXT", "BIGTEXT", "DATE" ];
-		for (var colI = 0; colI < c.columns.length; colI++) {
-			var colParts = c.columns[colI].substr(1).split("@");
-			var colType = c.columns[colI].substr(0, 1) * 1;
-			var colName = colParts[1];
-			columns.push({
-				"name" : colName,
-				"type" : colTypes[colType],
-				"index" : colI
-			});
+		if(c && c.columns && c.columns.length) {
+			for (var colI = 0; colI < c.columns.length; colI++) {
+				var colParts = c.columns[colI].substr(1).split("@");
+				var colType = c.columns[colI].substr(0, 1) * 1;
+				var colName = colParts[1];
+				columns.push({
+					"name" : colName,
+					"type" : colTypes[colType],
+					"index" : colI
+				});
+			}
 		}
-
 		self.hideEditors();
 		self.editTable.style.display = "table";
 
@@ -1177,7 +1180,7 @@ var AdminEditor = function(adminer) {
 		self.currentlyEditing = fn;
 		var fo = fn["fo"];
 		if (fo == 1) {
-			alert("No such file");
+			self.common.showError("Chyba", "Zadaný soubor neexistuje", true, err);
 			return;
 		}
 		var name = fn["name"];

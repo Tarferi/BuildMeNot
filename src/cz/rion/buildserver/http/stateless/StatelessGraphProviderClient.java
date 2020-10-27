@@ -80,7 +80,7 @@ public class StatelessGraphProviderClient extends StatelessFileProviderClient {
 							}
 							obj.remove("result");
 							obj.add("result", newArr);
-							return new FileInfo(fo.ID, fo.FileName, obj.getJsonString());
+							return new FileInfo(fo.ID, fo.FileName, obj.getJsonString(), toolchain.getName());
 						}
 					}
 				}
@@ -99,8 +99,8 @@ public class StatelessGraphProviderClient extends StatelessFileProviderClient {
 				@Override
 				public JsonValue update() {
 					// Preload database files
-					List<DatabaseFile> files = data.StaticDB.getFiles();
-					LayeredDBFileWrapperDB.loadDatabaseFiles(data.RuntimeDB, files);
+					List<DatabaseFile> files = data.StaticDB.getFiles(toolchain);
+					LayeredDBFileWrapperDB.loadDatabaseFiles(data.RuntimeDB, files, toolchain);
 					Map<String, Integer> fileIds = new HashMap<>();
 					for (DatabaseFile file : files) {
 						fileIds.put(file.FileName, file.ID);

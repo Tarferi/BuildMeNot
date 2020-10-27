@@ -86,6 +86,11 @@ public abstract class LayeredConsoleOutputDB extends LayeredAdminLogDB {
 			return name;
 		}
 
+		@Override
+		public String getToolchain() {
+			return "shared";
+		}
+
 	}
 
 	public LayeredConsoleOutputDB(DatabaseInitData dbName) throws DatabaseException {

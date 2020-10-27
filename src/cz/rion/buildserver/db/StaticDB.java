@@ -7,5 +7,7 @@ public class StaticDB extends LayeredPermissionDB {
 
 	public StaticDB(DatabaseInitData dbName) throws DatabaseException {
 		super(dbName);
+		this.afterInit();
 	}
+
 }

@@ -26,8 +26,13 @@ var terminer = function() {
     	
     	if(data.Now && data.NextEvent) {
     		var diff = data.NextEvent - data.Now;
-    		if(diff > 0) {
-    		    setTimeout(function(){ self.loadTerms(true, false); }, diff+10000);
+			var sec = 1000;
+			var min = 60 * sec;
+			var hour = 60 * min;
+			var day = 24 * hour;
+			var limit = 30 * day;
+    		if(diff > 0 && diff < limit) {
+    		    setTimeout(function(){ self.loadTerms(true, false); }, diff + 10000);
     		}
     	}
     	
@@ -107,7 +112,7 @@ var terminer = function() {
     		self.common.hideLoader();
 			var el = document.createElement("span");
 			el.innerHTML = data;
-			alert(el.innerText);
+			self.common.showError("Chyba", "Nepodařilo se uložení výběru.", true, el.innerText);
 		};
 		var cbOk = function(data) {
 			self.common.hideLoader();
@@ -226,7 +231,7 @@ var terminer = function() {
 				}
 				newAdmData[type].push(admData[i]);
 			}
-			admDataTotal = newAdmData;
+			var admDataTotal = newAdmData;
 			
 			for(var admDataTotalKey in admDataTotal) {
 			   if(admDataTotal.hasOwnProperty(admDataTotalKey)) {
@@ -329,7 +334,7 @@ var terminer = function() {
 			self.hideInitLoad();
     		self.root.innerHTML = "";
 			if(useInitWaiter) {
-				self.showFailedLoad(data);
+				self.common.showError("Chyba", "Nepodařilo se nahrát seznam termínů", false, descr);
 			}
 		};
 		var cbOk = function(data) {
@@ -349,14 +354,6 @@ var terminer = function() {
 
 	self.showInitLoader = function() {
 		self.common.showInitLoader("Nahrávám seznam termínů...", "green");
-	}
-	
-	self.showFailedLoad = function(descr) {
-		var df = "Nepodařilo se nahrát seznam termínů"
-		if (descr !== undefined) {
-			df = df+":<br />"+descr;
-		}
-		self.common.showInitLoader(df, "red");
 	}
 	
 	self.hideInitLoad = function() {

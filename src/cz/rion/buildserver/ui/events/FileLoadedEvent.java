@@ -12,8 +12,8 @@ public class FileLoadedEvent extends Event {
 	public static class FileInfo extends DatabaseFile {
 		public final String Contents;
 
-		public FileInfo(int id, String fileName, String contents) {
-			super(id, fileName);
+		public FileInfo(int id, String fileName, String contents, String toolchainName) {
+			super(id, fileName, toolchainName);
 			this.Contents = contents;
 		}
 	}

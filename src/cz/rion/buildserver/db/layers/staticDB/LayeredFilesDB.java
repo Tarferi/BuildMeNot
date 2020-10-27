@@ -18,7 +18,7 @@ public abstract class LayeredFilesDB extends LayeredStaticDB {
 
 	public LayeredFilesDB(DatabaseInitData fileName) throws DatabaseException {
 		super(fileName);
-		this.makeTable("files", KEY("ID"), TEXT("name"), BIGTEXT("contents"), NUMBER("deleted"));
+		this.makeTable("files", false, KEY("ID"), TEXT("name"), BIGTEXT("contents"), NUMBER("deleted"), TEXT("toolchain"));
 	}
 
 	private static final char[] hexData = new char[] { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
@@ -61,13 +61,13 @@ public abstract class LayeredFilesDB extends LayeredStaticDB {
 		return new String(n, Settings.getDefaultCharset());
 	}
 
-	public FileInfo createFile(String name, String contents, boolean overwriteExisting) throws DatabaseException {
+	public FileInfo createFile(Toolchain toolchain, String name, String contents, boolean overwriteExisting) throws DatabaseException {
 		final String tableName = "files";
 		synchronized (fileTable) {
 			try {
 				boolean insertNew = true;
 				if (overwriteExisting) {
-					JsonArray res = select(tableName, new TableField[] { getField(tableName, "ID") }, false, new ComparisionField(getField(tableName, "name"), name), new ComparisionField(getField(tableName, "deleted"), 0));
+					JsonArray res = select(tableName, new TableField[] { getField(tableName, "ID") }, false, new ComparisionField(getField(tableName, "name"), name), new ComparisionField(getField(tableName, "toolchain"), toolchain.getName()), new ComparisionField(getField(tableName, "deleted"), 0));
 					if (res.Value.size() == 1) { // Existing
 						JsonValue val = res.Value.get(0);
 						if (val.isObject()) {
@@ -81,12 +81,12 @@ public abstract class LayeredFilesDB extends LayeredStaticDB {
 					}
 				}
 				if (insertNew) {
-					this.insert(tableName, new ValuedField(this.getField(tableName, "name"), name), new ValuedField(this.getField(tableName, "deleted"), 0), new ValuedField(this.getField(tableName, "contents"), encodeFileContents(contents)));
+					this.insert(tableName, new ValuedField(this.getField(tableName, "name"), name), new ValuedField(this.getField(tableName, "deleted"), 0), new ValuedField(this.getField(tableName, "toolchain"), toolchain.getName()), new ValuedField(this.getField(tableName, "contents"), encodeFileContents(contents)));
 				}
 			} catch (DatabaseException e) {
 				e.printStackTrace();
 			}
-			JsonArray res = select(tableName, new TableField[] { getField(tableName, "ID"), getField(tableName, "name"), getField(tableName, "contents") }, true);
+			JsonArray res = select(tableName, new TableField[] { getField(tableName, "ID"), getField(tableName, "name"), getField(tableName, "contents") }, true, new ComparisionField(getField(tableName, "toolchain"), toolchain.getName()));
 			if (res.Value.size() == 1) {
 				JsonValue val = res.Value.get(0);
 				if (val.isObject()) {
@@ -95,7 +95,7 @@ public abstract class LayeredFilesDB extends LayeredStaticDB {
 						int id = obj.getNumber("ID").Value;
 						String fname = obj.getString("name").Value;
 						String c = decodeFileContents(obj.getString("contents").Value);
-						return new FileInfo(id, fname, c);
+						return new FileInfo(id, fname, c, toolchain.getName());
 					}
 				}
 			}
@@ -106,10 +106,12 @@ public abstract class LayeredFilesDB extends LayeredStaticDB {
 	public static class DatabaseFile {
 		public final int ID;
 		public final String FileName;
+		public final String ToolchainName;
 
-		public DatabaseFile(int id, String fileName) {
+		public DatabaseFile(int id, String fileName, String toolchainName) {
 			this.ID = id;
 			this.FileName = fileName;
+			this.ToolchainName = toolchainName == null ? Settings.getRootToolchain() : toolchainName;
 		}
 
 		@Override
@@ -120,16 +122,19 @@ public abstract class LayeredFilesDB extends LayeredStaticDB {
 
 	public FileInfo getFile(int fileID, boolean decodeBigString, Toolchain toolchain) throws DatabaseException {
 		final String tableName = "files";
-		JsonArray res = select(tableName, new TableField[] { getField(tableName, "ID"), getField(tableName, "name"), getField(tableName, "contents") }, true, new ComparisionField(getField(tableName, "ID"), fileID));
+		JsonArray res = select(tableName, new TableField[] { getField(tableName, "ID"), getField(tableName, "name"), getField(tableName, "contents"), getField(tableName, "toolchain") }, true, new ComparisionField(getField(tableName, "ID"), fileID));
 		if (res != null) {
 			for (JsonValue val : res.Value) {
 				if (val.isObject()) {
 					JsonObject obj = val.asObject();
-					if (obj.containsNumber("ID") && obj.containsString("name") && obj.containsString("contents")) {
+					if (obj.containsNumber("ID") && obj.containsString("name") && obj.containsString("contents") && obj.containsString("toolchain")) {
 						int id = obj.getNumber("ID").Value;
 						String name = obj.getString("name").Value;
+						String toolchainN = obj.getString("toolchain").Value;
 						String contents = decodeFileContents(obj.getString("contents").Value);
-						return new FileInfo(id, name, contents);
+						if (toolchainN.equals(toolchain.getName()) || toolchain.IsRoot || toolchainN.equals("shared")) {
+							return new FileInfo(id, name, contents, toolchainN);
+						}
 					}
 				}
 			}
@@ -137,22 +142,22 @@ public abstract class LayeredFilesDB extends LayeredStaticDB {
 		return null;
 	}
 
-	public List<DatabaseFile> getFiles() {
+	public List<DatabaseFile> getFiles(Toolchain toolchain) {
 		List<DatabaseFile> result = new ArrayList<>();
 		try {
 			final String tableName = "files";
-			JsonArray res = select(tableName, new TableField[] { getField(tableName, "ID"), getField(tableName, "name"), getField(tableName, "contents") }, true, new ComparisionField(getField(tableName, "deleted"), 0));
+			JsonArray res = select(tableName, new TableField[] { getField(tableName, "ID"), getField(tableName, "name"), getField(tableName, "contents"), getField(tableName, "toolchain") }, true, new ComparisionField(getField(tableName, "deleted"), 0));
 			if (res != null) {
 				for (JsonValue val : res.Value) {
 					if (val.isObject()) {
 						JsonObject obj = val.asObject();
-						if (obj.containsNumber("ID") && obj.containsString("name")) {
+						if (obj.containsNumber("ID") && obj.containsString("name") && obj.containsString("toolchain")) {
 							int id = obj.getNumber("ID").Value;
 							String name = obj.getString("name").Value;
-							if (name.equals("tests/test09_05.json")) {
-								continue;
+							String toolchainN = obj.getString("toolchain").Value;
+							if (toolchainN.equals(toolchain.getName()) || toolchainN.equals("shared") || toolchain.IsRoot) {
+								result.add(new DatabaseFile(id, name, toolchainN));
 							}
-							result.add(new DatabaseFile(id, name));
 						}
 					}
 				}
@@ -175,17 +180,21 @@ public abstract class LayeredFilesDB extends LayeredStaticDB {
 	public FileInfo loadFile(String name, boolean decodeBigString, Toolchain toolchain) {
 		try {
 			final String tableName = "files";
-			JsonArray res = select(tableName, new TableField[] { getField(tableName, "ID"), getField(tableName, "name"), getField(tableName, "contents") }, true, new ComparisionField(getField(tableName, "name"), name));
+
+			JsonArray res = select(tableName, new TableField[] { getField(tableName, "ID"), getField(tableName, "name"), getField(tableName, "contents"), getField(tableName, "toolchain") }, true, new ComparisionField(getField(tableName, "name"), name));
 			if (res != null) {
 				if (!res.Value.isEmpty()) {
 					JsonValue val = res.Value.get(0);
 					if (val.isObject()) {
 						JsonObject obj = val.asObject();
-						if (obj.containsNumber("ID") && obj.containsString("name") && obj.containsString("contents")) {
+						if (obj.containsNumber("ID") && obj.containsString("name") && obj.containsString("contents") && obj.containsString("toolchain")) {
 							int id = obj.getNumber("ID").Value;
 							String fname = obj.getString("name").Value;
 							String contents = decodeFileContents(obj.getString("contents").Value);
-							return new FileInfo(id, fname, contents);
+							String toolchainN = obj.getString("toolchain").Value;
+							if (toolchainN.equals(toolchain.getName()) || toolchainN.equals("shared") || toolchain.IsRoot) {
+								return new FileInfo(id, fname, contents, toolchainN);
+							}
 						}
 					}
 				}
@@ -195,5 +204,4 @@ public abstract class LayeredFilesDB extends LayeredStaticDB {
 		}
 		return null;
 	}
-
 }

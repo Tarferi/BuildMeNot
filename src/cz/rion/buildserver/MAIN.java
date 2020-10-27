@@ -12,6 +12,7 @@ import cz.rion.buildserver.db.DatabaseInitData;
 import cz.rion.buildserver.db.RuntimeDB;
 import cz.rion.buildserver.db.StaticDB;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
+import cz.rion.buildserver.db.layers.staticDB.LayeredStaticDB.ToolchainCallback;
 import cz.rion.buildserver.exceptions.CompressionException;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.exceptions.HTTPServerException;
@@ -35,9 +36,22 @@ public class MAIN {
 		try {
 			StaticDB sdb = new StaticDB(new DatabaseInitData("static.sqlite"));
 			RuntimeDB db = new RuntimeDB(new DatabaseInitData("data.sqlite"), sdb);
-			for (Toolchain toolchain : sdb.getAllToolchains()) {
-				db.updateStatsForAllUsers(toolchain.getName());
-			}
+
+			sdb.registerToolchainListener(new ToolchainCallback() {
+
+				@Override
+				public void toolchainRemoved(Toolchain t) {
+				}
+
+				@Override
+				public void toolchainAdded(Toolchain t) {
+					try {
+						db.updateStatsForAllUsers(t);
+					} catch (DatabaseException e) {
+						e.printStackTrace();
+					}
+				}
+			});
 		} catch (DatabaseException e) {
 			e.printStackTrace();
 		}

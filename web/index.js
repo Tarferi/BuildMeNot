@@ -514,7 +514,7 @@ var tester = function() {
 		btnCloseFaq.addEventListener("click", function() {self.hideFaq();});
 		pnlWarnID.addEventListener("click", function() {self.showFaq();});
 		if(window.Admin){
-			admin = new Admin(self.common);
+			var admin = new Admin(self.common);
 		}
 	}
 	

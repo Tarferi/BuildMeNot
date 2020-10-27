@@ -5,22 +5,26 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.json.PermissionNode;
 
 public final class Permission {
 
 	private boolean hasStar = false;
 	private Map<Integer, Permission> children = new HashMap<>();
+	public final Toolchain toolchain;
 
-	private Permission() {
+	private Permission(Toolchain toolchain) {
+		this.toolchain = toolchain;
 	}
 
-	public Permission(String raw) {
-		this.add(new PermissionBranch(raw));
+	public Permission(Toolchain toolchain, String raw) {
+		this.toolchain = toolchain;
+		this.add(new PermissionBranch(toolchain, raw));
 	}
 
-	public static PermissionBranch getBranch(String raw) {
-		return new PermissionBranch(raw);
+	public static PermissionBranch getBranch(Toolchain toolchain, String raw) {
+		return new PermissionBranch(toolchain, raw);
 	}
 
 	private static boolean covers(Permission root, int[] branch, int levelWithinBranch) {
@@ -82,7 +86,10 @@ public final class Permission {
 	}
 
 	public boolean covers(PermissionBranch requiredPermission) {
-		return covers(this, requiredPermission.getBranch(), 0);
+		if (requiredPermission.toolchain.equals(toolchain)) {
+			return covers(this, requiredPermission.getBranch(), 0);
+		}
+		return false;
 	}
 
 	private void add(Permission root, int[] branch, int levelWithinBranch) {
@@ -99,7 +106,7 @@ public final class Permission {
 				if (root.children.containsKey(level)) { // Already exist -> move inside
 					add(root.children.get(level), branch, levelWithinBranch + 1);
 				} else { // Doesn't exist, create new
-					Permission np = new Permission();
+					Permission np = new Permission(toolchain);
 					root.children.put(level, np);
 					add(np, branch, levelWithinBranch + 1);
 				}

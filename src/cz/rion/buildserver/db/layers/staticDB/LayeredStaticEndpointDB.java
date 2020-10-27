@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
+import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.DatabaseInitData;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.json.JsonValue;
@@ -13,11 +14,11 @@ import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.json.JsonValue.JsonString;
 
-public abstract class LayeredStaticEndpointDB extends LayeredConsoleOutputDB {
+public abstract class LayeredStaticEndpointDB extends LayeredDynDocDB {
 
 	public LayeredStaticEndpointDB(DatabaseInitData dbName) throws DatabaseException {
 		super(dbName);
-		this.makeTable("static_endpoints", KEY("ID"), TEXT("path"), BIGTEXT("contents"));
+		this.makeTable("static_endpoints", true, KEY("ID"), TEXT("path"), BIGTEXT("contents"));
 		this.registerVirtualFile(new VirtualFile() {
 
 			private String getHeader() {
@@ -79,6 +80,11 @@ public abstract class LayeredStaticEndpointDB extends LayeredConsoleOutputDB {
 				return "static_endpoints.ini";
 			}
 
+			@Override
+			public String getToolchain() {
+				return Settings.getRootToolchain();
+			}
+
 		});
 	}
 
@@ -87,6 +93,7 @@ public abstract class LayeredStaticEndpointDB extends LayeredConsoleOutputDB {
 		LayeredStaticEndpointDB.this.update(tableName, id, new ValuedField(getField(tableName, "contents"), contents));
 	}
 
+	@SuppressWarnings("deprecation")
 	private void delete(int id) throws DatabaseException {
 		LayeredStaticEndpointDB.this.execute_raw("DELETE FROM static_endpoints WHERE id = ?", id);
 	}

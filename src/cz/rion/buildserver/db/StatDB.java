@@ -11,6 +11,8 @@ import java.util.Map.Entry;
 import cz.rion.buildserver.db.SQLiteDB.ComparisionField;
 import cz.rion.buildserver.db.SQLiteDB.FieldComparator;
 import cz.rion.buildserver.db.SQLiteDB.TableField;
+import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
+import cz.rion.buildserver.db.layers.staticDB.LayeredStaticDB.ToolchainCallback;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
@@ -131,7 +133,13 @@ public class StatDB {
 		}
 	}
 
-	private final VirtualStatFile sf1 = new VirtualStatFile() {
+	private final class sf1 extends VirtualStatFile {
+
+		private final String toolchain;
+
+		private sf1(String toolchain) {
+			this.toolchain = toolchain;
+		}
 
 		@Override
 		public String getName() {
@@ -157,9 +165,20 @@ public class StatDB {
 			return "TEXT(Date), INT(CountTotal), INT(CountGood), TEXT(ToolChain)";
 		}
 
+		@Override
+		public String getToolchain() {
+			return toolchain;
+		}
+
 	};
 
-	private final VirtualStatFile sf2 = new VirtualStatFile() {
+	private final class sf2 extends VirtualStatFile {
+
+		private final String toolchain;
+
+		private sf2(String toolchain) {
+			this.toolchain = toolchain;
+		}
 
 		@Override
 		public String getName() {
@@ -186,9 +205,20 @@ public class StatDB {
 			return "TEXT(Date), INT(CountTotal), INT(CountGood), TEXT(ToolChain)";
 		}
 
+		@Override
+		public String getToolchain() {
+			return toolchain;
+		}
+
 	};
 
-	private final VirtualStatFile sf3 = new VirtualStatFile() {
+	private final class sf3 extends VirtualStatFile {
+
+		private final String toolchain;
+
+		private sf3(String toolchain) {
+			this.toolchain = toolchain;
+		}
 
 		@Override
 		public String getName() {
@@ -215,9 +245,20 @@ public class StatDB {
 			return "TEXT(Date), INT(CountTotal), INT(CountGood), TEXT(ToolChain)";
 		}
 
+		@Override
+		public String getToolchain() {
+			return toolchain;
+		}
+
 	};
 
-	private final VirtualStatFile sf4 = new VirtualStatFile() {
+	private final class sf4 extends VirtualStatFile {
+
+		private final String toolchain;
+
+		private sf4(String toolchain) {
+			this.toolchain = toolchain;
+		}
 
 		@Override
 		public String getName() {
@@ -266,14 +307,53 @@ public class StatDB {
 			return "TEXT(Date), INT(CountTotal), INT(CountGood), TEXT(ToolChain)";
 		}
 
+		@Override
+		public String getToolchain() {
+			return toolchain;
+		}
+
 	};
 
 	public StatDB(RuntimeDB runtimeDB) {
 		this.db = runtimeDB;
-		this.db.registerVirtualStatFile(sf1);
-		this.db.registerVirtualStatFile(sf2);
-		this.db.registerVirtualStatFile(sf3);
-		this.db.registerVirtualStatFile(sf4);
+		final Map<String, List<VirtualStatFile>> files = new HashMap<>();
+
+		runtimeDB.registerToolchainUpdator(new ToolchainCallback() {
+
+			@Override
+			public void toolchainAdded(Toolchain toolchain) {
+				synchronized (files) {
+					List<VirtualStatFile> lst = files.get(toolchain.getName());
+					if (lst == null) {
+						lst = new ArrayList<>();
+						lst.add(new sf1(toolchain.getName()));
+						lst.add(new sf2(toolchain.getName()));
+						lst.add(new sf3(toolchain.getName()));
+						lst.add(new sf4(toolchain.getName()));
+						for (VirtualStatFile vs : lst) {
+							db.registerVirtualStatFile(vs);
+						}
+						files.put(toolchain.getName(), lst);
+					}
+				}
+
+			}
+
+			@Override
+			public void toolchainRemoved(Toolchain toolchain) {
+				synchronized (files) {
+					List<VirtualStatFile> lst = files.get(toolchain.getName());
+					if (lst != null) {
+						for (VirtualStatFile vf : lst) {
+							db.unregisterVirtualStatFile(vf);
+						}
+						files.remove(toolchain.getName());
+					}
+				}
+			}
+
+		});
+
 	}
 
 }

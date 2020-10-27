@@ -2,8 +2,10 @@ package cz.rion.buildserver.db.layers.common;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import cz.rion.buildserver.db.DatabaseInitData;
 import cz.rion.buildserver.db.SQLiteDB;
@@ -36,7 +38,7 @@ public class LayeredMetaDB extends SQLiteDB {
 		this.dataField = BIGTEXT("data");
 		this.nameField = TEXT("name");
 		this.idField = KEY("ID");
-		this.makeTable("meta_tables", idField, nameField, dataField);
+		this.makeTable("meta_tables", true, idField, nameField, dataField);
 		synchronized (incSyncer) {
 			this.DB_FILE_FIRST_ID = DB_FILE_FIRST_ID_ALL;
 			DB_FILE_FIRST_ID_ALL += DB_FILE_SIZE;
@@ -75,9 +77,11 @@ public class LayeredMetaDB extends SQLiteDB {
 		}
 		ComparisionField[] fa = new ComparisionField[0];
 		if (toolchain != null) {
-			try {
-				fa = new ComparisionField[] { new ComparisionField(getField(tableName, "toolchain"), toolchain.getName()) };
-			} catch (Exception e) {
+			if (!toolchain.IsRoot) {
+				try {
+					fa = new ComparisionField[] { new ComparisionField(getField(tableName, "toolchain"), toolchain.getName()) };
+				} catch (Exception e) {
+				}
 			}
 		}
 		return this.select(tableName, fld, decodeBigString, fa);
@@ -119,6 +123,16 @@ public class LayeredMetaDB extends SQLiteDB {
 		return true;
 	}
 
+	private Set<String> rootOnly = new HashSet<>();
+
+	public void setRootOnly(String tableName) {
+		rootOnly.add(tableName);
+	}
+
+	public boolean isRootOnly(String tableName) {
+		return rootOnly.contains(tableName);
+	}
+
 	public final List<TableField> getFields(String name) {
 		JsonArray res;
 		try {
@@ -158,11 +172,14 @@ public class LayeredMetaDB extends SQLiteDB {
 	}
 
 	@Override
-	protected void makeTable(String name, Field... fields) throws DatabaseException {
-		super.makeTable(name, fields);
+	protected void makeTable(String name, boolean rootOnly, Field... fields) throws DatabaseException {
+		super.makeTable(name, rootOnly, fields);
 		String dataStr = getFields(fields).getJsonString();
 		this.tables.put(name.toLowerCase(), dataStr);
 		this.lstTables.add(name);
+		if (rootOnly) {
+			this.rootOnly.add(name);
+		}
 		final String tableName = "meta_tables";
 
 		JsonArray res = this.select(tableName, new TableField[] { getField(tableName, "ID"), getField(tableName, "name"), getField(tableName, "data") }, false, new ComparisionField(getField(tableName, "name"), name));

@@ -282,11 +282,16 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 
 	}
 
+	private static final Map<String, Integer> toolchainIndexMapping = new HashMap<>();
+
 	public final class Toolchain {
 		private final Tool[] tools;
 		private final String name;
 		private final String pathPrefix;
 		public final String[] runnerParams;
+		private final int ToolchainIndex;
+		public final boolean IsRoot;
+		public final boolean IsShared;
 
 		public ExecutionResult run(ToolchainLogger errors, GenericTest test, String workingDirectory, String inputString, String stdin, String login) {
 			MyFS.deleteFileSilent(workingDirectory);
@@ -339,7 +344,17 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 			this.tools = tools;
 			this.name = name;
 			this.pathPrefix = prefix;
+			this.IsRoot = name.equals(Settings.getRootToolchain());
+			this.IsShared = name.equals("shared");
 			this.runnerParams = unserializeParams(runnerParams);
+			synchronized (toolchainIndexMapping) {
+				Integer index = toolchainIndexMapping.get(name);
+				if (index == null) {
+					index = toolchainIndexMapping.size();
+					toolchainIndexMapping.put(name, index);
+				}
+				this.ToolchainIndex = index;
+			}
 		}
 
 		public String getLastOutputFileName() {
@@ -359,14 +374,14 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 		@Override
 		public boolean equals(Object another) {
 			if (another instanceof Toolchain) {
-				return name.equals(((Toolchain) another).name);
+				return this.ToolchainIndex == ((Toolchain) another).ToolchainIndex;
 			}
 			return super.equals(another);
 		}
 	}
 
 	private final ToolInputModifier getModifier(String name) throws DatabaseException {
-		if(modifiers.isEmpty()) {
+		if (modifiers.isEmpty()) {
 		}
 		if (modifiers.containsKey(name)) {
 			return modifiers.get(name);
@@ -459,24 +474,7 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 	}
 
 	private Map<String, Toolchain> toolchains = new HashMap<>();
-
-	public Toolchain[] getAllToolchains() {
-		if(toolchains.isEmpty()) {
-			try {
-				loadToolchains();
-			} catch (NoSuchToolException | DatabaseException e) {
-				e.printStackTrace();
-			}
-		}
-		
-		Toolchain[] tc = new Toolchain[toolchains.entrySet().size()];
-		int i = 0;
-		for (Entry<String, Toolchain> entry : toolchains.entrySet()) {
-			tc[i] = entry.getValue();
-			i++;
-		}
-		return tc;
-	}
+	private final Toolchain rootToolchain;
 
 	public LayeredBuildersDB(DatabaseInitData dbName) throws DatabaseException {
 		super(dbName);
@@ -484,10 +482,23 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 		this.dropTable("tools");
 		this.dropTable("toolchain");
 
-		this.makeTable("builders", KEY("ID"), TEXT("name"), TEXT("builder_path"), TEXT("builder_executable"), TEXT("params"), TEXT("fail_if_file_exists"), TEXT("fail_if_file_doesnt_exist"), NUMBER("expected_result"), NUMBER("valid"), NUMBER("timeout"), TEXT("expected_outputFile"), TEXT("expected_inputFile"), TEXT("modifiers"), NUMBER("provide_stdin"), TEXT("stdout_output_handler"), TEXT("stderr_output_handler"));
-		this.makeTable("tools", KEY("ID"), TEXT("builder"), NUMBER("next"), NUMBER("valid"));
-		this.makeTable("toolchain", KEY("ID"), TEXT("name"), NUMBER("first_tool"), TEXT("target_path_prefix"), TEXT("runner_params"), NUMBER("valid"));
+		this.makeTable("builders", true, KEY("ID"), TEXT("name"), TEXT("builder_path"), TEXT("builder_executable"), TEXT("params"), TEXT("fail_if_file_exists"), TEXT("fail_if_file_doesnt_exist"), NUMBER("expected_result"), NUMBER("valid"), NUMBER("timeout"), TEXT("expected_outputFile"), TEXT("expected_inputFile"), TEXT("modifiers"), NUMBER("provide_stdin"), TEXT("stdout_output_handler"), TEXT("stderr_output_handler"));
+		this.makeTable("tools", true, KEY("ID"), TEXT("builder"), NUMBER("next"), NUMBER("valid"));
+		this.makeTable("toolchain", true, KEY("ID"), TEXT("name"), NUMBER("first_tool"), TEXT("target_path_prefix"), TEXT("runner_params"), NUMBER("valid"));
+
+		this.rootToolchain = new Toolchain(Settings.getRootToolchain(), "", new Tool[0], "[]");
+
 		initDefaultToolchains();
+	}
+
+	@Override
+	public void afterInit() {
+		try {
+			loadToolchains();
+		} catch (NoSuchToolException | DatabaseException e) {
+			e.printStackTrace();
+		}
+		super.afterInit();
 	}
 
 	private Map<String, Tool> getTools() throws DatabaseException {
@@ -627,6 +638,8 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 				}
 			}
 		}
+
+		result.put(this.rootToolchain.name, this.rootToolchain);
 		return result;
 	}
 
@@ -970,7 +983,7 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 	private void initDefaultToolchains() throws DatabaseException {
 		addNasmToolchain();
 		addGCCToolchain();
-		FileInfo tcf = this.loadFile("toolchains.ini", true, null);
+		FileInfo tcf = this.loadFile("toolchains.ini", true, rootToolchain);
 		if (tcf != null) {
 			Set<String> loaded = new HashSet<>();
 			loaded.add("IZP");
@@ -996,6 +1009,21 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 		synchronized (toolchains) {
 			toolchains.clear();
 			toolchains = getToolchains();
+			toolchainsKnownUpdate(toolchains);
+		}
+	}
+
+	public Toolchain getRootToolchain() {
+		return this.rootToolchain;
+	}
+
+	@Override
+	public void clearCache() {
+		super.clearCache();
+		try {
+			loadToolchains();
+		} catch (NoSuchToolException | DatabaseException e) {
+			e.printStackTrace();
 		}
 	}
 }

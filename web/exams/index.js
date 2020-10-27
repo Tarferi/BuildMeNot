@@ -1,8 +1,10 @@
+$INJECT(common.js)$
+
 function ExamNoAccess() {
-	alert("Nemáte dostatečná práva k přístupu k tomuto dokumentu");
+	self.common.showError("Chyba", "Nemáte dostatečná práva k přístupu k tomuto dokumentu", false);
 }
 
-$INJECT_CODE_NOPERMS(WEB.EXAMS.SEE, window.aload = ExamNoAccess;)$
+$INJECT_CODE_NOPERMS(WEB.EXAMS.SEE, window.exam_load = ExamNoAccess;)$
 
 
 
@@ -445,12 +447,11 @@ var ExamExamer = function(initLoad) {
 			if(data.Available === true) {
 				self.materialize(data);
 			} else {
-				self.common.showInitLoader("Nepodařilo se spustit termín", "red");
+				self.common.showError("Chyba načítání dat", "Nepodařilo se spuštění termínu, protože není spustitelný", true).then(self.common.hideLoader, self.common.hideLoader);
 			}
 		}
 		var cbFail = function(err) {
-			self.common.hideLoader();
-			self.common.showInitLoader("Nepodařilo se spustit termín:<br />" + err, "red");
+			self.common.showError("Chyba načítání dat", "Nepodařilo se spuštění termínu", true, err).then(self.common.hideLoader, self.common.hideLoader);
 		}
 		var asyncData = {
 			"action" : "HANDLE_EXAMS",
@@ -472,12 +473,12 @@ var ExamExamer = function(initLoad) {
 			if(data.Available === true) {
 				self.materialize(data);
 			} else {
-				self.common.showInitLoader("Nepodařilo se spustit termín", "red");
+				self.common.showError("Chyba odevzdání", "Nepodařilo se odevzdat odpověď k termínu", true, data).then(self.common.hideLoader, self.common.hideLoader);
 			}
 		}
 		var cbFail = function(err) {
 			self.common.hideLoader();
-			self.common.showInitLoader("Nepodařilo se spustit termín:<br />" + err, "red");
+			self.common.showError("Chyba odevzdání", "Nepodařilo se odevzdat odpověď k termínu", true, err).then(self.common.hideLoader, self.common.hideLoader);
 		}
 		var asyncData = {
 			"action" : "HANDLE_EXAMS",
@@ -527,12 +528,14 @@ var ExamExamer = function(initLoad) {
 			if(data.Available === true) {
 				self.materialize(data, fromAdmin);
 			} else {
-				self.common.showInitLoader("Není k dispozici žádný termín", "red");
+				self.common.hideInitLoader();
+				self.common.hideLoader();
+				self.common.showError("Chyba zobrazení", "Není k dispozici žádný termín k zobrazení", false)
 			}
 		}
 		var cbFail = function(err) {
 			self.common.hideLoader();
-			self.common.showInitLoader("Nepodařilo se nahrát termín:<br />" + err, "red");
+			self.common.showError("Chyba načítání termínu", "Nepodařilo se načíst termín", false, err);
 		}
 		var asyncData = {
 			"action" : "HANDLE_EXAMS",
@@ -567,6 +570,5 @@ function exam_load() {
 }
 
 $INJECT(exams/templates.js)$
-$INJECT(common.js)$
 $INJECT(formats.js)$
 $INJECT(WEB.ADMIN, admin.js)$

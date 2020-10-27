@@ -6,6 +6,7 @@ import java.util.List;
 
 import com.sun.org.apache.xml.internal.security.utils.Base64;
 
+import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.wrappers.FileReadException;
 import cz.rion.buildserver.wrappers.MyFS;
 
@@ -59,6 +60,8 @@ public class Settings {
 	private final SettingsValue JWTSecret = new SettingsValue("JWTSecret", ValueType.STRING, "");
 
 	private final SettingsValue CompressJS = new SettingsValue("CompressJS", ValueType.BOOLEAN, 0);
+	private final SettingsValue RootToolchain = new SettingsValue("RootToolchain", ValueType.STRING, "root");
+	private final SettingsValue RootUser = new SettingsValue("RootUser", ValueType.STRING, "");
 
 	private List<SettingsValue> settings;
 
@@ -243,8 +246,8 @@ public class Settings {
 		return instance.static_db.asString();
 	}
 
-	public static String getCookieName() {
-		return instance.cookieName.asString();
+	public static String getCookieName(Toolchain toolchain) {
+		return toolchain.getName() + "_" + instance.cookieName.asString();
 	}
 
 	public static String getAuthKeyFilename() {
@@ -349,6 +352,14 @@ public class Settings {
 
 	public static boolean DoJSCompression() {
 		return instance.CompressJS.asBoolean();
+	}
+
+	public static String getRootToolchain() {
+		return instance.RootToolchain.asString();
+	}
+
+	public static String getRootUser() {
+		return instance.RootUser.asString();
 	}
 
 }

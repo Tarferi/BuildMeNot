@@ -9,7 +9,7 @@ public abstract class LayeredAdminLogDB extends LayeredThreadDB {
 
 	public LayeredAdminLogDB(DatabaseInitData dbName) throws DatabaseException {
 		super(dbName);
-		this.makeTable("admin_log", KEY("ID"), TEXT("login"), TEXT("address"), TEXT("command"), DATE("creation_time"), BIGTEXT("full"));
+		this.makeTable("admin_log", true, KEY("ID"), TEXT("login"), TEXT("address"), TEXT("command"), DATE("creation_time"), BIGTEXT("full"));
 	}
 
 	@Override
