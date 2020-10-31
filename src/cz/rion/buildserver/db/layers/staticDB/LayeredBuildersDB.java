@@ -13,6 +13,7 @@ import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.DatabaseInitData;
 import cz.rion.buildserver.db.RuntimeDB.BadResultType;
 import cz.rion.buildserver.db.RuntimeDB.BadResults;
+import cz.rion.buildserver.db.VirtualFileManager.ReadVirtualFile;
 import cz.rion.buildserver.exceptions.CommandLineExecutionException;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.exceptions.FileWriteException;
@@ -23,7 +24,6 @@ import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.json.JsonValue.JsonString;
 import cz.rion.buildserver.test.GenericTest;
-import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 import cz.rion.buildserver.wrappers.FileReadException;
 import cz.rion.buildserver.wrappers.MyExec;
 import cz.rion.buildserver.wrappers.MyExec.MyExecResult;
@@ -475,6 +475,7 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 
 	private Map<String, Toolchain> toolchains = new HashMap<>();
 	private final Toolchain rootToolchain;
+	private final Toolchain sharedToolchain;
 
 	public LayeredBuildersDB(DatabaseInitData dbName) throws DatabaseException {
 		super(dbName);
@@ -487,6 +488,7 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 		this.makeTable("toolchain", true, KEY("ID"), TEXT("name"), NUMBER("first_tool"), TEXT("target_path_prefix"), TEXT("runner_params"), NUMBER("valid"));
 
 		this.rootToolchain = new Toolchain(Settings.getRootToolchain(), "", new Tool[0], "[]");
+		this.sharedToolchain = new Toolchain("shared", "", new Tool[0], "[]");
 
 		initDefaultToolchains();
 	}
@@ -983,7 +985,7 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 	private void initDefaultToolchains() throws DatabaseException {
 		addNasmToolchain();
 		addGCCToolchain();
-		FileInfo tcf = this.loadFile("toolchains.ini", true, rootToolchain);
+		ReadVirtualFile tcf = this.loadRootFile("toolchains.ini");
 		if (tcf != null) {
 			Set<String> loaded = new HashSet<>();
 			loaded.add("IZP");
@@ -1015,6 +1017,10 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 
 	public Toolchain getRootToolchain() {
 		return this.rootToolchain;
+	}
+
+	public Toolchain getSharedToolchain() {
+		return this.sharedToolchain;
 	}
 
 	@Override

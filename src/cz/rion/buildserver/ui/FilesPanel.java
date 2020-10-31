@@ -3,7 +3,6 @@ package cz.rion.buildserver.ui;
 import javax.swing.JPanel;
 
 import cz.rion.buildserver.Settings;
-import cz.rion.buildserver.db.layers.staticDB.LayeredFilesDB.DatabaseFile;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.ui.TableView.ShowDetailsPanelCallback;
@@ -262,14 +261,14 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 
 			wTxtCreate.setVisible(true);
 			wTxtCreate.setEnabled(true);
-			wTxtCreate.setText(this.loadedFile.FileName);
+			wTxtCreate.setText(this.loadedFile.Name);
 
 			wBtnReload.setVisible(true);
 			wBtnReload.setEnabled(true);
 
 			wLblOverview.setVisible(true);
 			wLblOverview.setEnabled(true);
-			wLblOverview.setText(this.loadedFile.FileName);
+			wLblOverview.setText(this.loadedFile.Name);
 
 			if (this.CurrentlyEditingTable()) {
 				setTableEditing();
@@ -358,7 +357,7 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 		wPnlDetails.commit();
 	}
 
-	private void setListItems(DatabaseFile[] items) {
+	private void setListItems(FileInfo[] items) {
 		list.setItems(items, true);
 	}
 
@@ -389,11 +388,11 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 	}
 
 	public boolean CurrentlyEditingView() {
-		return loadedFile.FileName.endsWith(".view");
+		return loadedFile.Name.endsWith(".view");
 	}
 
 	public boolean CurrentlyEditingTable() {
-		return loadedFile.FileName.endsWith(".table");
+		return loadedFile.Name.endsWith(".table");
 	}
 
 	private void setTextAreaEditing() {
@@ -511,11 +510,11 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 		list.setCellRenderer(renderer);
 		list.setFont(new Font("Tahoma", Font.PLAIN, Settings.getFontSize()));
 		list.addFileSelectedListener(new FileSelectedListener() {
-			public void FileSelected(DatabaseFile file) {
+			public void FileSelected(FileInfo file) {
 				selectedFile(file);
 			}
 		});
-		setListItems(new DatabaseFile[0]);
+		setListItems(new FileInfo[0]);
 		list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
 		pnlFiles.add(list, BorderLayout.CENTER);
 
@@ -587,9 +586,9 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 			private void filter() {
 				if (loadedFile != null) {
 					if (loadedFile.Contents.equals(txtContents.getText())) {
-						lblOverview.setText(loadedFile.FileName);
+						lblOverview.setText(loadedFile.Name);
 					} else {
-						lblOverview.setText(loadedFile.FileName + " (unsaved changes)");
+						lblOverview.setText(loadedFile.Name + " (unsaved changes)");
 					}
 				}
 			}
@@ -654,13 +653,13 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 	protected void save() {
 		if (this.CurrentViewIsTextContents()) {
 			setState(ActionState.SAVING_FILE);
-			driver.saveFile(loadedFile.ID, txtCreate.getText(), txtContents.getText());
+			driver.saveFile(loadedFile.FileID, txtCreate.getText(), txtContents.getText());
 			this.closeAfterSave = false;
 		} else if (CurrentViewIsPnlDetails()) {
 			JsonObject vals = pnlDetails.collectValues();
 			if (vals != null) {
 				setState(ActionState.SAVING_FILE);
-				driver.editTableRow(loadedFile.ID, vals);
+				driver.editTableRow(loadedFile.FileID, vals);
 				this.closeAfterSave = false;
 			}
 		}
@@ -669,13 +668,13 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 	protected void saveAndClose() {
 		if (this.CurrentViewIsTextContents()) {
 			setState(ActionState.SAVING_FILE);
-			driver.saveFile(loadedFile.ID, txtCreate.getText(), txtContents.getText());
+			driver.saveFile(loadedFile.FileID, txtCreate.getText(), txtContents.getText());
 			this.closeAfterSave = true;
 		} else if (CurrentViewIsPnlDetails()) {
 			JsonObject vals = pnlDetails.collectValues();
 			if (vals != null) {
 				setState(ActionState.SAVING_FILE);
-				driver.editTableRow(loadedFile.ID, vals);
+				driver.editTableRow(loadedFile.FileID, vals);
 				this.closeAfterSave = true;
 			}
 		}
@@ -686,12 +685,12 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 		this.redraw();
 	}
 
-	private void selectedFile(DatabaseFile file) {
+	private void selectedFile(FileInfo file) {
 		setState(ActionState.LOADING_FILE);
-		lblOverview.setText(file.FileName);
+		lblOverview.setText(file.Name);
 		if (status == Status.CONNECTED) {
 			setState(ActionState.LOADING_FILE);
-			driver.loadFile(file.ID);
+			driver.loadFile(file.FileID);
 		} else {
 			setState(ActionState.DISCONNECTED);
 		}
@@ -715,7 +714,7 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 
 	private void editBtnPressed() {
 		if (this.loadedFile != null) {
-			if (this.loadedFile.FileName.endsWith(".view")) { // Editing view
+			if (this.loadedFile.Name.endsWith(".view")) { // Editing view
 				if (CurrentViewIsTextContents()) { // Edit pressed in table -> return
 					this.btnEdit.setText("Edit");
 					setTableEditing();
@@ -734,11 +733,11 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 	}
 
 	@Override
-	public void fileListLoaded(List<DatabaseFile> files) {
+	public void fileListLoaded(List<FileInfo> files) {
 		if (status == Status.CONNECTED) {
-			DatabaseFile[] fileList = new DatabaseFile[files.size()];
+			FileInfo[] fileList = new FileInfo[files.size()];
 			int index = 0;
-			for (DatabaseFile file : files) {
+			for (FileInfo file : files) {
 				fileList[index] = file;
 				index++;
 			}
@@ -760,7 +759,7 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 				driver.disconnect();
 			} else {
 				loadedFile = file;
-				lblOverview.setText(file.FileName);
+				lblOverview.setText(file.Name);
 				setState(ActionState.EDITING_FILE);
 				// txtContents.setText(file.Contents);
 			}
@@ -779,7 +778,7 @@ public class FilesPanel extends JPanel implements FileListLoadedListener, FileLo
 		} else {
 			loadedFile = file;
 			setState(ActionState.EDITING_FILE);
-			lblOverview.setText(file.FileName);
+			lblOverview.setText(file.Name);
 			if (closeAfterSave) {
 				loadedFile = null;
 				setState(ActionState.FILES_LOADED);

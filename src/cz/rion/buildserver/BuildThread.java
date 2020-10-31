@@ -70,12 +70,7 @@ public class BuildThread {
 
 	private boolean waiting = false;
 
-	private final MyThread thread = new MyThread() {
-		@Override
-		public void runAsync() {
-			async();
-		}
-	};
+	private final MyThread thread;
 
 	private final ClientAccepter accepter;
 	private final StatelessClient processor;
@@ -85,12 +80,17 @@ public class BuildThread {
 		this.server = server;
 		this.accepter = accepter;
 		this.processor = processor;
+		thread = new MyThread("Worker " + ID) {
+			@Override
+			public void runAsync() {
+				async();
+			}
+		};
 	}
 
 	private HTTPClientFactory currentClient;
 
 	private void async() {
-		thread.setName("Worker " + ID);
 		while (true) {
 			try {
 				server.data.remoteUI.writeBuilderDataUpdate(ID, this);

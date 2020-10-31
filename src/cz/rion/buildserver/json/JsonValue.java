@@ -7,8 +7,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 
-import cz.rion.buildserver.db.RuntimeDB.TestHistory;
-
 public abstract class JsonValue {
 
 	@Override
@@ -237,7 +235,7 @@ public abstract class JsonValue {
 						break;
 					}
 				}
-				return new JsonNumber(num, sb.toString());
+				return new JsonNumber(minus ? -num : num, sb.toString());
 			} else if (c == '{') {
 				inst.nextChar(true);
 				boolean foundEnd = false;

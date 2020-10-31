@@ -2,6 +2,8 @@ package cz.rion.buildserver.db.layers.staticDB;
 
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.DatabaseInitData;
+import cz.rion.buildserver.db.VirtualFileManager.UserContext;
+import cz.rion.buildserver.db.VirtualFileManager.VirtualFile;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.exceptions.FileWriteException;
 import cz.rion.buildserver.wrappers.FileReadException;
@@ -10,42 +12,41 @@ import cz.rion.buildserver.wrappers.MyFS;
 public abstract class LayeredSettingsDB extends LayeredToolchainMappingDB {
 
 	private static final String SettingsFileName = "settings.ini";
+	private final DatabaseInitData dbData;
 
-	public LayeredSettingsDB(DatabaseInitData dbName) throws DatabaseException {
-		super(dbName);
-		this.registerVirtualFile(new VirtualFile() {
+	@Override
+	public void afterInit() {
+		super.afterInit();
+		dbData.Files.registerVirtualFile(new VirtualFile(SettingsFileName, this.getRootToolchain()) {
 
 			@Override
-			public String read() throws DatabaseException {
+			public String read(UserContext context) {
 				try {
 					return MyFS.readFile(SettingsFileName);
 				} catch (FileReadException e) {
 					e.printStackTrace();
-					throw new DatabaseException("Failed to read settings file", e);
+					return null;
 				}
 			}
 
 			@Override
-			public void write(String data) {
+			public boolean write(UserContext context, String newName, String data) {
 				try {
 					MyFS.writeFile(SettingsFileName, data);
 					Settings.reload();
+					return true;
 				} catch (FileWriteException e) {
 					e.printStackTrace();
+					return false;
 				}
 			}
 
-			@Override
-			public String getName() {
-				return SettingsFileName;
-			}
-
-			@Override
-			public String getToolchain() {
-				return Settings.getRootToolchain();
-			}
-
 		});
+	}
+
+	public LayeredSettingsDB(DatabaseInitData dbData) throws DatabaseException {
+		super(dbData);
+		this.dbData = dbData;
 	}
 
 }

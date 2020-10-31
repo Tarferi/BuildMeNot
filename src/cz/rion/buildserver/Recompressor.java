@@ -9,6 +9,7 @@ import cz.rion.buildserver.db.RuntimeDB;
 import cz.rion.buildserver.db.SQLiteDB.FieldType;
 import cz.rion.buildserver.db.SQLiteDB.TableField;
 import cz.rion.buildserver.db.StaticDB;
+import cz.rion.buildserver.db.VirtualFileManager;
 import cz.rion.buildserver.db.layers.common.LayeredMetaDB;
 import cz.rion.buildserver.exceptions.CompressionException;
 import cz.rion.buildserver.exceptions.DatabaseException;
@@ -21,8 +22,9 @@ public class Recompressor {
 	private StaticDB sdb;
 
 	public Recompressor() throws DatabaseException {
-		this.sdb = new StaticDB(new DatabaseInitData(Settings.getStaticDB()));
-		this.db = new RuntimeDB(new DatabaseInitData(Settings.getMainDB()), sdb);
+		VirtualFileManager files = new VirtualFileManager();
+		this.sdb = new StaticDB(new DatabaseInitData(Settings.getStaticDB(), files));
+		this.db = new RuntimeDB(new DatabaseInitData(Settings.getMainDB(), files), sdb);
 	}
 
 	private TableField[] getFields(LayeredMetaDB db, String tableName) {

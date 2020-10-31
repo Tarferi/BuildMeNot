@@ -4,7 +4,7 @@ import java.util.List;
 
 import javax.swing.SwingUtilities;
 
-import cz.rion.buildserver.db.layers.staticDB.LayeredFilesDB.DatabaseFile;
+import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 import cz.rion.buildserver.ui.provider.RemoteUIClient;
 
 public class FileListLoadedEvent extends Event {
@@ -19,19 +19,19 @@ public class FileListLoadedEvent extends Event {
 		}
 	}
 
-	public FileListLoadedEvent(List<DatabaseFile> info) {
+	public FileListLoadedEvent(List<FileInfo> info) {
 		super(info);
 	}
 
 	public static interface FileListLoadedListener {
 
-		void fileListLoaded(List<DatabaseFile> file);
+		void fileListLoaded(List<FileInfo> file);
 	}
 
 	public void dispatch(EventManager m) {
 		synchronized (m.buildersAvailableListeners) {
 			@SuppressWarnings("unchecked")
-			final List<DatabaseFile> data = (List<DatabaseFile>) super.data;
+			final List<FileInfo> data = (List<FileInfo>) super.data;
 			for (final FileListLoadedListener userListLoadedListener : m.fileListLoadedListeners) {
 				SwingUtilities.invokeLater(new Runnable() {
 

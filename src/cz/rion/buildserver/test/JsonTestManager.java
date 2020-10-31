@@ -8,19 +8,20 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import cz.rion.buildserver.db.StaticDB;
+import cz.rion.buildserver.db.VirtualFileManager;
+import cz.rion.buildserver.db.VirtualFileManager.UserContext;
+import cz.rion.buildserver.db.VirtualFileManager.VirtualFile;
+import cz.rion.buildserver.db.VirtualFileManager.VirtualFile.VirtualFileException;
 import cz.rion.buildserver.db.RuntimeDB.BadResultType;
 import cz.rion.buildserver.db.RuntimeDB.BadResults;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
-import cz.rion.buildserver.db.layers.staticDB.LayeredFilesDB.DatabaseFile;
 import cz.rion.buildserver.exceptions.CommandLineExecutionException;
-import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.exceptions.NoSuchToolchainException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.test.TestManager.TestInput;
 import cz.rion.buildserver.test.TestManager.TestResult;
-import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 import cz.rion.buildserver.utils.Pair;
 import cz.rion.buildserver.wrappers.FileReadException;
 import cz.rion.buildserver.wrappers.MyExec.MyExecResult;
@@ -376,23 +377,24 @@ public class JsonTestManager {
 		}
 	}
 
-	private static void fillDBTests(StaticDB sdb, List<Pair<String, JsonObject>> data, Toolchain toolchain) {
-		if (sdb == null) {
-			return;
-		}
-		List<DatabaseFile> files = sdb.getFiles(toolchain);
-		for (DatabaseFile file : files) {
-			String fname = file.FileName;
+	private static void fillDBTests(VirtualFileManager files, List<Pair<String, JsonObject>> data, UserContext context) {
+		List<VirtualFile> fileLst = new ArrayList<>();
+		files.getFiles(fileLst, context);
+
+		for (VirtualFile file : fileLst) {
+			String fname = file.Name;
 			if (fname.startsWith("tests/") && fname.endsWith(".json")) {
 				try {
-					FileInfo fileData = sdb.getFile(file.ID, true, toolchain);
-					JsonValue val = JsonValue.parse(fileData.Contents);
-					if (val != null) {
-						if (val.isObject()) {
-							data.add(new Pair<>(fileData.FileName, val.asObject()));
+					String contents = file.read(context);
+					if (contents != null) {
+						JsonValue val = JsonValue.parse(contents);
+						if (val != null) {
+							if (val.isObject()) {
+								data.add(new Pair<>(file.Name, val.asObject()));
+							}
 						}
 					}
-				} catch (DatabaseException e) {
+				} catch (VirtualFileException e) {
 					continue;
 				}
 			}
@@ -503,11 +505,11 @@ public class JsonTestManager {
 
 	}
 
-	public static List<GenericTest> load(StaticDB sdb, String testDirectory, Toolchain toolchain) {
+	public static List<GenericTest> load(VirtualFileManager files, StaticDB sdb, String testDirectory, UserContext context) {
 		List<GenericTest> lst = new ArrayList<>();
 		List<Pair<String, JsonObject>> tests = new ArrayList<>();
 		fillFSTests(tests, testDirectory);
-		fillDBTests(sdb, tests, toolchain);
+		fillDBTests(files, tests, context);
 		for (Pair<String, JsonObject> obj : tests) {
 			GenericTest test = ConvertJsonToTest(obj.Key, obj.Value, sdb);
 			if (test != null) {

@@ -17,11 +17,10 @@ public class Dexter {
 
 	private static final long interval = 1000 * 60; // Every minute
 
-	private final MyThread _thread = new MyThread() {
+	private final MyThread _thread = new MyThread("Dexter") {
 
 		@Override
 		public void runAsync() {
-			setName("Dexter");
 			async();
 		}
 	};

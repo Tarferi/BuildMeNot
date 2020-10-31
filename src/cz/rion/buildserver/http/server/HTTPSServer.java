@@ -29,11 +29,10 @@ public class HTTPSServer extends HTTPServer {
 
 	private final ServerData data;
 
-	private MyThread thread = new MyThread() {
+	private MyThread thread = new MyThread("HTTPS server") {
 
 		@Override
 		protected void runAsync() {
-			this.setName("HTTPS server");
 			try {
 				HTTPSServer.this.runAsync();
 			} catch (HTTPServerException e) {

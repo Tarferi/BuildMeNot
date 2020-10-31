@@ -14,6 +14,7 @@ import cz.rion.buildserver.cia.Dexter;
 import cz.rion.buildserver.db.DatabaseInitData;
 import cz.rion.buildserver.db.RuntimeDB;
 import cz.rion.buildserver.db.StaticDB;
+import cz.rion.buildserver.db.VirtualFileManager;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.exceptions.HTTPServerException;
 import cz.rion.buildserver.http.CompatibleSocketClient;
@@ -53,14 +54,15 @@ public class HTTPServer implements DatabaseInitData.CacheClearer {
 		StaticDB sdb;
 
 		try {
-			sdb = new StaticDB(new DatabaseInitData(Settings.getStaticDB(), this));
-			RuntimeDB db = new RuntimeDB(new DatabaseInitData(Settings.getMainDB(), this), sdb);
-			TestManager tests = new TestManager(sdb, "./web/tests");
+			VirtualFileManager files = new VirtualFileManager();
+			sdb = new StaticDB(new DatabaseInitData(Settings.getStaticDB(), this, files));
+			RuntimeDB db = new RuntimeDB(new DatabaseInitData(Settings.getMainDB(), this, files), sdb);
+			TestManager tests = new TestManager(files, sdb, "./web/tests");
 			List<BuildThread> builders = new ArrayList<>();
-			RemoteUIProviderServer remoteUI = new RemoteUIProviderServer(db, sdb, builders);
+			RemoteUIProviderServer remoteUI = new RemoteUIProviderServer(db, sdb, builders, files);
 			Dexter dexter = new Dexter(this);
 
-			processor = new StatelessClient(db, sdb, tests);
+			processor = new StatelessClient(db, sdb, tests, files);
 
 			for (int i = 0; i < Settings.getBuildersCount(); i++) {
 				builders.add(new BuildThread(this, i, acc, processor));

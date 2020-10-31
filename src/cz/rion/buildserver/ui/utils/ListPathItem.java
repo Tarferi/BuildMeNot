@@ -5,7 +5,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import cz.rion.buildserver.db.layers.staticDB.LayeredFilesDB.DatabaseFile;
+import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 
 public abstract class ListPathItem {
 	public final boolean isDirectory;
@@ -88,10 +88,10 @@ public abstract class ListPathItem {
 	}
 
 	public static class ListPathItemFile extends ListPathItem {
-		public final DatabaseFile File;
+		public final FileInfo File;
 
-		public ListPathItemFile(ListPathItemDirectory root, DatabaseFile file) {
-			super(getParent(root, file.FileName), getName(file.FileName), false);
+		public ListPathItemFile(ListPathItemDirectory root, FileInfo file) {
+			super(getParent(root, file.Name), getName(file.Name), false);
 			this.File = file;
 		}
 	}

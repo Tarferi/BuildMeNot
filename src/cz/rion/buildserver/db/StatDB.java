@@ -73,7 +73,7 @@ public class StatDB {
 		}
 	}
 
-	private JsonArray getByDays(Date d_from, Date d_to, long step, SimpleDateFormat format) {
+	private JsonArray getByDays(Date d_from, Date d_to, long step, SimpleDateFormat format, Toolchain tc) {
 
 		long from = d_from.getTime();
 		long to = d_to.getTime();
@@ -114,16 +114,18 @@ public class StatDB {
 			List<JsonValue> data = new ArrayList<>();
 			for (Entry<String, StatsCounts> entry : counters.data.entrySet()) {
 				String toolchain = entry.getKey();
-				int[] good = entry.getValue().good;
-				int[] all = entry.getValue().all;
-				for (int i = 0; i < good.length; i++) {
-					JsonObject obj = new JsonObject();
-					Date td = new Date(from + (i * step));
-					obj.add("Date", new JsonString(format.format(td)));
-					obj.add("CountTotal", new JsonNumber(all[i]));
-					obj.add("CountGood", new JsonNumber(good[i]));
-					obj.add("ToolChain", new JsonString(toolchain));
-					data.add(obj);
+				if (tc.IsRoot || toolchain.equals(tc.getName())) {
+					int[] good = entry.getValue().good;
+					int[] all = entry.getValue().all;
+					for (int i = 0; i < good.length; i++) {
+						JsonObject obj = new JsonObject();
+						Date td = new Date(from + (i * step));
+						obj.add("Date", new JsonString(format.format(td)));
+						obj.add("CountTotal", new JsonNumber(all[i]));
+						obj.add("CountGood", new JsonNumber(good[i]));
+						obj.add("ToolChain", new JsonString(toolchain));
+						data.add(obj);
+					}
 				}
 			}
 			return new JsonArray(data);
@@ -135,15 +137,8 @@ public class StatDB {
 
 	private final class sf1 extends VirtualStatFile {
 
-		private final String toolchain;
-
-		private sf1(String toolchain) {
-			this.toolchain = toolchain;
-		}
-
-		@Override
-		public String getName() {
-			return "Last24Hours";
+		private sf1(Toolchain toolchain) {
+			super("Last24Hours", toolchain);
 		}
 
 		@SuppressWarnings("deprecation")
@@ -156,7 +151,7 @@ public class StatDB {
 			long from = new Date(today.getTime() - (24 * hour)).getTime();
 			long to = today.getTime() + hour;
 
-			return getByDays(new Date(from), new Date(to), hour, dateFormatByHours);
+			return getByDays(new Date(from), new Date(to), hour, dateFormatByHours, Toolchain);
 
 		}
 
@@ -164,25 +159,12 @@ public class StatDB {
 		public String getQueryString() {
 			return "TEXT(Date), INT(CountTotal), INT(CountGood), TEXT(ToolChain)";
 		}
-
-		@Override
-		public String getToolchain() {
-			return toolchain;
-		}
-
 	};
 
 	private final class sf2 extends VirtualStatFile {
 
-		private final String toolchain;
-
-		private sf2(String toolchain) {
-			this.toolchain = toolchain;
-		}
-
-		@Override
-		public String getName() {
-			return "PastWeek";
+		private sf2(Toolchain toolchain) {
+			super("PastWeek", toolchain);
 		}
 
 		@SuppressWarnings("deprecation")
@@ -196,7 +178,7 @@ public class StatDB {
 			long from = new Date(today.getTime() - (7 * day)).getTime();
 			long to = today.getTime() + day;
 
-			return getByDays(new Date(from), new Date(to), day, dateFormatByDays);
+			return getByDays(new Date(from), new Date(to), day, dateFormatByDays, Toolchain);
 
 		}
 
@@ -205,24 +187,12 @@ public class StatDB {
 			return "TEXT(Date), INT(CountTotal), INT(CountGood), TEXT(ToolChain)";
 		}
 
-		@Override
-		public String getToolchain() {
-			return toolchain;
-		}
-
 	};
 
 	private final class sf3 extends VirtualStatFile {
 
-		private final String toolchain;
-
-		private sf3(String toolchain) {
-			this.toolchain = toolchain;
-		}
-
-		@Override
-		public String getName() {
-			return "PastMonth";
+		private sf3(Toolchain toolchain) {
+			super("PastMonth", toolchain);
 		}
 
 		@SuppressWarnings("deprecation")
@@ -236,7 +206,7 @@ public class StatDB {
 			long from = new Date(today.getTime() - (30 * day)).getTime();
 			long to = today.getTime() + day;
 
-			return getByDays(new Date(from), new Date(to), day, dateFormatByDays);
+			return getByDays(new Date(from), new Date(to), day, dateFormatByDays, Toolchain);
 
 		}
 
@@ -245,24 +215,12 @@ public class StatDB {
 			return "TEXT(Date), INT(CountTotal), INT(CountGood), TEXT(ToolChain)";
 		}
 
-		@Override
-		public String getToolchain() {
-			return toolchain;
-		}
-
 	};
 
 	private final class sf4 extends VirtualStatFile {
 
-		private final String toolchain;
-
-		private sf4(String toolchain) {
-			this.toolchain = toolchain;
-		}
-
-		@Override
-		public String getName() {
-			return "Total2020";
+		private sf4(Toolchain toolchain) {
+			super("Total2020", toolchain);
 		}
 
 		@SuppressWarnings("deprecation")
@@ -298,7 +256,7 @@ public class StatDB {
 			long from = first.getTime();
 			long to = last.getTime();
 
-			return getByDays(new Date(from), new Date(to), day, dateFormatByDays);
+			return getByDays(new Date(from), new Date(to), day, dateFormatByDays, Toolchain);
 
 		}
 
@@ -307,17 +265,11 @@ public class StatDB {
 			return "TEXT(Date), INT(CountTotal), INT(CountGood), TEXT(ToolChain)";
 		}
 
-		@Override
-		public String getToolchain() {
-			return toolchain;
-		}
-
 	};
 
 	public StatDB(RuntimeDB runtimeDB) {
 		this.db = runtimeDB;
 		final Map<String, List<VirtualStatFile>> files = new HashMap<>();
-
 		runtimeDB.registerToolchainUpdator(new ToolchainCallback() {
 
 			@Override
@@ -326,10 +278,10 @@ public class StatDB {
 					List<VirtualStatFile> lst = files.get(toolchain.getName());
 					if (lst == null) {
 						lst = new ArrayList<>();
-						lst.add(new sf1(toolchain.getName()));
-						lst.add(new sf2(toolchain.getName()));
-						lst.add(new sf3(toolchain.getName()));
-						lst.add(new sf4(toolchain.getName()));
+						lst.add(new sf1(toolchain));
+						lst.add(new sf2(toolchain));
+						lst.add(new sf3(toolchain));
+						lst.add(new sf4(toolchain));
 						for (VirtualStatFile vs : lst) {
 							db.registerVirtualStatFile(vs);
 						}

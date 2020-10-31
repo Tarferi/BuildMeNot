@@ -5,6 +5,15 @@ import java.util.List;
 
 public abstract class MyThread {
 
+	private static final List<MyThreadObserver> observers = new ArrayList<>();
+
+	public static interface MyThreadObserver {
+		void ThreadStarted(MyThread thread);
+
+		void ThreadFinished(MyThread thread);
+
+	}
+
 	private static final List<MyThread> threads = new ArrayList<>();
 
 	private final Thread _thread = new Thread() {
@@ -14,26 +23,44 @@ public abstract class MyThread {
 			synchronized (threads) {
 				threads.add(MyThread.this);
 			}
+			for (MyThreadObserver obs : observers) {
+				obs.ThreadStarted(MyThread.this);
+			}
+			Thread.currentThread().setName(name);
 			try {
 				runAsync();
 			} catch (Throwable t) {
 				t.printStackTrace();
 			}
+
 			synchronized (threads) {
 				threads.remove(MyThread.this);
 			}
+			for (MyThreadObserver obs : observers) {
+				obs.ThreadFinished(MyThread.this);
+			}
+
 		}
 	};
 
-	private String name = "Default thread";
-
-	public void setName(String name) {
-		_thread.setName(name);
-		this.name = name;
-	}
+	private final String name;
 
 	public String getName() {
 		return name;
+	}
+
+	public int getID() {
+		return id;
+	}
+
+	private final int id;
+	private static int ids = 0;
+
+	public MyThread(String name) {
+		_thread.setName(name);
+		this.name = name;
+		id = ids;
+		ids++;
 	}
 
 	public String getStackTrace() {
@@ -78,4 +105,12 @@ public abstract class MyThread {
 		return Thread.currentThread() == _thread;
 	}
 
+	public static void addThreadObserver(MyThreadObserver obs) {
+		synchronized (threads) {
+			observers.add(obs);
+			for (MyThread thread : threads) {
+				obs.ThreadStarted(thread);
+			}
+		}
+	}
 }

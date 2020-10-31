@@ -24,6 +24,8 @@ import cz.rion.buildserver.utils.CachedToolchainDataWrapper2;
 import cz.rion.buildserver.utils.Pair;
 import cz.rion.buildserver.db.DatabaseInitData;
 import cz.rion.buildserver.db.StaticDB;
+import cz.rion.buildserver.db.VirtualFileManager.UserContext;
+import cz.rion.buildserver.db.VirtualFileManager.VirtualFile;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 
 public abstract class LayeredPresenceDB extends LayeredExamDB {
@@ -142,21 +144,14 @@ public abstract class LayeredPresenceDB extends LayeredExamDB {
 		}
 	}
 
-	private final class vfCreaterTerm implements VirtualFile {
+	private final class vfCreaterTerm extends VirtualFile {
 
-		private final String toolchain;
-
-		private vfCreaterTerm(String toolchain) {
-			this.toolchain = toolchain;
+		private vfCreaterTerm(Toolchain toolchain) {
+			super("cvièení/vytvoøení_termínu.exe", toolchain);
 		}
 
 		@Override
-		public String getToolchain() {
-			return toolchain;
-		}
-
-		@Override
-		public String read() throws DatabaseException {
+		public String read(UserContext context) {
 			StringBuilder sb = new StringBuilder();
 			sb.append("# Tento soubor slouží pro založení slotu rezervace cvièení. \n");
 			sb.append("# Každý øádek = slot.\n");
@@ -175,7 +170,7 @@ public abstract class LayeredPresenceDB extends LayeredExamDB {
 		}
 
 		@Override
-		public void write(String data) throws DatabaseException {
+		public boolean write(UserContext context, String newName, String data) {
 			try {
 				for (String line : data.split("\n")) {
 					line = line.trim();
@@ -216,7 +211,7 @@ public abstract class LayeredPresenceDB extends LayeredExamDB {
 
 											}
 										} catch (Exception e) {
-											return;
+											return false;
 										}
 									}
 								}
@@ -231,30 +226,18 @@ public abstract class LayeredPresenceDB extends LayeredExamDB {
 			} finally {
 				clearCache();
 			}
+			return true;
 		}
-
-		@Override
-		public String getName() {
-			return "cvièení/vytvoøení_termínu.exe";
-		}
-
 	};
 
-	private final class vfDuplicateTerm implements VirtualFile {
-
-		private final Toolchain toolchain;
+	private final class vfDuplicateTerm extends VirtualFile {
 
 		private vfDuplicateTerm(Toolchain toolchain) {
-			this.toolchain = toolchain;
+			super("cvièení/kopie_termínu.exe", toolchain);
 		}
 
 		@Override
-		public String getToolchain() {
-			return toolchain.getName();
-		}
-
-		@Override
-		public String read() throws DatabaseException {
+		public String read(UserContext context) {
 			StringBuilder sb = new StringBuilder();
 			sb.append("# Tento soubor slouží pro duplikaci termínù. \n");
 			sb.append("# Každý øádek = duplikát.\n");
@@ -265,7 +248,7 @@ public abstract class LayeredPresenceDB extends LayeredExamDB {
 		}
 
 		@Override
-		public void write(String data) throws DatabaseException {
+		public boolean write(UserContext context, String newName, String data) {
 			try {
 				for (String line : data.split("\n")) {
 					line = line.trim();
@@ -314,53 +297,50 @@ public abstract class LayeredPresenceDB extends LayeredExamDB {
 			} finally {
 				clearCache();
 			}
-		}
-
-		@Override
-		public String getName() {
-			return "cvièení/kopie_termínu.exe";
+			return true;
 		}
 
 	};
 
-	private final class vfPresenceTypes implements VirtualFile {
+	private final class vfPresenceTypes extends VirtualFile {
 
 		private final Toolchain toolchain;
 
 		private vfPresenceTypes(Toolchain toolchain) {
+			super("cvièení/presence_types.ini", toolchain);
 			this.toolchain = toolchain;
 		}
 
 		@Override
-		public String getToolchain() {
-			return toolchain.getName();
-		}
-
-		@Override
-		public String read() throws DatabaseException {
+		public String read(UserContext context) {
 			StringBuilder sb = new StringBuilder();
 			sb.append("# Tento soubor je urèen pro bezpeèné editování záznamù typù variant\n");
 			sb.append("# Formát: <ZOBRAZIT>: <KOD_TYPU> = <NAZEV_TYPU>\n");
 			sb.append("# Pozn: ZOBRAZIT je buï \"true\" nebo \"false\"\n");
 			sb.append("# Pozn2: KOD_TYPU je text\n\n");
 			final String tableName = "presence_types";
-			for (JsonValue val : select(tableName, new TableField[] { getField(tableName, "name"), getField(tableName, "title"), getField(tableName, "show") }, true, new ComparisionField(getField(tableName, "toolchain"), toolchain.getName())).Value) {
-				if (val.isObject()) {
-					JsonObject obj = val.asObject();
-					if (obj.containsString("name") && obj.containsString("title") && obj.containsNumber("show")) {
-						String name = obj.getString("name").Value;
-						String title = obj.getString("title").Value;
-						boolean show = obj.getNumber("show").Value == 1;
-						sb.append((show ? "true" : "false") + ": " + name + " = " + title + "\n");
+			try {
+				for (JsonValue val : select(tableName, new TableField[] { getField(tableName, "name"), getField(tableName, "title"), getField(tableName, "show") }, true, new ComparisionField(getField(tableName, "toolchain"), toolchain.getName())).Value) {
+					if (val.isObject()) {
+						JsonObject obj = val.asObject();
+						if (obj.containsString("name") && obj.containsString("title") && obj.containsNumber("show")) {
+							String name = obj.getString("name").Value;
+							String title = obj.getString("title").Value;
+							boolean show = obj.getNumber("show").Value == 1;
+							sb.append((show ? "true" : "false") + ": " + name + " = " + title + "\n");
+						}
 					}
 				}
+			} catch (DatabaseException e) {
+				e.printStackTrace();
+				return null;
 			}
 			return sb.toString();
 		}
 
 		@SuppressWarnings("deprecation")
 		@Override
-		public void write(String data) throws DatabaseException {
+		public boolean write(UserContext context, String newName, String data) {
 			try {
 				Map<String, Pair<Integer, Pair<String, Boolean>>> typesByName = new HashMap<>();
 				final String tableName = "presence_types";
@@ -441,24 +421,21 @@ public abstract class LayeredPresenceDB extends LayeredExamDB {
 									// cache
 									// after
 									// saving
+			} catch (DatabaseException e) {
+				e.printStackTrace();
+				return false;
 			} finally {
 				clearCache();
 			}
+			return true;
 		}
+	}
 
-		@Override
-		public String getName() {
-			return "cvièení/presence_types.ini";
-		}
+	private final DatabaseInitData dbData;;
 
-	};
-
-	public LayeredPresenceDB(DatabaseInitData dbName) throws DatabaseException {
-		super(dbName);
-		this.makeTable("presence_types", false, KEY("ID"), TEXT("name"), TEXT("title"), NUMBER("show"), TEXT("toolchain"));
-		this.makeTable("presence_slots", false, KEY("ID"), TEXT("name"), BIGTEXT("description"), TEXT("title"), BIGTEXT("settings"), NUMBER("valid"), TEXT("owner_login"), TEXT("toolchain"), DATE("odkdy_zobrazit"), DATE("odkdy_nezobrazit"), DATE("odkdy_prihlasovani"), DATE("dokdy_prihlasovani"));
-		this.makeTable("presence_users", false, KEY("ID"), NUMBER("user_id"), NUMBER("slot_id"), NUMBER("valid"), TEXT("type"), DATE("creation_time"), TEXT("toolchain"));
-
+	@Override
+	public void afterInit() {
+		super.afterInit();
 		final Map<String, List<VirtualFile>> files = new HashMap<>();
 
 		registerToolchainListener(new ToolchainCallback() {
@@ -469,11 +446,11 @@ public abstract class LayeredPresenceDB extends LayeredExamDB {
 					List<VirtualFile> lst = files.get(toolchain.getName());
 					if (lst == null) {
 						lst = new ArrayList<>();
-						lst.add(new vfCreaterTerm(toolchain.getName()));
+						lst.add(new vfCreaterTerm(toolchain));
 						lst.add(new vfDuplicateTerm(toolchain));
 						lst.add(new vfPresenceTypes(toolchain));
 						for (VirtualFile vs : lst) {
-							registerVirtualFile(vs);
+							dbData.Files.registerVirtualFile(vs);
 						}
 						files.put(toolchain.getName(), lst);
 					}
@@ -487,7 +464,7 @@ public abstract class LayeredPresenceDB extends LayeredExamDB {
 					List<VirtualFile> lst = files.get(toolchain.getName());
 					if (lst != null) {
 						for (VirtualFile vf : lst) {
-							unregisterVirtualFile(vf);
+							dbData.Files.unregisterVirtualFile(vf);
 						}
 						files.remove(toolchain.getName());
 					}
@@ -495,6 +472,15 @@ public abstract class LayeredPresenceDB extends LayeredExamDB {
 			}
 
 		});
+
+	}
+
+	public LayeredPresenceDB(DatabaseInitData dbData) throws DatabaseException {
+		super(dbData);
+		this.makeTable("presence_types", false, KEY("ID"), TEXT("name"), TEXT("title"), NUMBER("show"), TEXT("toolchain"));
+		this.makeTable("presence_slots", false, KEY("ID"), TEXT("name"), BIGTEXT("description"), TEXT("title"), BIGTEXT("settings"), NUMBER("valid"), TEXT("owner_login"), TEXT("toolchain"), DATE("odkdy_zobrazit"), DATE("odkdy_nezobrazit"), DATE("odkdy_prihlasovani"), DATE("dokdy_prihlasovani"));
+		this.makeTable("presence_users", false, KEY("ID"), NUMBER("user_id"), NUMBER("slot_id"), NUMBER("valid"), TEXT("type"), DATE("creation_time"), TEXT("toolchain"));
+		this.dbData = dbData;
 	}
 
 	public static class PresenceSlot {

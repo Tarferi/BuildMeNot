@@ -6,6 +6,8 @@ import java.util.Map;
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.RuntimeDB;
 import cz.rion.buildserver.db.StaticDB;
+import cz.rion.buildserver.db.VirtualFileManager;
+import cz.rion.buildserver.db.VirtualFileManager.UserContext;
 import cz.rion.buildserver.test.TestManager;
 import cz.rion.buildserver.utils.CachedData;
 import cz.rion.buildserver.utils.CachedDataGetter;
@@ -32,11 +34,13 @@ public class AbstractStatelessClient {
 		public final StaticDB StaticDB;
 		public final TestManager Tests;
 		public final PermissionManager PermissionManager;
+		public final VirtualFileManager Files;
 
-		protected StatelessInitData(RuntimeDB db, StaticDB sdb, TestManager tests) {
+		protected StatelessInitData(RuntimeDB db, StaticDB sdb, TestManager tests, VirtualFileManager files) {
 			this.RuntimeDB = db;
 			this.StaticDB = sdb;
 			this.Tests = tests;
+			this.Files = files;
 			this.PermissionManager = new PermissionManager(sdb, Settings.GetDefaultUsername());
 		}
 	}
@@ -67,6 +71,38 @@ public class AbstractStatelessClient {
 		private UsersPermission perms = null;
 		private IntentionData Intention = new IntentionData();
 		public final int BuilderID;
+		private UserContext context = null;
+
+		private Toolchain ContextToolchain = null;
+
+		public void setContextToolchain(Toolchain tc) {
+			ContextToolchain = tc;
+		}
+
+		public UserContext getContext() {
+			if (context == null) {
+				final String login = getPermissions().Login;
+				context = new UserContext() {
+
+					@Override
+					public Toolchain getToolchain() {
+						return ContextToolchain == null ? Toolchain : ContextToolchain;
+					}
+
+					@Override
+					public String getLogin() {
+						return login;
+					}
+
+					@Override
+					public String getAddress() {
+						return Request.remoteAddress;
+					}
+
+				};
+			}
+			return context;
+		}
 
 		public void setIntention(Intention intention, JsonValue value) {
 			this.Intention = new IntentionData(intention, value);

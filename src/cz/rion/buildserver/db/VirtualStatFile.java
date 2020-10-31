@@ -1,30 +1,36 @@
 package cz.rion.buildserver.db;
 
+import cz.rion.buildserver.db.VirtualFileManager.UserContext;
+import cz.rion.buildserver.db.VirtualFileManager.VirtualFile;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
+import cz.rion.buildserver.json.JsonValue.JsonNumber;
+import cz.rion.buildserver.json.JsonValue.JsonObject;
+import cz.rion.buildserver.json.JsonValue.JsonString;
+import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 
-public abstract class VirtualStatFile {
+public abstract class VirtualStatFile extends VirtualFile {
 
-	private String prefix = "";
-	private String suffix = "";
-
-	public void setPrefixAndSuffix(String prefix, String suffix) {
-		this.prefix = prefix;
-		this.suffix = suffix;
+	public VirtualStatFile(String name, Toolchain toolchain) {
+		super("database/RuntimeDB/stats/virtual/" + name + ".view", toolchain);
 	}
-
-	public String getPrefix() {
-		return prefix;
-	}
-
-	public String getSuffix() {
-		return suffix;
-	}
-
-	public abstract String getName();
 
 	public abstract JsonArray getData();
 
 	public abstract String getQueryString();
 
-	public abstract String getToolchain();
+	@Override
+	public boolean write(UserContext context, String newName, String newContents) {
+		return false;
+	}
+
+	@Override
+	public String read(UserContext context) {
+		JsonObject robj = new JsonObject();
+		robj.add("SQL", new JsonString(getQueryString()));
+		robj.add("freeSQL", new JsonString(getQueryString()));
+		robj.add("code", new JsonNumber(0));
+		robj.add("result", getData());
+		return robj.getJsonString();
+	}
+
 }

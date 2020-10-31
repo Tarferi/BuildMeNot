@@ -13,6 +13,7 @@ import cz.rion.buildserver.db.SQLiteDB.TableField;
 import cz.rion.buildserver.db.SQLiteDB.TableJoin;
 import cz.rion.buildserver.db.SQLiteDB.ValuedField;
 import cz.rion.buildserver.db.StaticDB;
+import cz.rion.buildserver.db.VirtualFileManager;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.exceptions.NoSuchToolchainException;
 import cz.rion.buildserver.json.JsonValue;
@@ -92,9 +93,10 @@ public class Retester {
 	private final StaticDB sdb;
 
 	public Retester() throws DatabaseException {
-		this.sdb = new StaticDB(new DatabaseInitData("static.sqlite"));
-		this.db = new RuntimeDB(new DatabaseInitData("data.sqlite"), sdb);
-		tests = new TestManager(sdb, "./web/tests");
+		VirtualFileManager files = new VirtualFileManager();
+		this.sdb = new StaticDB(new DatabaseInitData("static.sqlite", files));
+		this.db = new RuntimeDB(new DatabaseInitData("data.sqlite", files), sdb);
+		tests = new TestManager(files, sdb, "./web/tests");
 	}
 
 	public void restoreData() throws DatabaseException {

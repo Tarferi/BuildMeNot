@@ -12,7 +12,7 @@ import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 
 import cz.rion.buildserver.ui.utils.ListPathItem.ListPathItemFile;
-import cz.rion.buildserver.db.layers.staticDB.LayeredFilesDB.DatabaseFile;
+import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 import cz.rion.buildserver.ui.utils.ListPathItem.ListPathItemDirectory;
 
 public class NavigationList extends JList<ListPathItem> {
@@ -62,9 +62,9 @@ public class NavigationList extends JList<ListPathItem> {
 		}
 	}
 
-	public void setItems(DatabaseFile[] items, boolean resetCWD) {
+	public void setItems(FileInfo[] items, boolean resetCWD) {
 		root.items.clear();
-		for (DatabaseFile file : items) {
+		for (FileInfo file : items) {
 			new ListPathItemFile(root, file);
 		}
 		if (resetCWD) {
@@ -120,7 +120,7 @@ public class NavigationList extends JList<ListPathItem> {
 		}
 	}
 
-	private void dispatchSelectedFile(DatabaseFile f) {
+	private void dispatchSelectedFile(FileInfo f) {
 		for (FileSelectedListener listener : listeners) {
 			listener.FileSelected(f);
 		}
@@ -128,6 +128,6 @@ public class NavigationList extends JList<ListPathItem> {
 
 	public static interface FileSelectedListener {
 
-		public void FileSelected(DatabaseFile file);
+		public void FileSelected(FileInfo file);
 	}
 }

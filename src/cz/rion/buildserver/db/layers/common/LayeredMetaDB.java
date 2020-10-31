@@ -9,6 +9,8 @@ import java.util.Set;
 
 import cz.rion.buildserver.db.DatabaseInitData;
 import cz.rion.buildserver.db.SQLiteDB;
+import cz.rion.buildserver.db.VirtualFileManager.UserContext;
+import cz.rion.buildserver.db.layers.common.LayeredDBFileWrapperDB.VirtualViewManipulator;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.json.JsonValue;
@@ -20,11 +22,6 @@ public class LayeredMetaDB extends SQLiteDB {
 
 	private final Map<String, String> tables = new HashMap<>();
 	private final List<String> lstTables = new ArrayList<>();
-
-	private static final Object incSyncer = new Object();
-	private static int DB_FILE_FIRST_ID_ALL = 0x0FFFFFFF;
-	protected static final int DB_FILE_SIZE = 10000; // 10k tables per database
-	protected final int DB_FILE_FIRST_ID;
 
 	protected final String metaDatabaseName;
 
@@ -39,10 +36,6 @@ public class LayeredMetaDB extends SQLiteDB {
 		this.nameField = TEXT("name");
 		this.idField = KEY("ID");
 		this.makeTable("meta_tables", true, idField, nameField, dataField);
-		synchronized (incSyncer) {
-			this.DB_FILE_FIRST_ID = DB_FILE_FIRST_ID_ALL;
-			DB_FILE_FIRST_ID_ALL += DB_FILE_SIZE;
-		}
 	}
 
 	public List<String> getTables() {
@@ -68,7 +61,8 @@ public class LayeredMetaDB extends SQLiteDB {
 		return tables.containsKey(name.toLowerCase());
 	}
 
-	public final JsonArray readTable(String tableName, boolean decodeBigString, Toolchain toolchain) throws DatabaseException {
+	public final JsonArray readTable(String tableName, boolean decodeBigString, UserContext context) throws DatabaseException {
+		Toolchain toolchain = context.getToolchain();
 		List<TableField> fields = this.getFields(tableName);
 		TableField[] fld = new TableField[fields.size()];
 		for (int i = 0; i < fld.length; i++) {
@@ -196,4 +190,14 @@ public class LayeredMetaDB extends SQLiteDB {
 			}
 		}
 	}
+
+	public final VirtualViewManipulator ViewManipulator = new VirtualViewManipulator() {
+
+		@SuppressWarnings("deprecation")
+		@Override
+		public DatabaseResult select_raw(String sql, Object... objects) throws DatabaseException {
+			return LayeredMetaDB.this.select_raw(sql, objects);
+		}
+
+	};
 }

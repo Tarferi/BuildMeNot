@@ -1,20 +1,20 @@
 package cz.rion.buildserver.http.stateless;
 
-import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.StaticDB;
-import cz.rion.buildserver.db.layers.common.LayeredDBFileWrapperDB;
+import cz.rion.buildserver.db.VirtualFileManager.UserContext;
+import cz.rion.buildserver.db.VirtualFileManager.VirtualFile;
+import cz.rion.buildserver.db.VirtualFileManager.VirtualFile.VirtualFileException;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
-import cz.rion.buildserver.db.layers.staticDB.LayeredFilesDB.DatabaseFile;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonNumber;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.json.JsonValue.JsonString;
-import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 
 public class StatelessAdminClient extends StatelessPermissionClient {
 
@@ -31,23 +31,24 @@ public class StatelessAdminClient extends StatelessPermissionClient {
 	}
 
 	private JsonValue collectFiles(ProcessState state) {
-		Toolchain toolchain = getToolchain(state);
+		UserContext context = state.getContext();
+		Toolchain toolchain = context.getToolchain();
 		JsonArray arr = new JsonArray();
 
-		List<DatabaseFile> lst = state.Data.StaticDB.getFiles(toolchain);
-		LayeredDBFileWrapperDB.loadDatabaseFiles(state.Data.RuntimeDB, lst, toolchain);
+		List<VirtualFile> lst = new ArrayList<>();
+		state.Data.Files.getFiles(lst, context);
 
-		for (DatabaseFile f : lst) {
-			if (f.ToolchainName.equals(toolchain.getName()) || toolchain.IsRoot || f.ToolchainName.equals("shared")) {
+		for (VirtualFile f : lst) {
+			if (f.Toolchain.equals(toolchain) || toolchain.IsRoot || f.Toolchain.IsShared) {
 				String name;
 				if (toolchain.IsRoot) {
-					if (!f.ToolchainName.equals(toolchain.getName()) && !f.ToolchainName.equals("shared")) {
-						name = "data/" + f.ToolchainName + "/" + f.FileName;
+					if (!f.Toolchain.equals(toolchain) && !f.Toolchain.IsShared) {
+						name = "data/" + f.Toolchain + "/" + f.Name;
 					} else {
-						name = f.FileName;
+						name = f.Name;
 					}
-				} else if (f.ToolchainName.equals(toolchain.getName()) || f.ToolchainName.equals("shared")) {
-					name = f.FileName;
+				} else if (f.Toolchain.equals(toolchain) || f.Toolchain.IsShared) {
+					name = f.Name;
 				} else {
 					continue;
 				}
@@ -60,52 +61,41 @@ public class StatelessAdminClient extends StatelessPermissionClient {
 		return arr;
 	}
 
-	private FileInfo getFile(ProcessState state, int fileID) {
-		Toolchain toolchain = getToolchain(state);
-		FileInfo fo = null;
-		try {
-			fo = state.Data.StaticDB.getFile(fileID, true, toolchain);
-		} catch (DatabaseException e1) {
-			e1.printStackTrace();
-		}
-		if (fo == null) {
-			try {
-				fo = LayeredDBFileWrapperDB.getFile(state.Data.RuntimeDB, fileID, true, toolchain);
-			} catch (DatabaseException e) {
-				e.printStackTrace();
-			}
-		}
-		if (fo.ToolchainName.equals(toolchain.getName()) || toolchain.IsRoot || fo.ToolchainName.equals("shared")) {
-			return fo;
-		}
-		return null;
+	private VirtualFile getFile(ProcessState state, int fileID) {
+		UserContext context = state.getContext();
+		VirtualFile fo = state.Data.Files.getFile(fileID, context);
+		return fo;
 	}
 
 	private JsonValue loadFile(ProcessState state, int fileID, boolean log) {
-		Toolchain toolchain = getToolchain(state);
-		FileInfo fo = LayeredDBFileWrapperDB.processPostLoadedFile(state.Data.RuntimeDB, LayeredDBFileWrapperDB.processPostLoadedFile(state.Data.StaticDB, getFile(state, fileID), true, toolchain), true, toolchain);
 		JsonObject obj = new JsonObject();
-		if (fo == null) {
-			if (log) {
-				state.Data.StaticDB.adminLog(state.Toolchain, state.Request.remoteAddress, state.getPermissions().Login, "load", "load:" + fileID);
-			}
-			obj.add("fo", new JsonNumber(1));
-			return obj;
-		} else {
-			if (fo.ToolchainName.equals(toolchain.getName()) || toolchain.IsRoot || fo.ToolchainName.equals("shared")) {
-				obj.add("fo", new JsonNumber(0));
-				obj.add("name", new JsonString(fo.FileName));
-				obj.add("ID", new JsonNumber(fo.ID));
-				obj.add("contents", new JsonString(new String(fo.Contents.getBytes(Settings.getDefaultCharset()), StandardCharsets.UTF_8)));
-				if (log) {
-					state.Data.StaticDB.adminLog(state.Toolchain, state.Request.remoteAddress, state.getPermissions().Login, "load", "load:" + fileID + ":" + fo.FileName);
+		Toolchain toolchain = state.getContext().getToolchain();
+		VirtualFile rawFile = getFile(state, fileID);
+		if (rawFile != null) {
+			if (rawFile.Toolchain.IsShared || (rawFile.Toolchain.equals(toolchain) || toolchain.IsRoot)) {
+				String contents;
+				try {
+					contents = rawFile.read(state.getContext());
+					if (contents != null) {
+						obj.add("fo", new JsonNumber(0));
+						obj.add("name", new JsonString(rawFile.Name));
+						obj.add("ID", new JsonNumber(rawFile.ID));
+						obj.add("contents", contents);
+						if (log) {
+							state.Data.StaticDB.adminLog(state.Toolchain, state.Request.remoteAddress, state.getPermissions().Login, "load", "load:" + fileID + ":" + rawFile.Name);
+						}
+						return obj;
+					}
+				} catch (VirtualFileException e) {
+					e.printStackTrace();
 				}
-				return obj;
-			} else {
-				obj.add("fo", new JsonNumber(1));
-				return obj;
 			}
 		}
+		if (log) {
+			state.Data.StaticDB.adminLog(state.Toolchain, state.Request.remoteAddress, state.getPermissions().Login, "load", "load:" + fileID);
+		}
+		obj.add("fo", new JsonNumber(1));
+		return obj;
 	}
 
 	protected JsonObject handleAdminEvent(ProcessState state, JsonObject obj) {
@@ -117,6 +107,7 @@ public class StatelessAdminClient extends StatelessPermissionClient {
 		JsonObject idata = new JsonObject();
 		idata.add("invalid", true);
 		if (obj.containsObject("admin_data")) {
+			state.setContextToolchain(getToolchain(state));
 			JsonObject data = obj.getObject("admin_data");
 			if (data.containsString("action")) {
 				String action = data.getString("action").Value;
@@ -163,7 +154,7 @@ public class StatelessAdminClient extends StatelessPermissionClient {
 					idata.add("name", fileName);
 					if (!fileName.isEmpty()) {
 						try {
-							sdb.createFile(state.Toolchain, fileName, "", false);
+							sdb.createFile(state.getContext(), fileName, "");
 							result.add("code", new JsonNumber(0));
 							result.add("result", new JsonString("File created"));
 							sdb.adminLog(state.Toolchain, state.Request.remoteAddress, state.getPermissions().Login, "create", "create:0:" + fileName);
@@ -187,44 +178,21 @@ public class StatelessAdminClient extends StatelessPermissionClient {
 	}
 
 	private boolean saveRow(ProcessState state, int fileID, String jsn) { // Logs itself
-		Toolchain toolchain = getToolchain(state);
+		Toolchain toolchain = state.getContext().getToolchain();
 		JsonValue val = JsonValue.parse(jsn);
-		final String login = state.getPermissions().Login;
-		final String address = state.Request.remoteAddress;
 		if (val != null) {
 			if (val.isObject()) {
 				JsonObject obj = val.asObject();
 				if (obj.containsString("toolchain") && !toolchain.IsRoot) { // Only root can change toolchain
 					return false;
 				}
-				FileInfo f;
+				VirtualFile f = state.Data.Files.getFile(fileID, state.getContext());
+				if (f == null) {
+					return false;
+				}
 				try {
-					f = state.Data.StaticDB.getFile(fileID, false, toolchain);
-					if (f != null) { // SDB database
-						state.Data.StaticDB.isRootOnly(f.FileName);
-						String tn = LayeredDBFileWrapperDB.getTableNameForFile(state.Data.StaticDB, f);
-						if (tn != null) {
-							if ((state.Data.StaticDB.isRootOnly(tn) && toolchain.IsRoot) || !state.Data.StaticDB.isRootOnly(tn)) {
-								if (LayeredDBFileWrapperDB.editRow(state.Data.StaticDB, login, address, state.Data.StaticDB, f, obj, state.Toolchain)) {
-									return true;
-								}
-							}
-						}
-					} else { // DB database ?
-						f = LayeredDBFileWrapperDB.getFile(state.Data.RuntimeDB, fileID, false, toolchain);
-						if (f != null) {
-
-							String tn = LayeredDBFileWrapperDB.getTableNameForFile(state.Data.RuntimeDB, f);
-							if (tn != null) {
-								if (state.Data.RuntimeDB.isRootOnly(tn) && toolchain.IsRoot || !state.Data.RuntimeDB.isRootOnly(tn)) {
-									if (LayeredDBFileWrapperDB.editRow(state.Data.StaticDB, login, address, state.Data.RuntimeDB, f, obj, state.Toolchain)) {
-										return true;
-									}
-								}
-							}
-						}
-					}
-				} catch (DatabaseException e) {
+					return f.write(state.getContext(), f.Name, jsn);
+				} catch (VirtualFileException e) {
 					e.printStackTrace();
 				}
 			}
@@ -233,41 +201,17 @@ public class StatelessAdminClient extends StatelessPermissionClient {
 	}
 
 	private boolean saveFile(ProcessState state, int fileID, String newContents, StringBuilder log) {
-		Toolchain toolchain = getToolchain(state);
-		List<DatabaseFile> lst = state.Data.StaticDB.getFiles(toolchain);
-		for (DatabaseFile f : lst) {
-			if (f.ID == fileID) {
-				FileInfo fo = null;
-				try {
-					fo = state.Data.StaticDB.getFile(fileID, true, toolchain);
-				} catch (DatabaseException e) {
-					log.append("Chyba databáze: " + e.toString());
-					e.printStackTrace();
-					return false;
-				}
-				if (fo != null) {
-					if (fo.ToolchainName.equals(toolchain.getName()) || toolchain.IsRoot || fo.ToolchainName.equals("shared")) {
-						if (!fo.FileName.endsWith(LayeredDBFileWrapperDB.viewFileSuffix) || toolchain.IsRoot) { // Only root can edit views
-							JsonObject obj = new JsonObject();
-							obj.add("original", new JsonString(fo.Contents));
-							obj.add("new", new JsonString(newContents));
-							state.Data.StaticDB.adminLog(state.Toolchain, state.Request.remoteAddress, state.getPermissions().Login, "saveFile:" + fileID + ":" + fo.FileName, obj.getJsonString());
-							state.Data.StaticDB.storeFile(f, f.FileName, newContents);
-							return true;
-						} else {
-							log.append("Pouze root mohou upravovat pohledy");
-							return false;
-						}
-					}
-				} else {
-					log.append("Zadaný soubor nelze uložit, protože se ho nepodařilo načíst");
-					state.Data.StaticDB.adminLog(state.Toolchain, state.Request.remoteAddress, state.getPermissions().Login, "saveFile:" + fileID, "saveFile:" + fileID);
-					return false;
-				}
-			}
+		VirtualFile f = state.Data.Files.getFile(fileID, state.getContext());
+		if (f == null) {
+			log.append("No such file exists");
+			return false;
 		}
-		log.append("Zadaný soubor nelze uložit, protože neexistuje");
+		try {
+			return f.write(state.getContext(), f.Name, newContents);
+		} catch (VirtualFileException e) {
+			e.printStackTrace();
+			log.append(e.getMessage());
+		}
 		return false;
 	}
-
 }

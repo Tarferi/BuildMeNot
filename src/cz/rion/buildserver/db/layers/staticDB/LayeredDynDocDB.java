@@ -7,9 +7,11 @@ import java.util.Map;
 
 import cz.rion.buildserver.db.DatabaseInitData;
 import cz.rion.buildserver.db.StaticDB;
+import cz.rion.buildserver.db.VirtualFileManager.ReadVirtualFile;
+import cz.rion.buildserver.db.VirtualFileManager.UserContext;
+import cz.rion.buildserver.db.VirtualFileManager.VirtualFile;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.exceptions.DatabaseException;
-import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 
 public abstract class LayeredDynDocDB extends LayeredConsoleOutputDB {
 
@@ -64,7 +66,7 @@ public abstract class LayeredDynDocDB extends LayeredConsoleOutputDB {
 		}
 
 		private void load(StaticDB sdb) {
-			FileInfo tc = sdb.loadFile("file_mapping.ini", true, sdb.getRootToolchain());
+			ReadVirtualFile tc = sdb.loadRootFile("file_mapping.ini");
 			if (tc != null) {
 				for (String line : tc.Contents.split("\n")) {
 					line = line.trim();
@@ -78,7 +80,7 @@ public abstract class LayeredDynDocDB extends LayeredConsoleOutputDB {
 					}
 				}
 			}
-			tc = sdb.loadFile("toolchains.ini", true, sdb.getRootToolchain());
+			tc = sdb.loadRootFile("toolchains.ini");
 			if (tc != null) {
 				for (String line : tc.Contents.split("\n")) {
 					line = line.trim();
@@ -100,18 +102,19 @@ public abstract class LayeredDynDocDB extends LayeredConsoleOutputDB {
 		}
 	}
 
-	private static class DynDocVf implements VirtualFile {
+	private static class DynDocVf extends VirtualFile {
 
 		private Toolchain toolchain;
 		private StaticDB sdb;
 
 		private DynDocVf(StaticDB sdb, Toolchain tc) {
+			super("dynamic_doc.ini", tc);
 			this.sdb = sdb;
 			this.toolchain = tc;
 		}
 
 		@Override
-		public String read() throws DatabaseException {
+		public String read(UserContext context) {
 			StringBuilder sb = new StringBuilder();
 			sb.append("# Soubor je jen pro ètení\n\n");
 			List<String> data = new MappingManager(sdb).getAffected(toolchain);
@@ -122,24 +125,20 @@ public abstract class LayeredDynDocDB extends LayeredConsoleOutputDB {
 		}
 
 		@Override
-		public void write(String data) throws DatabaseException {
+		public boolean write(UserContext context, String newName, String data) {
+			return false;
 		}
 
-		@Override
-		public String getName() {
-			return "dynamic_doc.ini";
-		}
+	}
 
-		@Override
-		public String getToolchain() {
-			return toolchain.getName();
-		}
+	private final DatabaseInitData dbData;
 
-	};
-
-	public LayeredDynDocDB(DatabaseInitData dbName) throws DatabaseException {
-		super(dbName);
-
+	@Override
+	public void afterInit() {
+		super.afterInit();
+		StaticDB sdb = (StaticDB) this;
+		DynDocVf vf = new DynDocVf(sdb, sdb.getRootToolchain());
+		dbData.Files.registerVirtualFile(vf);
 		final Map<String, VirtualFile> map = new HashMap<>();
 
 		this.registerToolchainListener(new ToolchainCallback() {
@@ -149,7 +148,7 @@ public abstract class LayeredDynDocDB extends LayeredConsoleOutputDB {
 				synchronized (map) {
 					if (!map.containsKey(t.getName())) {
 						DynDocVf vf = new DynDocVf((StaticDB) LayeredDynDocDB.this, t);
-						registerVirtualFile(vf);
+						dbData.Files.registerVirtualFile(vf);
 						map.put(t.getName(), vf);
 					}
 				}
@@ -161,18 +160,17 @@ public abstract class LayeredDynDocDB extends LayeredConsoleOutputDB {
 					if (map.containsKey(t.getName())) {
 						VirtualFile vf = map.get(t.getName());
 						map.remove(t.getName());
-						unregisterVirtualFile(vf);
+						dbData.Files.unregisterVirtualFile(vf);
 					}
 				}
 			}
 
 		});
+
 	}
 
-	@Override
-	public void afterInit() {
-		StaticDB sdb = (StaticDB) this;
-		DynDocVf vf = new DynDocVf(sdb, sdb.getRootToolchain());
-		registerVirtualFile(vf);
+	public LayeredDynDocDB(DatabaseInitData dbData) throws DatabaseException {
+		super(dbData);
+		this.dbData = dbData;
 	}
 }

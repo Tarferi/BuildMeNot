@@ -10,26 +10,26 @@ import javax.net.ssl.SSLSocketFactory;
 
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.DatabaseInitData;
-import cz.rion.buildserver.db.StaticDB;
+import cz.rion.buildserver.db.VirtualFileManager.ReadVirtualFile;
+import cz.rion.buildserver.db.VirtualFileManager.UserContext;
+import cz.rion.buildserver.db.VirtualFileManager.VirtualFile;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.exceptions.HTTPClientException;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.json.JsonValue.JsonString;
-import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 
 public abstract class LayeredPHPAuthDB extends LayeredPresenceDB {
 
 	private static final String AuthFileName = "auth/index.php";
-	private final StaticDB sdb;
+	private final DatabaseInitData dbData;
 
-	public LayeredPHPAuthDB(DatabaseInitData dbName) throws DatabaseException {
-		super(dbName);
-		StaticDB sdb = (StaticDB) this;
-		this.sdb = sdb;
-		this.registerVirtualFile(new VirtualFile() {
+	@Override
+	public void afterInit() {
+		super.afterInit();
+		dbData.Files.registerVirtualFile(new VirtualFile(AuthFileName, this.getRootToolchain()) {
 
 			@Override
-			public String read() throws DatabaseException {
+			public String read(UserContext context) {
 				JsonObject obj = new JsonObject();
 				obj.add("key", new JsonString(getKeyHash()));
 				obj.add("action", new JsonString("GET"));
@@ -44,32 +44,25 @@ public abstract class LayeredPHPAuthDB extends LayeredPresenceDB {
 			}
 
 			@Override
-			public void write(String data) throws DatabaseException {
+			public boolean write(UserContext context, String newName, String data) {
 				JsonObject obj = new JsonObject();
 				obj.add("key", new JsonString(getKeyHash()));
 				obj.add("action", new JsonString("PUT"));
 				obj.add("data", new JsonString(data));
 				String request = obj.getJsonString();
-				if (!TinyHTTPSClient.send("raw=" + encode(request)).equals("OK")) {
-					throw new DatabaseException("Failed to save remote auth file");
-				}
-			}
-
-			@Override
-			public String getName() {
-				return AuthFileName;
-			}
-
-			@Override
-			public String getToolchain() {
-				return Settings.getRootToolchain();
+				return TinyHTTPSClient.send("raw=" + encode(request)).equals("OK");
 			}
 
 		});
 	}
 
+	public LayeredPHPAuthDB(DatabaseInitData dbData) throws DatabaseException {
+		super(dbData);
+		this.dbData = dbData;
+	}
+
 	private String getKeyHash() {
-		FileInfo fo = this.loadFile("enc.key", true, sdb.getRootToolchain());
+		ReadVirtualFile fo = this.loadRootFile("enc.key");
 		if (fo != null) {
 			try {
 				java.security.MessageDigest md = java.security.MessageDigest.getInstance("MD5");

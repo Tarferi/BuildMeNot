@@ -15,20 +15,6 @@ import cz.rion.buildserver.exceptions.DatabaseException;
 
 public abstract class LayeredStaticDB extends LayeredMetaDB {
 
-	public static class RuntimeClientSession {
-		public final String login;
-		public final String session;
-		public final String fullName;
-		public final String group;
-
-		private RuntimeClientSession(String login, String session, String fullName, String group) {
-			this.login = login;
-			this.session = session;
-			this.fullName = fullName;
-			this.group = group;
-		}
-	}
-
 	public LayeredStaticDB(DatabaseInitData fileName) throws DatabaseException {
 		super(fileName, "StaticDB");
 	}
@@ -87,6 +73,10 @@ public abstract class LayeredStaticDB extends LayeredMetaDB {
 			}
 		}
 	}
+
+	public abstract Toolchain getRootToolchain();
+
+	public abstract Toolchain getSharedToolchain();
 
 	public abstract void afterInit();
 }

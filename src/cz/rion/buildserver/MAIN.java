@@ -11,6 +11,7 @@ import javax.swing.WindowConstants;
 import cz.rion.buildserver.db.DatabaseInitData;
 import cz.rion.buildserver.db.RuntimeDB;
 import cz.rion.buildserver.db.StaticDB;
+import cz.rion.buildserver.db.VirtualFileManager;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.db.layers.staticDB.LayeredStaticDB.ToolchainCallback;
 import cz.rion.buildserver.exceptions.CompressionException;
@@ -34,8 +35,9 @@ public class MAIN {
 
 	public static void main_recalcstats(String[] args) {
 		try {
-			StaticDB sdb = new StaticDB(new DatabaseInitData("static.sqlite"));
-			RuntimeDB db = new RuntimeDB(new DatabaseInitData("data.sqlite"), sdb);
+			VirtualFileManager files = new VirtualFileManager();
+			StaticDB sdb = new StaticDB(new DatabaseInitData("static.sqlite", files));
+			RuntimeDB db = new RuntimeDB(new DatabaseInitData("data.sqlite", files), sdb);
 
 			sdb.registerToolchainListener(new ToolchainCallback() {
 

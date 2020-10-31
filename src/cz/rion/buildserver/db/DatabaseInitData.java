@@ -4,14 +4,17 @@ public class DatabaseInitData {
 
 	public final String DatabaseName;
 	private CacheClearer cleaner = null;
+	public final VirtualFileManager Files;
 
-	public DatabaseInitData(String name) {
+	public DatabaseInitData(String name, VirtualFileManager files) {
 		this.DatabaseName = name;
+		this.Files = files;
 	}
 
-	public DatabaseInitData(String name, CacheClearer cleaner) {
+	public DatabaseInitData(String name, CacheClearer cleaner, VirtualFileManager files) {
 		this.DatabaseName = name;
 		this.cleaner = cleaner;
+		this.Files = files;
 	}
 
 	public void clearCache() {

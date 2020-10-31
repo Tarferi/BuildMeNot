@@ -10,9 +10,10 @@ import java.util.Random;
 
 import cz.rion.buildserver.db.DatabaseInitData;
 import cz.rion.buildserver.db.StaticDB;
+import cz.rion.buildserver.db.VirtualFileManager.UserContext;
+import cz.rion.buildserver.db.VirtualFileManager.VirtualFile;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.exceptions.DatabaseException;
-import cz.rion.buildserver.exceptions.NoSuchToolchainException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
@@ -38,12 +39,11 @@ public abstract class LayeredExamDB extends LayeredStaticEndpointDB {
 		}
 	}
 
-	public LayeredExamDB(DatabaseInitData dbData) throws DatabaseException {
-		super(dbData);
-		this.makeTable("ex_terms", false, KEY("ID"), TEXT("name"), BIGTEXT("config"), BIGTEXT("participants"), NUMBER("valid"), TEXT("toolchain"));
-		this.makeTable("ex_question_groups", false, KEY("ID"), TEXT("name"), BIGTEXT("config"), NUMBER("valid"), TEXT("toolchain"));
-		this.makeTable("ex_questions", false, KEY("ID"), TEXT("name"), BIGTEXT("config"), NUMBER("valid"), TEXT("toolchain"));
-		this.makeTable("ex_generated", false, KEY("ID"), NUMBER("exam_id"), TEXT("login"), BIGTEXT("config"), NUMBER("valid"), TEXT("toolchain"));
+	private final DatabaseInitData dbData;
+
+	@Override
+	public void afterInit() {
+		super.afterInit();
 
 		final Map<String, VirtualFile> vf = new HashMap<>();
 		this.registerToolchainListener(new ToolchainCallback() {
@@ -51,9 +51,9 @@ public abstract class LayeredExamDB extends LayeredStaticEndpointDB {
 			@Override
 			public void toolchainAdded(Toolchain t) {
 				if (!vf.containsKey(t.getName())) {
-					VirtualFile f = new generateExamsVF(t.getName());
+					VirtualFile f = new generateExamsVF(t);
 					vf.put(t.getName(), f);
-					registerVirtualFile(f);
+					dbData.Files.registerVirtualFile(f);
 				}
 			}
 
@@ -62,18 +62,29 @@ public abstract class LayeredExamDB extends LayeredStaticEndpointDB {
 				if (vf.containsKey(t.getName())) {
 					VirtualFile f = vf.get(t.getName());
 					vf.remove(t.getName());
-					unregisterVirtualFile(f);
+					dbData.Files.unregisterVirtualFile(f);
 				}
 			}
 
 		});
+
 	}
 
-	private final class generateExamsVF implements VirtualFile {
+	public LayeredExamDB(DatabaseInitData dbData) throws DatabaseException {
+		super(dbData);
+		this.makeTable("ex_terms", false, KEY("ID"), TEXT("name"), BIGTEXT("config"), BIGTEXT("participants"), NUMBER("valid"), TEXT("toolchain"));
+		this.makeTable("ex_question_groups", false, KEY("ID"), TEXT("name"), BIGTEXT("config"), NUMBER("valid"), TEXT("toolchain"));
+		this.makeTable("ex_questions", false, KEY("ID"), TEXT("name"), BIGTEXT("config"), NUMBER("valid"), TEXT("toolchain"));
+		this.makeTable("ex_generated", false, KEY("ID"), NUMBER("exam_id"), TEXT("login"), BIGTEXT("config"), NUMBER("valid"), TEXT("toolchain"));
+		this.dbData = dbData;
+	}
 
-		private final String toolchain;
+	private final class generateExamsVF extends VirtualFile {
 
-		public generateExamsVF(String toolchain) {
+		private final Toolchain toolchain;
+
+		public generateExamsVF(Toolchain toolchain) {
+			super("exams/generate.exe", toolchain);
 			this.toolchain = toolchain;
 		}
 
@@ -89,7 +100,7 @@ public abstract class LayeredExamDB extends LayeredStaticEndpointDB {
 		}
 
 		@Override
-		public String read() throws DatabaseException {
+		public String read(UserContext context) {
 			if (lastcontents.trim().isEmpty()) {
 				setDefaultContents();
 			}
@@ -97,7 +108,7 @@ public abstract class LayeredExamDB extends LayeredStaticEndpointDB {
 		}
 
 		@Override
-		public void write(String data) throws DatabaseException {
+		public boolean write(UserContext context, String newName, String data) {
 			if (data.trim().isEmpty()) {
 				setDefaultContents();
 			} else {
@@ -120,39 +131,19 @@ public abstract class LayeredExamDB extends LayeredStaticEndpointDB {
 						ei = Integer.parseInt(exam_id);
 					} catch (Exception e) {
 						lastcontents = "# Invalid exam_id: " + exam_id + "\n\n" + data;
-						return;
+						return true;
 					}
 
 					StaticDB sdb = (StaticDB) LayeredExamDB.this;
-					Toolchain tc = null;
-					try {
-						tc = sdb.getToolchain(toolchain);
-					} catch (NoSuchToolchainException e) {
-						lastcontents = "# No such toolchain: " + toolchain + "\n\n" + data;
-						return;
-					}
-					if (tc == null) {
-						lastcontents = "# No such toolchain: " + toolchain + "\n\n" + data;
-						return;
-					}
 					StringBuilder log = new StringBuilder();
-					if (sdb.generateExams(tc, ei, log)) {
+					if (sdb.generateExams(toolchain, ei, log)) {
 						lastcontents = "# Generating finished OK\n\n" + data;
 					} else {
 						lastcontents = "# Generating failed: \n" + log.toString() + "\n\n" + data;
 					}
 				}
 			}
-		}
-
-		@Override
-		public String getName() {
-			return "exams/generate.exe";
-		}
-
-		@Override
-		public String getToolchain() {
-			return toolchain;
+			return true;
 		}
 
 	};

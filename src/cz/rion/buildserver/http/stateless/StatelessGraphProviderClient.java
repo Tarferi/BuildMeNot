@@ -1,21 +1,15 @@
 package cz.rion.buildserver.http.stateless;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-
-import cz.rion.buildserver.db.RuntimeDB;
-import cz.rion.buildserver.db.StaticDB;
-import cz.rion.buildserver.db.layers.common.LayeredDBFileWrapperDB;
+import cz.rion.buildserver.db.VirtualFileManager.UserContext;
+import cz.rion.buildserver.db.VirtualFileManager.VirtualFile;
+import cz.rion.buildserver.db.VirtualFileManager.VirtualFile.VirtualFileException;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
-import cz.rion.buildserver.db.layers.staticDB.LayeredFilesDB.DatabaseFile;
-import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.http.HTTPResponse;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
-import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 import cz.rion.buildserver.utils.CachedData;
 import cz.rion.buildserver.utils.CachedDataGetter;
 import cz.rion.buildserver.utils.CachedDataWrapper2;
@@ -32,60 +26,44 @@ public class StatelessGraphProviderClient extends StatelessFileProviderClient {
 		this.data = data;
 	}
 
+	private Toolchain getRootToolchain() {
+		return data.StaticDB.getRootToolchain();
+	}
+
 	protected JsonValue loadGraphs(ProcessState state) {
 		return graphCache.get(state.Toolchain);
 	}
 
-	private FileInfo getFile(int fileID, boolean decodeBigString, Toolchain toolchain) {
-		FileInfo fo = null;
-		try {
-			fo = data.StaticDB.getFile(fileID, decodeBigString, toolchain);
-		} catch (DatabaseException e1) {
-			e1.printStackTrace();
+	private VirtualFile getFile(String fileName, UserContext context) {
+		List<VirtualFile> fo = data.Files.getFile(fileName, context);
+		if (fo.isEmpty()) {
+			return null;
 		}
-		if (fo == null) {
-			try {
-				fo = LayeredDBFileWrapperDB.getFile(data.RuntimeDB, fileID, decodeBigString, toolchain);
-			} catch (DatabaseException e) {
-				e.printStackTrace();
-			}
-		}
-		return fo;
+		return fo.get(0);
 	}
 
-	private FileInfo loadView(Map<String, Integer> fileIds, String view, boolean decodeBigString, Toolchain toolchain, Toolchain rootToolchain) {
-		RuntimeDB db = data.RuntimeDB;
-		StaticDB sdb = data.StaticDB;
-		if (fileIds.containsKey(view)) {
-			int fileID = fileIds.get(view);
-			FileInfo fo = LayeredDBFileWrapperDB.processPostLoadedFile(db, LayeredDBFileWrapperDB.processPostLoadedFile(sdb, getFile(fileID, decodeBigString, rootToolchain), decodeBigString, rootToolchain), decodeBigString, rootToolchain);
-			if (fo != null) {
-				JsonValue jsn = JsonValue.parse(fo.Contents);
-				if (jsn != null) {
-					if (jsn.isObject()) {
-						JsonObject obj = jsn.asObject();
-						if (obj.containsArray("result")) {
-							JsonArray arr = obj.getArray("result");
-							JsonArray newArr = new JsonArray(new ArrayList<JsonValue>());
-							for (JsonValue val : arr.Value) {
-								if (val.isObject()) {
-									JsonObject xobj = val.asObject();
-									if (xobj.containsString("ToolChain")) {
-										String tc = xobj.getString("ToolChain").Value;
-										if (tc.equals(toolchain.getName())) {
-											newArr.add(xobj);
-										}
-									}
-								}
+	private JsonObject loadView(JsonValue jsn, UserContext context) {
+		Toolchain toolchain = context.getToolchain();
+		if (jsn.isObject()) {
+			JsonObject obj = jsn.asObject();
+			if (obj.containsArray("result")) {
+				JsonArray arr = obj.getArray("result");
+				JsonArray newArr = new JsonArray(new ArrayList<JsonValue>());
+				for (JsonValue val : arr.Value) {
+					if (val.isObject()) {
+						JsonObject xobj = val.asObject();
+						if (xobj.containsString("ToolChain")) {
+							String tc = xobj.getString("ToolChain").Value;
+							if (tc.equals(toolchain.getName())) {
+								newArr.add(xobj);
 							}
-							obj.remove("result");
-							obj.add("result", newArr);
-							return new FileInfo(fo.ID, fo.FileName, obj.getJsonString(), toolchain.getName());
 						}
 					}
 				}
+				obj.remove("result");
+				obj.add("result", newArr);
+				return obj;
 			}
-			return null;
 		}
 		return null;
 	}
@@ -96,21 +74,62 @@ public class StatelessGraphProviderClient extends StatelessFileProviderClient {
 		public CachedData<JsonValue> createData(int refreshIntervalInSeconds, final Toolchain toolchain) {
 			return new CachedDataWrapper2<>(refreshIntervalInSeconds, new CachedDataGetter<JsonValue>() {
 
-				@Override
-				public JsonValue update() {
-					// Preload database files
-					List<DatabaseFile> files = data.StaticDB.getFiles(toolchain);
-					LayeredDBFileWrapperDB.loadDatabaseFiles(data.RuntimeDB, files, toolchain);
-					Map<String, Integer> fileIds = new HashMap<>();
-					for (DatabaseFile file : files) {
-						fileIds.put(file.FileName, file.ID);
+				private UserContext rootToolchainContext = new UserContext() {
+
+					@Override
+					public Toolchain getToolchain() {
+						return getRootToolchain();
 					}
 
-					// Load tests
-					FileInfo src = data.StaticDB.loadFile("graphs.cfg", true, data.StaticDB.getRootToolchain());
+					@Override
+					public String getLogin() {
+						return "root";
+					}
 
-					if (src != null) {
-						JsonValue val = JsonValue.parse(src.Contents);
+					@Override
+					public String getAddress() {
+						return "0.0.0.0";
+					}
+
+				};
+
+				private UserContext toolchainContext = new UserContext() {
+
+					@Override
+					public Toolchain getToolchain() {
+						return toolchain;
+					}
+
+					@Override
+					public String getLogin() {
+						return "root";
+					}
+
+					@Override
+					public String getAddress() {
+						return "0.0.0.0";
+					}
+
+				};
+
+				@Override
+				public JsonValue update() {
+
+					// Preload database files
+					List<VirtualFile> files = new ArrayList<>();
+					data.Files.getFiles(files, toolchainContext);
+
+					// Load tests
+					VirtualFile src = getFile("graphs.cfg", rootToolchainContext);
+					String contents;
+					try {
+						contents = src.read(toolchainContext);
+					} catch (VirtualFileException e1) {
+						e1.printStackTrace();
+						return new JsonArray();
+					}
+					if (contents != null) {
+						JsonValue val = JsonValue.parse(contents);
 						if (val != null) {
 							if (val.isArray()) {
 								JsonArray result = new JsonArray(new ArrayList<JsonValue>());
@@ -126,67 +145,74 @@ public class StatelessGraphProviderClient extends StatelessFileProviderClient {
 
 										JsonObject res = new JsonObject();
 
-										FileInfo loadedView = loadView(fileIds, view, true, toolchain, data.StaticDB.getRootToolchain());
+										VirtualFile loadedView = getFile(view, toolchainContext);
 										if (loadedView == null) {
 											continue;
 										}
-										JsonValue viewData = JsonValue.parse(loadedView.Contents);
-										if (viewData == null) {
-											continue;
-										}
-										JsonObject dataColumns = new JsonObject();
-
-										if (!viewData.isObject()) {
-											continue;
-										}
-										JsonObject vobj = viewData.asObject();
-										if (!vobj.containsArray("result")) {
-											continue;
-										}
-										List<JsonValue> vres = vobj.getArray("result").Value;
-
-										JsonArray xData = new JsonArray(new ArrayList<JsonValue>());
-										JsonArray yData = new JsonArray(new ArrayList<JsonValue>());
-
-										String[] yNames = new String[y.Value.size()];
-										JsonArray[] yVals = new JsonArray[y.Value.size()];
-										int index = 0;
-										for (JsonValue vy : y.Value) {
-											yNames[index] = vy.asObject().getString("Column").Value;
-											yVals[index] = new JsonArray(new ArrayList<JsonValue>());
-											index++;
-										}
-
-										// Load values for all columns
-										for (JsonValue vd : vres) {
-											JsonValue xVal = vd.asObject().get(x);
-											for (int i = 0; i < yNames.length; i++) {
-												JsonValue yVal = vd.asObject().get(yNames[i]);
-												yVals[i].add(yVal);
+										String loadedViewContents = loadedView.read(toolchainContext);
+										if (loadedViewContents != null) {
+											JsonValue viewData = JsonValue.parse(loadedViewContents);
+											if (viewData == null) {
+												continue;
 											}
-											xData.add(xVal);
-										}
-										dataColumns.add("x", xData);
+											viewData = loadView(viewData, toolchainContext);
+											if (viewData != null) {
 
-										for (int i = 0; i < yNames.length; i++) {
-											JsonObject yObj = y.Value.get(i).asObject();
-											yObj.add("data", yVals[i]);
-											yData.add(yObj);
-										}
+												JsonObject dataColumns = new JsonObject();
 
-										dataColumns.add("y", yData);
-										res.add("Name", obj.getString("Name"));
-										res.add("X-label", obj.getString("X-label"));
-										res.add("Y-label", obj.getString("Y-label"));
-										if (obj.contains("Options")) {
-											res.add("Options", obj.get("Options"));
-										}
-										if (obj.contains("LibOptions")) {
-											res.add("LibOptions", obj.get("LibOptions"));
-										}
-										res.add("Data", dataColumns);
+												if (!viewData.isObject()) {
+													continue;
+												}
+												JsonObject vobj = viewData.asObject();
+												if (!vobj.containsArray("result")) {
+													continue;
+												}
+												List<JsonValue> vres = vobj.getArray("result").Value;
 
-										result.add(res);
+												JsonArray xData = new JsonArray(new ArrayList<JsonValue>());
+												JsonArray yData = new JsonArray(new ArrayList<JsonValue>());
+
+												String[] yNames = new String[y.Value.size()];
+												JsonArray[] yVals = new JsonArray[y.Value.size()];
+												int index = 0;
+												for (JsonValue vy : y.Value) {
+													yNames[index] = vy.asObject().getString("Column").Value;
+													yVals[index] = new JsonArray(new ArrayList<JsonValue>());
+													index++;
+												}
+
+												// Load values for all columns
+												for (JsonValue vd : vres) {
+													JsonValue xVal = vd.asObject().get(x);
+													for (int i = 0; i < yNames.length; i++) {
+														JsonValue yVal = vd.asObject().get(yNames[i]);
+														yVals[i].add(yVal);
+													}
+													xData.add(xVal);
+												}
+												dataColumns.add("x", xData);
+
+												for (int i = 0; i < yNames.length; i++) {
+													JsonObject yObj = y.Value.get(i).asObject();
+													yObj.add("data", yVals[i]);
+													yData.add(yObj);
+												}
+
+												dataColumns.add("y", yData);
+												res.add("Name", obj.getString("Name"));
+												res.add("X-label", obj.getString("X-label"));
+												res.add("Y-label", obj.getString("Y-label"));
+												if (obj.contains("Options")) {
+													res.add("Options", obj.get("Options"));
+												}
+												if (obj.contains("LibOptions")) {
+													res.add("LibOptions", obj.get("LibOptions"));
+												}
+												res.add("Data", dataColumns);
+
+												result.add(res);
+											}
+										}
 									} catch (Throwable e) {
 										e.printStackTrace();
 										continue;

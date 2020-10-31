@@ -10,12 +10,13 @@ import java.util.Map;
 import java.util.Map.Entry;
 
 import cz.rion.buildserver.Settings;
+import cz.rion.buildserver.db.VirtualFileManager.ReadVirtualFile;
 import cz.rion.buildserver.db.crypto.Crypto;
 import cz.rion.buildserver.db.crypto.CryptoException;
 import cz.rion.buildserver.db.crypto.CryptoManager;
+import cz.rion.buildserver.db.layers.common.LayeredDBFileWrapperDB;
 import cz.rion.buildserver.db.layers.common.LayeredMetaDB;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
-import cz.rion.buildserver.db.layers.staticDB.LayeredFilesDB.DatabaseFile;
 import cz.rion.buildserver.db.layers.staticDB.LayeredPermissionDB.UsersPermission;
 import cz.rion.buildserver.db.layers.staticDB.LayeredStaticDB.ToolchainCallback;
 import cz.rion.buildserver.exceptions.ChangeOfSessionAddressException;
@@ -25,9 +26,7 @@ import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonNumber;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
-import cz.rion.buildserver.json.JsonValue.JsonString;
 import cz.rion.buildserver.json.JsonValue.JsonValuable;
-import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 import cz.rion.buildserver.utils.CachedData;
 
 public class RuntimeDB extends LayeredMetaDB {
@@ -42,9 +41,12 @@ public class RuntimeDB extends LayeredMetaDB {
 
 	private final StaticDB sdb;
 
-	public RuntimeDB(DatabaseInitData fileName, StaticDB sdb) throws DatabaseException {
-		super(fileName, "RuntimeDB");
+	private final DatabaseInitData data;
+
+	public RuntimeDB(DatabaseInitData dbData, StaticDB sdb) throws DatabaseException {
+		super(dbData, "RuntimeDB");
 		this.sdb = sdb;
+		this.data = dbData;
 		crypto = CryptoManager.getCrypto(sdb);
 		CachedBypassedClientData = new CachedBypassedClientDataCls(sdb);
 		new StatDB(this);
@@ -57,6 +59,7 @@ public class RuntimeDB extends LayeredMetaDB {
 		makeTable("user_timeouts", false, KEY("ID"), NUMBER("user_id"), DATE("last_time"), DATE("allow_next"), NUMBER("bad_instr"), NUMBER("bad_segfaults"), NUMBER("bad_base"), NUMBER("bad_uncompilable"), NUMBER("live"), TEXT("toolchain"));
 		makeCompilationStatsTable();
 		makeRetestsTable();
+		LayeredDBFileWrapperDB.initTableFiles(sdb, this, dbData.Files, sdb.getRootToolchain(), sdb.getSharedToolchain());
 	}
 
 	public final static class TestFeedback implements JsonValuable {
@@ -1013,91 +1016,12 @@ public class RuntimeDB extends LayeredMetaDB {
 		return stats;
 	}
 
-	private static final int VIRTUAL_VIEWS_BASE = 5000;
-	private static final String VIRTUAL_STAT_PATH = "stats/virtual/";
-
-	public void addSpecialFiles(List<DatabaseFile> lst, int index, String prefix, String suffix, Toolchain toolchain) {
-		synchronized (virtualStatFiles) {
-			int myBase = this.DB_FILE_FIRST_ID + VIRTUAL_VIEWS_BASE;
-			int i = 0;
-			for (VirtualStatFile sf : virtualStatFiles) {
-				if (sf.getToolchain().equals(toolchain.getName())) {
-					sf.setPrefixAndSuffix(prefix + VIRTUAL_STAT_PATH, suffix);
-					lst.add(new DatabaseFile(i + myBase, prefix + VIRTUAL_STAT_PATH + sf.getName() + suffix, sf.getToolchain()));
-					i++;
-				}
-			}
-		}
-	}
-
-	private List<VirtualStatFile> virtualStatFiles = new ArrayList<>();
-
 	public void registerVirtualStatFile(VirtualStatFile f) {
-		synchronized (virtualStatFiles) {
-			virtualStatFiles.add(f);
-		}
+		data.Files.registerVirtualFile(f);
 	}
 
 	public void unregisterVirtualStatFile(VirtualStatFile f) {
-		synchronized (virtualStatFiles) {
-			virtualStatFiles.remove(f);
-		}
-	}
-
-	public FileInfo handleSpecialView(String name, int fileID, boolean interpret) {
-		synchronized (virtualStatFiles) {
-			VirtualStatFile vf = null;
-			int myBase = this.DB_FILE_FIRST_ID + VIRTUAL_VIEWS_BASE;
-			int realID = -1;
-			if (name == null) {
-				fileID -= myBase;
-				if (fileID >= 0 && fileID < virtualStatFiles.size()) {
-					vf = virtualStatFiles.get(fileID);
-					realID = fileID;
-				}
-			} else {
-				int i = 0;
-				for (VirtualStatFile sf : virtualStatFiles) {
-					String fullName = sf.getPrefix() + sf.getName() + sf.getSuffix();
-					if (fullName.equals(name)) {
-						vf = sf;
-						realID = i;
-						break;
-					}
-					i++;
-				}
-			}
-			if (vf == null) {
-				return null;
-			}
-			String fullName = vf.getPrefix() + vf.getName() + vf.getSuffix();
-			if (interpret) {
-				JsonObject robj = new JsonObject();
-				robj.add("SQL", new JsonString(vf.getQueryString()));
-				robj.add("freeSQL", new JsonString(vf.getQueryString()));
-				robj.add("code", new JsonNumber(0));
-				robj.add("result", vf.getData());
-				return new FileInfo(realID + myBase, fullName, robj.getJsonString(), vf.getToolchain());
-			} else {
-				return new FileInfo(realID + myBase, fullName, vf.getQueryString(), vf.getToolchain());
-			}
-		}
-	}
-
-	public boolean ownsFile(String name) {
-		synchronized (virtualStatFiles) {
-			for (VirtualStatFile vf : virtualStatFiles) {
-				String fullName = vf.getPrefix() + vf.getName() + vf.getSuffix();
-				if (name.equals(fullName)) {
-					return true;
-				}
-			}
-		}
-		return false;
-	}
-
-	public FileInfo getSpecialFile(int fileID, boolean interpret) {
-		return handleSpecialView(null, fileID, interpret);
+		data.Files.unregisterVirtualFile(f);
 	}
 
 	public static class BypassedClient {
@@ -1122,7 +1046,7 @@ public class RuntimeDB extends LayeredMetaDB {
 		@Override
 		protected Map<String, BypassedClient> update() {
 			Map<String, BypassedClient> result = new HashMap<>();
-			FileInfo f = sdb.loadFile("remapped_users.ini", true, sdb.getRootToolchain());
+			ReadVirtualFile f = sdb.loadRootFile("remapped_users.ini");
 			if (f != null) {
 				for (String line : f.Contents.split("\n")) {
 					line = line.trim();

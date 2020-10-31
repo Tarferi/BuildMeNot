@@ -13,7 +13,6 @@ import cz.rion.buildserver.http.CompatibleSocketClient;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.BuildThread.BuilderStats;
-import cz.rion.buildserver.db.layers.staticDB.LayeredFilesDB.DatabaseFile;
 import cz.rion.buildserver.ui.events.BuildersLoadedEvent.BuildThreadInfo;
 import cz.rion.buildserver.ui.events.DatabaseTableRowEditEvent;
 import cz.rion.buildserver.ui.events.Event;
@@ -302,13 +301,13 @@ public class UIDriver {
 		}
 	}
 
-	private List<DatabaseFile> readFiles(InputPacketRequest inBuffer) throws IOException {
-		List<DatabaseFile> lst = new ArrayList<>();
+	private List<FileInfo> readFiles(InputPacketRequest inBuffer) throws IOException {
+		List<FileInfo> lst = new ArrayList<>();
 		int totalSize = inBuffer.readInt();
 		for (int i = 0; i < totalSize; i++) {
 			int id = inBuffer.readInt();
 			String name = inBuffer.readString();
-			lst.add(new DatabaseFile(id, name, null));
+			lst.add(new FileInfo(id, name, "", null));
 		}
 		return lst;
 	}

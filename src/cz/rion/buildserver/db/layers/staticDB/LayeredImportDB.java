@@ -11,6 +11,11 @@ import java.util.regex.Pattern;
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.DatabaseInitData;
 import cz.rion.buildserver.db.StaticDB;
+import cz.rion.buildserver.db.VirtualFileManager;
+import cz.rion.buildserver.db.VirtualFileManager.UserContext;
+import cz.rion.buildserver.db.VirtualFileManager.VirtualDatabaseFile;
+import cz.rion.buildserver.db.VirtualFileManager.VirtualFile;
+import cz.rion.buildserver.db.VirtualFileManager.VirtualFile.VirtualFileException;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.exceptions.FileWriteException;
@@ -18,91 +23,135 @@ import cz.rion.buildserver.exceptions.NoSuchToolchainException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
-import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 import cz.rion.buildserver.wrappers.MyFS;
 
-public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
+public abstract class LayeredImportDB extends LayeredFilesDB {
 
 	private final Object syncer = new Object();
 
-	private Map<String, ImportMetaFile> loadedVirtualFiles = new HashMap<>();
+	private final VirtualFileManager files;
 
 	static interface WritableData {
 		void write(String data);
 	}
 
-	private class ImportMetaFile implements VirtualFile {
+	private final UserContext rootContext = new UserContext() {
+
+		@Override
+		public Toolchain getToolchain() {
+			return getRootToolchain();
+		}
+
+		@Override
+		public String getLogin() {
+			return "root";
+		}
+
+		@Override
+		public String getAddress() {
+			return "0.0.0.0";
+		}
+
+	};
+
+	private class ImportMetaFile extends VirtualFile {
+
+		private final UserContext toolchainContext = new UserContext() {
+
+			@Override
+			public Toolchain getToolchain() {
+				return toolchain;
+			}
+
+			@Override
+			public String getLogin() {
+				return "root";
+			}
+
+			@Override
+			public String getAddress() {
+				return "0.0.0.0";
+			}
+
+		};
 
 		private final String name;
 		private String value = "";
 		private final Object syncer;
 		private final boolean realFile;
 		private final StaticDB fdb;
-		private DatabaseFile realFileObj = null;
+		private VirtualDatabaseFile realFileObj = null;
 		private WritableData onReady;
 		private final Toolchain toolchain;
 
 		public ImportMetaFile(Object syncer, String name, boolean addRealFile, StaticDB fdb, Toolchain toolchain) {
+			super(name, toolchain);
 			this.name = name;
 			this.syncer = syncer;
 			this.realFile = addRealFile;
 			this.fdb = fdb;
 			this.toolchain = toolchain;
 			if (realFile) {
-				loadedVirtualFiles.put(name, this);
-				ensureFile(fdb.getFiles(toolchain), toolchain);
+				ensureFile(rootContext);
 			}
 		}
 
-		private boolean ensureFile(List<DatabaseFile> files, Toolchain toolchain) {
+		private void ensureFile(UserContext context) {
+			List<VirtualFile> filesA = new ArrayList<>();
+			files.getFiles(filesA, context);
 			if (realFile) {
 				if (realFileObj != null) {
-					return true;
+					return;
 				} else {
-					for (DatabaseFile file : files) {
-						if (file.FileName.equals(name)) {
-							realFileObj = file;
+					for (VirtualFile file : filesA) {
+						if (file.Name.equals(name) && file instanceof VirtualDatabaseFile) {
+							realFileObj = (VirtualDatabaseFile) file;
 							if (onReady != null) {
-								onReady.write(read());
+								onReady.write(read(context));
 								onReady = null;
 							}
-							return true;
+							return;
 						}
 					}
 					try {
-						fdb.createFile(toolchain, name, "", true);
+						realFileObj = fdb.createFile(toolchainContext, name, "");
 					} catch (DatabaseException e) {
 						e.printStackTrace();
 					}
-					return false;
+					return;
 				}
 			} else {
 				if (onReady != null) {
-					onReady.write(read());
+					onReady.write(read(context));
 					onReady = null;
 				}
-				return true;
+				return;
 			}
 		}
 
-		public void writeWhenReady(WritableData onReady) {
+		public void writeWhenReady(UserContext context, WritableData onReady) {
 			if (realFile && realFileObj == null) {
 				this.onReady = onReady;
 			} else {
-				onReady.write(read());
+				onReady.write(read(context));
 			}
 		}
 
 		@Override
-		public String read() {
+		public String read(UserContext context) {
 			synchronized (syncer) {
 				if (realFile) {
 					if (realFileObj == null) {
 						return "Failed to read file";
 					}
 					try {
-						return JsonValue.getPrettyJsonString(fdb.getFile(realFileObj.ID, true, fdb.getRootToolchain()).Contents);
-					} catch (DatabaseException e) {
+						String contents = files.getFile(realFileObj.ID, context).read(context);
+						if (contents != null) {
+							return JsonValue.getPrettyJsonString(contents);
+						} else {
+							return "Failed to read file";
+						}
+					} catch (Exception e) {
 						e.printStackTrace();
 						return "Failed to read file";
 					}
@@ -113,28 +162,22 @@ public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
 		}
 
 		@Override
-		public void write(String data) {
+		public boolean write(UserContext context, String newName, String data) throws VirtualFileException {
 			synchronized (syncer) {
 				if (realFile) {
 					if (realFileObj != null) {
-						fdb.storeFile(realFileObj, realFileObj.FileName, data);
+						realFileObj.write(context, newName, data);
 					}
 				} else {
 					value = data;
 				}
+				return true;
 			}
 		}
 
-		@Override
-		public String getName() {
-			return name;
+		public void write(UserContext context, String data) throws VirtualFileException {
+			this.write(context, this.Name, data);
 		}
-
-		@Override
-		public String getToolchain() {
-			return toolchain.getName();
-		}
-
 	}
 
 	private class InternalResultUser {
@@ -449,29 +492,32 @@ public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
 			}
 		}
 
-		public ImportMetaFunctioningFile(Object syncer, String name, ImportMetaFile users, ImportMetaFile groups, ImportMetaFile defaultPermissionsFile, ImportMetaFile defaultSettingsFile, StaticDB fdb, Toolchain toolchain) {
+		public ImportMetaFunctioningFile(UserContext context, Object syncer, String name, ImportMetaFile users, ImportMetaFile groups, ImportMetaFile defaultPermissionsFile, ImportMetaFile defaultSettingsFile, StaticDB fdb, Toolchain toolchain) throws VirtualFileException {
 			super(syncer, name, false, fdb, toolchain);
 			this.users = users;
 			this.groups = groups;
 			this.perms = defaultPermissionsFile;
 			this.defaultSettingsFile = defaultSettingsFile;
 			this.syncer = syncer;
-			writeEmpty();
+			writeEmpty(context);
 		}
 
-		private void superWrite(String data) {
-			super.write(data);
-			;
+		private void superWrite(UserContext context, String data) throws VirtualFileException {
+			super.write(context, data);
 		}
 
-		public void writeEmpty() {
+		public void writeEmpty(final UserContext context) throws VirtualFileException {
 			synchronized (syncer) {
-				super.write(defaultSettingsFile.read());
-				defaultSettingsFile.writeWhenReady(new WritableData() {
+				super.write(context, defaultSettingsFile.read(context));
+				defaultSettingsFile.writeWhenReady(context, new WritableData() {
 
 					@Override
 					public void write(String data) {
-						superWrite(data);
+						try {
+							superWrite(context, data);
+						} catch (VirtualFileException e) {
+							e.printStackTrace();
+						}
 					}
 
 				});
@@ -479,14 +525,14 @@ public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
 		}
 
 		@Override
-		public void write(String data) {
+		public void write(UserContext context, String data) throws VirtualFileException {
 			synchronized (syncer) {
 				String[] lines = data.split("\n");
 				Map<String, String> map = new HashMap<>();
 				int lineNum = 0;
 				boolean hasConfirm = false;
 				if (data.trim().isEmpty()) {
-					writeEmpty();
+					writeEmpty(context);
 					return;
 				}
 				for (String line : lines) {
@@ -494,7 +540,7 @@ public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
 					if (line.equals("confirm")) {
 						hasConfirm = true;
 					} else if (parts.length != 2 && !line.trim().isEmpty() && !line.trim().startsWith("#")) {
-						super.write("Unexpected line: " + lineNum);
+						super.write(context, "Unexpected line: " + lineNum);
 						return;
 					} else if (parts.length == 2) {
 						map.put(parts[0].toLowerCase(), parts[1].trim());
@@ -502,7 +548,7 @@ public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
 					lineNum++;
 				}
 				if (!hasConfirm) {
-					super.write(data);
+					super.write(context, data);
 				} else if (map.containsKey("RegexGroupSearch".toLowerCase()) && map.containsKey("RegexGroupReplace".toLowerCase()) && map.containsKey("CourseName".toLowerCase()) && map.containsKey("CourseYear".toLowerCase()) && map.containsKey("StudentsGroupPrefix".toLowerCase()) && map.containsKey("TeachersGroupPrefix".toLowerCase()) && map.containsKey("Toolchain".toLowerCase())) {
 					String RegexGroupSearch = map.get("RegexGroupSearch".toLowerCase());
 					String RegexGroupReplace = map.get("RegexGroupReplace".toLowerCase());
@@ -510,33 +556,33 @@ public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
 					String CourseYear = map.get("CourseYear".toLowerCase());
 					String StudentsGroupPrefix = map.get("StudentsGroupPrefix".toLowerCase());
 					String TeachersGroupPrefix = map.get("TeachersGroupPrefix".toLowerCase());
-					String toolchain = map.get("Toolchain".toLowerCase());
+					String toolchainC = map.get("Toolchain".toLowerCase());
 
 					Toolchain Toolchain = null;
 					StaticDB sdb = (StaticDB) LayeredImportDB.this;
 					try {
-						Toolchain = sdb.getToolchain(toolchain);
+						Toolchain = sdb.getToolchain(toolchainC);
 					} catch (NoSuchToolchainException e) {
 					}
 					if (Toolchain != null) {
 						StringBuilder processLog = new StringBuilder();
-						List<InternalResultUser> loadedUsers = process(data, CourseName, CourseYear, RegexGroupSearch, RegexGroupReplace, StudentsGroupPrefix, TeachersGroupPrefix, processLog);
-						List<InternalDefaultPermission> defPerms = this.loadDefaultPermissions();
+						List<InternalResultUser> loadedUsers = process(context, data, CourseName, CourseYear, RegexGroupSearch, RegexGroupReplace, StudentsGroupPrefix, TeachersGroupPrefix, processLog);
+						List<InternalDefaultPermission> defPerms = this.loadDefaultPermissions(context);
 						if (loadedUsers == null || defPerms == null) {
-							super.write("# Import failed\n\n\n" + processLog + "\n\n========= Original Data ===========" + data);
+							super.write(context, "# Import failed\n\n\n" + processLog + "\n\n========= Original Data ===========" + data);
 						} else {
-							super.write(replaceUsers(loadedUsers, Toolchain, Settings.GetDefaultGroup(), defPerms) + "\n\n\n ====== Protocol =======\n" + processLog.toString());
+							super.write(context, replaceUsers(loadedUsers, Toolchain, Settings.GetDefaultGroup(), defPerms) + "\n\n\n ====== Protocol =======\n" + processLog.toString());
 						}
 					}
 				} else {
-					super.write("# Missing some mandatory fields. Save as empty file to reset\n" + data);
+					super.write(context, "# Missing some mandatory fields. Save as empty file to reset\n" + data);
 				}
 			}
 		}
 
-		private List<InternalResultUser> process(String originalData, String courseName, String courseYear, String regexGroupSearch, String regexGroupReplace, String studentsGroupPrefix, String teachersGroupPrefix, StringBuilder sb) {
-			Map<String, InternalPasswdUser> users = getPasswdUsers();
-			InternalCourse course = new InternalCourse(courseName, courseYear, studentsGroupPrefix, teachersGroupPrefix, regexGroupSearch, regexGroupReplace, users, this.users.read());
+		private List<InternalResultUser> process(UserContext context, String originalData, String courseName, String courseYear, String regexGroupSearch, String regexGroupReplace, String studentsGroupPrefix, String teachersGroupPrefix, StringBuilder sb) {
+			Map<String, InternalPasswdUser> users = getPasswdUsers(context);
+			InternalCourse course = new InternalCourse(courseName, courseYear, studentsGroupPrefix, teachersGroupPrefix, regexGroupSearch, regexGroupReplace, users, this.users.read(context));
 			if (course.results.isEmpty()) {
 				return null;
 			} else {
@@ -552,9 +598,9 @@ public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
 			}
 		}
 
-		private Map<String, InternalPasswdUser> getPasswdUsers() {
+		private Map<String, InternalPasswdUser> getPasswdUsers(UserContext context) {
 			Map<String, InternalPasswdUser> ret = new HashMap<>();
-			String[] usersStr = groups.read().split("\n");
+			String[] usersStr = groups.read(context).split("\n");
 			for (String userStr : usersStr) {
 				String[] parts = userStr.trim().split(":");
 				if (parts.length >= 6) {
@@ -570,9 +616,9 @@ public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
 			return ret;
 		}
 
-		private List<InternalDefaultPermission> loadDefaultPermissions() {
+		private List<InternalDefaultPermission> loadDefaultPermissions(UserContext context) {
 			List<InternalDefaultPermission> lst = new ArrayList<>();
-			String permData = this.perms.read();
+			String permData = this.perms.read(context);
 			JsonValue val = JsonValue.parse(permData);
 			if (val != null) {
 				if (val.isObject()) {
@@ -601,18 +647,19 @@ public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
 		}
 	}
 
-	private VirtualFile addVirtualImporterForToolchain(Toolchain toolchain) {
+	private VirtualFile addVirtualImporterForToolchain(UserContext context, Toolchain toolchain) throws VirtualFileException {
 		StaticDB sdb = (StaticDB) this;
 		ImportMetaFile UsersFile = new ImportMetaFile(syncer, "importy/" + toolchain.getName() + "/Users.db", true, sdb, toolchain);
 		ImportMetaFile GroupsFile = new ImportMetaFile(syncer, "importy/" + toolchain.getName() + "/Groups.db", true, sdb, toolchain);
 		ImportMetaFile DefaultPermissionsFile = new ImportMetaFile(syncer, "importy/" + toolchain.getName() + "/DefaultPermissions.db", true, sdb, toolchain);
 		ImportMetaFile DefaultSettings = new ImportMetaFile(syncer, "importy/" + toolchain.getName() + "/Configuration.db", true, sdb, toolchain);
-		ImportMetaFunctioningFile ImportFile = new ImportMetaFunctioningFile(syncer, "importy/" + toolchain.getName() + "/Import.exe", UsersFile, GroupsFile, DefaultPermissionsFile, DefaultSettings, sdb, toolchain);
+		ImportMetaFunctioningFile ImportFile = new ImportMetaFunctioningFile(context, syncer, "importy/" + toolchain.getName() + "/Import.exe", UsersFile, GroupsFile, DefaultPermissionsFile, DefaultSettings, sdb, toolchain);
 		return ImportFile;
 	}
 
-	public LayeredImportDB(DatabaseInitData fileName) throws DatabaseException {
-		super(fileName);
+	@Override
+	public void afterInit() {
+		super.afterInit();
 
 		final Map<String, VirtualFile> map = new HashMap<>();
 
@@ -622,9 +669,14 @@ public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
 			public void toolchainAdded(Toolchain t) {
 				synchronized (map) {
 					if (!map.containsKey(t.getName())) {
-						VirtualFile vf = addVirtualImporterForToolchain(t);
-						registerVirtualFile(vf);
-						map.put(t.getName(), vf);
+						VirtualFile vf;
+						try {
+							vf = addVirtualImporterForToolchain(rootContext, t);
+							files.registerVirtualFile(vf);
+							map.put(t.getName(), vf);
+						} catch (VirtualFileException e) {
+							e.printStackTrace();
+						}
 					}
 				}
 			}
@@ -635,7 +687,7 @@ public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
 					if (map.containsKey(t.getName())) {
 						VirtualFile vf = map.get(t.getName());
 						map.remove(t.getName());
-						unregisterVirtualFile(vf);
+						files.unregisterVirtualFile(vf);
 					}
 				}
 			}
@@ -643,26 +695,9 @@ public abstract class LayeredImportDB extends LayeredVirtualFilesDB {
 		});
 	}
 
-	@Override
-	public FileInfo loadFile(String name, boolean decodeBigString, Toolchain toolchain) {
-		FileInfo fo = super.loadFile(name, decodeBigString, toolchain);
-		if (fo != null) {
-			if (loadedVirtualFiles.containsKey(fo.FileName)) {
-				return new FileInfo(fo.ID, fo.FileName, JsonValue.getPrettyJsonString(fo.Contents), fo.ToolchainName);
-			}
-		}
-		return fo;
-	}
-
-	@Override
-	public FileInfo getFile(int fileID, boolean decodeBigString, Toolchain toolchain) throws DatabaseException {
-		FileInfo fo = super.getFile(fileID, decodeBigString, toolchain);
-		if (fo != null) {
-			if (loadedVirtualFiles.containsKey(fo.FileName)) {
-				return new FileInfo(fo.ID, fo.FileName, JsonValue.getPrettyJsonString(fo.Contents), fo.ToolchainName);
-			}
-		}
-		return fo;
+	public LayeredImportDB(DatabaseInitData dbData) throws DatabaseException {
+		super(dbData);
+		this.files = dbData.Files;
 	}
 
 	public abstract boolean clearUsers(Toolchain toolchain);

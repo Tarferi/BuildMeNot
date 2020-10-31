@@ -39,6 +39,8 @@ import org.shredzone.acme4j.util.CSRBuilder;
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.DatabaseInitData;
 import cz.rion.buildserver.db.StaticDB;
+import cz.rion.buildserver.db.VirtualFileManager.UserContext;
+import cz.rion.buildserver.db.VirtualFileManager.VirtualFile;
 import cz.rion.buildserver.db.layers.common.LayeredDBFileWrapperDB;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.json.JsonValue;
@@ -53,162 +55,158 @@ public abstract class LayeredSSLDB extends LayeredDBFileWrapperDB {
 
 	private Certificate root;
 
-	private final VirtualFile vfPrehled = new VirtualFile() {
+	private final DatabaseInitData dbData;
 
-		private String getHeader() {
-			StringBuilder sb = new StringBuilder();
-			sb.append("# JSON objekt, kde klíèem je doména a kde každý prvek obsahuje:\n");
-			sb.append("#\tDomain - název domény, pro který je certifikát vydán\n");
-			sb.append("#\tPublicKey - surová data certifikátu. Pokud není obsaženo, spustit gen.exe a vytvoøí se\n");
-			sb.append("#\tPrivateKey - surová data certifikátu. Pokud není obsaženo, spustit gen.exe a vytvoøí se\n");
-			sb.append("#\tCreation - timestamp v ms kdy byl certifikát vydán\n");
-			sb.append("#\tExpiration - timestamp v ms kdy certifikát expiruje\n");
-			return sb.toString();
-		}
+	@Override
+	public void afterInit() {
+		super.afterInit();
+		final VirtualFile vfPrehled = new VirtualFile("ssl/config.cfg", this.getRootToolchain()) {
 
-		private String stripHeader(String data) {
-			StringBuilder sb = new StringBuilder();
-			for (String line : data.split("\n")) {
-				line = line.trim();
-				if (line.startsWith("#") || line.isEmpty()) {
-					continue;
-				}
-				sb.append(line + "\n");
+			private String getHeader() {
+				StringBuilder sb = new StringBuilder();
+				sb.append("# JSON objekt, kde klíèem je doména a kde každý prvek obsahuje:\n");
+				sb.append("#\tDomain - název domény, pro který je certifikát vydán\n");
+				sb.append("#\tPublicKey - surová data certifikátu. Pokud není obsaženo, spustit gen.exe a vytvoøí se\n");
+				sb.append("#\tPrivateKey - surová data certifikátu. Pokud není obsaženo, spustit gen.exe a vytvoøí se\n");
+				sb.append("#\tCreation - timestamp v ms kdy byl certifikát vydán\n");
+				sb.append("#\tExpiration - timestamp v ms kdy certifikát expiruje\n");
+				return sb.toString();
 			}
-			return sb.toString();
-		}
 
-		@Override
-		public String read() throws DatabaseException {
-			JsonObject obj = new JsonObject();
-			for (StoredCertificate cert : getCertificates()) {
-				JsonObject c = new JsonObject();
-				JsonArray domains = new JsonArray();
-				for (String domain : cert.Domains) {
-					domains.add(new JsonString(domain));
+			private String stripHeader(String data) {
+				StringBuilder sb = new StringBuilder();
+				for (String line : data.split("\n")) {
+					line = line.trim();
+					if (line.startsWith("#") || line.isEmpty()) {
+						continue;
+					}
+					sb.append(line + "\n");
 				}
-				c.add("Domains", domains);
-				if (!cert.PrivateKey.isEmpty() && !cert.PublicKey.isEmpty() && !cert.Certificate.isEmpty()) {
-					c.add("PublicKey", new JsonString(cert.PublicKey));
-					c.add("PrivateKey", new JsonString(cert.PrivateKey));
-					c.add("Certificate", new JsonString(cert.Certificate));
-				}
-				c.add("Creation", new JsonNumber(0, "" + cert.creation.getTime()));
-				c.add("Expiration", new JsonNumber(0, "" + cert.creation.getTime()));
-				obj.add(cert.Name, c);
+				return sb.toString();
 			}
-			return getHeader() + JsonValue.getPrettyJsonString(obj);
-		}
 
-		private List<Certificate> convert(JsonValue val) {
-			List<Certificate> lst = null;
-			if (val != null) {
-				if (val.isObject()) {
-					lst = new ArrayList<>();
-					for (Entry<String, JsonValue> entry : val.asObject().getEntries()) {
-						JsonValue c = entry.getValue();
-						if (c.isObject()) {
-							JsonObject obj = c.asObject();
-							if (obj.containsArray("Domains") && obj.containsNumber("Creation") && obj.containsNumber("Expiration")) {
-								List<JsonValue> domainsL = obj.getArray("Domains").Value;
-								String[] domains = new String[domainsL.size()];
-								for (int i = 0; i < domains.length; i++) {
-									domains[i] = domainsL.get(i).asString().Value;
+			@Override
+			public String read(UserContext context) {
+				JsonObject obj = new JsonObject();
+				for (StoredCertificate cert : getCertificates()) {
+					JsonObject c = new JsonObject();
+					JsonArray domains = new JsonArray();
+					for (String domain : cert.Domains) {
+						domains.add(new JsonString(domain));
+					}
+					c.add("Domains", domains);
+					if (!cert.PrivateKey.isEmpty() && !cert.PublicKey.isEmpty() && !cert.Certificate.isEmpty()) {
+						c.add("PublicKey", new JsonString(cert.PublicKey));
+						c.add("PrivateKey", new JsonString(cert.PrivateKey));
+						c.add("Certificate", new JsonString(cert.Certificate));
+					}
+					c.add("Creation", new JsonNumber(0, "" + cert.creation.getTime()));
+					c.add("Expiration", new JsonNumber(0, "" + cert.creation.getTime()));
+					obj.add(cert.Name, c);
+				}
+				return getHeader() + JsonValue.getPrettyJsonString(obj);
+			}
+
+			private List<Certificate> convert(JsonValue val) {
+				List<Certificate> lst = null;
+				if (val != null) {
+					if (val.isObject()) {
+						lst = new ArrayList<>();
+						for (Entry<String, JsonValue> entry : val.asObject().getEntries()) {
+							JsonValue c = entry.getValue();
+							if (c.isObject()) {
+								JsonObject obj = c.asObject();
+								if (obj.containsArray("Domains") && obj.containsNumber("Creation") && obj.containsNumber("Expiration")) {
+									List<JsonValue> domainsL = obj.getArray("Domains").Value;
+									String[] domains = new String[domainsL.size()];
+									for (int i = 0; i < domains.length; i++) {
+										domains[i] = domainsL.get(i).asString().Value;
+									}
+									String name = entry.getKey();
+									String publicKey = "";
+									String privateKey = "";
+									String certificate = "";
+									if (obj.containsString("PublicKey") && obj.containsString("PrivateKey") && obj.containsString("Certificate")) {
+										publicKey = obj.getString("PublicKey").Value;
+										privateKey = obj.getString("PrivateKey").Value;
+										certificate = obj.getString("Certificate").Value;
+									}
+									long creation = obj.getNumber("Creation").asLong();
+									long expiration = obj.getNumber("Expiration").asLong();
+									lst.add(new Certificate(name, expiration, creation, publicKey, privateKey, certificate, domains));
 								}
-								String name = entry.getKey();
-								String publicKey = "";
-								String privateKey = "";
-								String certificate = "";
-								if (obj.containsString("PublicKey") && obj.containsString("PrivateKey") && obj.containsString("Certificate")) {
-									publicKey = obj.getString("PublicKey").Value;
-									privateKey = obj.getString("PrivateKey").Value;
-									certificate = obj.getString("Certificate").Value;
-								}
-								long creation = obj.getNumber("Creation").asLong();
-								long expiration = obj.getNumber("Expiration").asLong();
-								lst.add(new Certificate(name, expiration, creation, publicKey, privateKey, certificate, domains));
 							}
 						}
 					}
 				}
+				return lst;
 			}
-			return lst;
-		}
 
-		@Override
-		public void write(String data) throws DatabaseException {
-			JsonValue val = JsonValue.parse(stripHeader(data));
-			List<Certificate> nw = convert(val);
-			if (nw != null) {
-				updateCertificates(nw);
-			}
-		}
-
-		@Override
-		public String getName() {
-			return "ssl/config.cfg";
-		}
-
-		@Override
-		public String getToolchain() {
-			return Settings.getRootToolchain();
-		}
-
-	};
-
-	private final VirtualFile vfProcess = new VirtualFile() {
-
-		@Override
-		public String read() throws DatabaseException {
-			try {
-				StringBuilder sb = new StringBuilder();
-				List<Certificate> lst = new ArrayList<>();
-				for (StoredCertificate cert : getCertificates()) {
-					if (cert.PublicKey.isEmpty() || cert.PrivateKey.isEmpty()) {
-						sb.append("Requesting certificate renewal for " + cert.Name + "\n");
-						Certificate nw = ACME.update((StaticDB) LayeredSSLDB.this, root, cert.Name, cert.Domains, sb);
-						if (nw == null) {
-							sb.append("Requesting certificate for " + cert.Name + " failed\n\n\n");
-						} else {
-							lst.add(nw);
-							sb.append("Requesting certificate for " + cert.Name + " finished\n\n\n");
-						}
+			@Override
+			public boolean write(UserContext context, String newName, String data) {
+				JsonValue val = JsonValue.parse(stripHeader(data));
+				List<Certificate> nw = convert(val);
+				if (nw != null) {
+					try {
+						updateCertificates(nw);
+					} catch (DatabaseException e) {
+						e.printStackTrace();
+						return false;
 					}
 				}
-				updateCertificates(lst);
-				return sb.toString();
-			} finally {
-				clearCache();
+				return true;
 			}
-		}
 
-		@Override
-		public void write(String data) throws DatabaseException {
+		};
 
-		}
+		final VirtualFile vfProcess = new VirtualFile("ssl/gen.exe", this.getRootToolchain()) {
 
-		@Override
-		public String getName() {
-			return "ssl/gen.exe";
-		}
+			@Override
+			public String read(UserContext context) {
+				try {
+					StringBuilder sb = new StringBuilder();
+					List<Certificate> lst = new ArrayList<>();
+					for (StoredCertificate cert : getCertificates()) {
+						if (cert.PublicKey.isEmpty() || cert.PrivateKey.isEmpty()) {
+							sb.append("Requesting certificate renewal for " + cert.Name + "\n");
+							Certificate nw = ACME.update((StaticDB) LayeredSSLDB.this, root, cert.Name, cert.Domains, sb);
+							if (nw == null) {
+								sb.append("Requesting certificate for " + cert.Name + " failed\n\n\n");
+							} else {
+								lst.add(nw);
+								sb.append("Requesting certificate for " + cert.Name + " finished\n\n\n");
+							}
+						}
+					}
+					updateCertificates(lst);
+					return sb.toString();
+				} catch (DatabaseException e) {
+					return null;
+				} finally {
+					clearCache();
+				}
+			}
 
-		@Override
-		public String getToolchain() {
-			return Settings.getRootToolchain();
-		}
+			@Override
+			public boolean write(UserContext context, String newNane, String data) {
+				return false;
+			}
 
-	};
+		};
 
-	public LayeredSSLDB(DatabaseInitData initData) throws DatabaseException {
-		super(initData);
-		this.makeTable("ssl", true, KEY("ID"), TEXT("name"), TEXT("domain"), BIGTEXT("public_key"), BIGTEXT("private_key"), BIGTEXT("certificate"), DATE("creation_date"), DATE("expiration"), NUMBER("valid"));
-		this.registerVirtualFile(vfPrehled);
-		this.registerVirtualFile(vfProcess);
+		dbData.Files.registerVirtualFile(vfPrehled);
+		dbData.Files.registerVirtualFile(vfProcess);
 		try {
 			initRootCert();
-		} catch (IOException e) {
-			throw new DatabaseException("Failed to create root certificate", e);
+		} catch (IOException | DatabaseException e) {
+			e.printStackTrace();
 		}
+	}
+
+	public LayeredSSLDB(DatabaseInitData dbData) throws DatabaseException {
+		super(dbData);
+		this.makeTable("ssl", true, KEY("ID"), TEXT("name"), TEXT("domain"), BIGTEXT("public_key"), BIGTEXT("private_key"), BIGTEXT("certificate"), DATE("creation_date"), DATE("expiration"), NUMBER("valid"));
+		this.dbData = dbData;
 	}
 
 	private static class KeyData {

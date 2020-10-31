@@ -15,12 +15,16 @@ import cz.rion.buildserver.BuildThread;
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.RuntimeDB;
 import cz.rion.buildserver.db.RuntimeDB.RuntimeUserStats;
-import cz.rion.buildserver.db.layers.common.LayeredDBFileWrapperDB;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
-import cz.rion.buildserver.db.layers.staticDB.LayeredFilesDB.DatabaseFile;
 import cz.rion.buildserver.db.layers.staticDB.LayeredStaticDB.ToolchainCallback;
 import cz.rion.buildserver.db.layers.staticDB.LayeredUserDB.LocalUser;
 import cz.rion.buildserver.db.StaticDB;
+import cz.rion.buildserver.db.VirtualFileManager;
+import cz.rion.buildserver.db.VirtualFileManager.ReadVirtualFile;
+import cz.rion.buildserver.db.VirtualFileManager.UserContext;
+import cz.rion.buildserver.db.VirtualFileManager.VirtualDatabaseFile;
+import cz.rion.buildserver.db.VirtualFileManager.VirtualFile;
+import cz.rion.buildserver.db.VirtualFileManager.VirtualFile.VirtualFileException;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.BuildThread.BuilderStats;
 import cz.rion.buildserver.http.CompatibleSocketClient;
@@ -34,7 +38,6 @@ import cz.rion.buildserver.ui.events.DatabaseTableRowEditEvent;
 import cz.rion.buildserver.ui.events.FileCreatedEvent;
 import cz.rion.buildserver.ui.events.FileListLoadedEvent;
 import cz.rion.buildserver.ui.events.FileLoadedEvent;
-import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 import cz.rion.buildserver.ui.events.FileSavedEvent;
 import cz.rion.buildserver.ui.events.PingEvent;
 import cz.rion.buildserver.ui.events.SettingsLoadedEvent;
@@ -63,20 +66,21 @@ public class RemoteUIProviderServer {
 	private final StaticDB sdb;
 	private final RuntimeDB db;
 
-	private final MyThread thread = new MyThread() {
+	private final MyThread thread = new MyThread("Remote UI provider") {
 		@Override
 		public void runAsync() {
-			Thread.currentThread().setName("Remote UI provider");
 			async();
 		}
 	};
 	private final List<BuildThread> builders;
+	private final VirtualFileManager files;
 
-	public RemoteUIProviderServer(RuntimeDB db, StaticDB sdb, List<BuildThread> builders) throws IOException {
+	public RemoteUIProviderServer(RuntimeDB db, StaticDB sdb, List<BuildThread> builders, VirtualFileManager files) throws IOException {
 		selector = Selector.open();
 		this.db = db;
 		this.sdb = sdb;
 		this.builders = builders;
+		this.files = files;
 	}
 
 	public void addClient(CompatibleSocketClient socket) {
@@ -166,6 +170,25 @@ public class RemoteUIProviderServer {
 		return true;
 	}
 
+	private final UserContext rootContext = new UserContext() {
+
+		@Override
+		public Toolchain getToolchain() {
+			return sdb.getRootToolchain();
+		}
+
+		@Override
+		public String getLogin() {
+			return "remote";
+		}
+
+		@Override
+		public String getAddress() {
+			return "0.0.0.0";
+		}
+
+	};
+
 	private void handleEditDatabaseTableRow(InputPacketRequest inBuffer, MemoryBuffer outBuffer) throws IOException {
 		int returnCode = 99;
 		int fileID = inBuffer.readInt();
@@ -173,23 +196,11 @@ public class RemoteUIProviderServer {
 
 		JsonValue val = JsonValue.parse(jsn);
 		if (val.isObject()) {
-			JsonObject obj = val.asObject();
-			FileInfo f;
+			ReadVirtualFile f = this.sdb.loadRootFile(fileID);
 			try {
-				f = this.sdb.getFile(fileID, false, sdb.getRootToolchain());
-				if (f != null) { // SDB database
-					if (LayeredDBFileWrapperDB.editRow(sdb, f, obj, sdb.getRootToolchain())) {
-						returnCode = 42;
-					}
-				} else { // DB database ?
-					f = LayeredDBFileWrapperDB.getFile(db, fileID, false, sdb.getRootToolchain());
-					if (f != null) {
-						if (LayeredDBFileWrapperDB.editRow(db, f, obj, sdb.getRootToolchain())) {
-							returnCode = 42;
-						}
-					}
-				}
-			} catch (DatabaseException e) {
+				f.File.write(rootContext, f.File.Name, jsn);
+				returnCode = 42;
+			} catch (VirtualFileException e) {
 				e.printStackTrace();
 			}
 		}
@@ -203,15 +214,15 @@ public class RemoteUIProviderServer {
 		String newName = inBuffer.readString();
 		outBuffer.writeInt(FileCreatedEvent.ID);
 		try {
-			FileInfo fo = sdb.createFile(sdb.getRootToolchain(), newName, "", false);
+			VirtualDatabaseFile fo = sdb.createFile(rootContext, newName, "");
 			if (fo == null) {
 				outBuffer.writeInt(0);
 				return;
 			} else {
 				outBuffer.writeInt(1);
 				outBuffer.writeInt(fo.ID);
-				outBuffer.writeString(fo.FileName);
-				outBuffer.writeString(fo.Contents);
+				outBuffer.writeString(fo.Name);
+				outBuffer.writeString("");
 			}
 		} catch (DatabaseException e) {
 			e.printStackTrace();
@@ -225,71 +236,58 @@ public class RemoteUIProviderServer {
 		String newContents = inBuffer.readString();
 		outBuffer.writeInt(FileSavedEvent.ID);
 		try {
-			FileInfo fo = sdb.getFile(fileID, false, sdb.getRootToolchain());
+			ReadVirtualFile fo = sdb.loadRootFile(fileID);
 			if (fo == null) {
 				outBuffer.writeInt(0);
 				return;
 			} else {
-				sdb.storeFile(fo, newFileName, newContents);
-				fo = sdb.getFile(fileID, false, sdb.getRootToolchain());
-				if (fo == null) { // Check the write operation
-					outBuffer.writeInt(0);
-				} else {
+				if (fo.File.write(rootContext, newFileName, newContents)) {
 					outBuffer.writeInt(1);
-					outBuffer.writeInt(fo.ID);
-					outBuffer.writeString(fo.FileName);
-					outBuffer.writeString(fo.Contents);
+					outBuffer.writeInt(fo.File.ID);
+					outBuffer.writeString(fo.File.Name);
+					outBuffer.writeString(newContents);
+				} else {
+					outBuffer.writeInt(0);
 				}
 			}
-		} catch (DatabaseException e) {
+		} catch (VirtualFileException e) {
 			e.printStackTrace();
 			throw new IOException();
 		}
 	}
 
-	private FileInfo getFile(int fileID) {
-		FileInfo fo = null;
-		try {
-			fo = sdb.getFile(fileID, false, sdb.getRootToolchain());
-		} catch (DatabaseException e1) {
-			e1.printStackTrace();
-		}
-		if (fo == null) {
-			try {
-				fo = LayeredDBFileWrapperDB.getFile(db, fileID, false, sdb.getRootToolchain());
-			} catch (DatabaseException e) {
-				e.printStackTrace();
-			}
-		}
+	private ReadVirtualFile getFile(int fileID) {
+		ReadVirtualFile fo = null;
+		fo = sdb.loadRootFile(fileID);
 		return fo;
 	}
 
 	private void writeFile(InputPacketRequest inBuffer, MemoryBuffer outBuffer) throws IOException {
 		int fileID = inBuffer.readInt();
 		outBuffer.writeInt(FileLoadedEvent.ID);
-		FileInfo fo = LayeredDBFileWrapperDB.processPostLoadedFile(db, LayeredDBFileWrapperDB.processPostLoadedFile(sdb, getFile(fileID), false, sdb.getRootToolchain()), false, sdb.getRootToolchain());
+		ReadVirtualFile fo = getFile(fileID);
 		if (fo == null) {
 			outBuffer.writeInt(0);
 			return;
 		} else {
 			outBuffer.writeInt(1);
-			outBuffer.writeInt(fo.ID);
-			outBuffer.writeString(fo.FileName);
+			outBuffer.writeInt(fo.File.ID);
+			outBuffer.writeString(fo.File.Name);
 			outBuffer.writeString(fo.Contents);
 		}
 	}
 
 	private void writeFileList(InputPacketRequest inBuffer, MemoryBuffer outBuffer) {
-		List<DatabaseFile> lst = sdb.getFiles(sdb.getRootToolchain());
-		LayeredDBFileWrapperDB.loadDatabaseFiles(db, lst, sdb.getRootToolchain());
+		List<VirtualFile> lst = new ArrayList<>();
+		files.getFiles(lst, rootContext);
 		outBuffer.writeInt(FileListLoadedEvent.ID);
 		outBuffer.writeInt(lst.size());
-		for (DatabaseFile file : lst) {
+		for (VirtualFile file : lst) {
 			outBuffer.writeInt(file.ID);
-			if (file.ToolchainName.equals(Settings.getRootToolchain()) || file.ToolchainName.equals("shared")) {
-				outBuffer.writeString(file.FileName);
+			if (file.Toolchain.IsRoot || file.Toolchain.IsShared) {
+				outBuffer.writeString(file.Name);
 			} else {
-				outBuffer.writeString("data/" + file.ToolchainName + "/" + file.FileName);
+				outBuffer.writeString("data/" + file.Toolchain.getName() + "/" + file.Name);
 			}
 		}
 	}

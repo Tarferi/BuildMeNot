@@ -798,7 +798,7 @@ window.Tester.FeedbackPanel = function(data, showLoginColumn) {
 
 	self.init();
 	return this;
-}
+};
 
 
 window.Tester.HistoryPanel = function(data, historyBtn, rowPnl) {
@@ -902,7 +902,7 @@ window.Tester.HistoryPanel = function(data, historyBtn, rowPnl) {
 	
 	self.init();
 	return this;
-}
+};
 
 
 window.Tester.TestPanel = function(data, forEveryOtherPanelCB) {
@@ -961,7 +961,7 @@ window.Tester.TestPanel = function(data, forEveryOtherPanelCB) {
 		var cbOK = function(data) {
 			if(data) {
 				data = JSON.parse(data);
-				if(data && data.code && data.result) {
+				if(data !== undefined && data.code !== undefined && data.result !== undefined) {
 					if(data.code == 53) {
 						cbFail("Uživatel není přihlášen");
 						return;

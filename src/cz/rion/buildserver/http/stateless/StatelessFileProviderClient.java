@@ -15,13 +15,15 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
 import cz.rion.buildserver.Settings;
-import cz.rion.buildserver.db.StaticDB;
+import cz.rion.buildserver.db.VirtualFileManager;
+import cz.rion.buildserver.db.VirtualFileManager.ReadVirtualFile;
+import cz.rion.buildserver.db.VirtualFileManager.UserContext;
+import cz.rion.buildserver.db.VirtualFileManager.VirtualFile;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.db.layers.staticDB.LayeredPermissionDB.UsersPermission;
 import cz.rion.buildserver.http.HTTPResponse;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.permissions.PermissionBranch;
-import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 import cz.rion.buildserver.utils.CachedData;
 import cz.rion.buildserver.utils.CachedDataGetter;
 import cz.rion.buildserver.utils.CachedDataWrapper;
@@ -38,6 +40,7 @@ import com.google.javascript.jscomp.CompilerOptions;
 import com.google.javascript.jscomp.SourceFile;
 
 public class StatelessFileProviderClient extends StatelessAdminClient {
+
 	private static final class JWTCrypto {
 
 		private static String jwt_header = null;
@@ -239,7 +242,16 @@ public class StatelessFileProviderClient extends StatelessAdminClient {
 		}
 	}
 
-	private static class FileMappingManager {
+	private VirtualFile loadFile(VirtualFileManager files, String name, UserContext context) {
+		List<VirtualFile> lst = new ArrayList<>();
+		files.getFiles(lst, context);
+		if (lst.isEmpty()) {
+			return null;
+		}
+		return lst.get(0);
+	}
+
+	private class FileMappingManager {
 
 		public final FileMapping[] Allowed;
 
@@ -253,12 +265,13 @@ public class StatelessFileProviderClient extends StatelessAdminClient {
 			return null;
 		}
 
-		public FileMappingManager(StaticDB sdb, Toolchain toolchain) {
+		public FileMappingManager(VirtualFileManager files, Toolchain toolchain) {
 			List<FileMapping> lst = new ArrayList<>();
 			try {
-				FileInfo fo = sdb.loadFile("file_mapping.ini", true, sdb.getRootToolchain());
+				ReadVirtualFile fo = data.StaticDB.loadRootFile("file_mapping.ini");
 				if (fo != null) {
-					for (String line : fo.Contents.split("\n")) {
+					String contents = fo.Contents;
+					for (String line : contents.split("\n")) {
 						line = line.trim();
 						line = line.replaceAll("\\$TOOLCHAIN\\$", toolchain.getName().toLowerCase());
 						if (line.isEmpty() || line.startsWith("#")) {
@@ -298,7 +311,7 @@ public class StatelessFileProviderClient extends StatelessAdminClient {
 
 				@Override
 				public FileMappingManager update() {
-					return new FileMappingManager(data.StaticDB, toolchain);
+					return new FileMappingManager(data.Files, toolchain);
 				}
 
 			});
@@ -310,7 +323,7 @@ public class StatelessFileProviderClient extends StatelessAdminClient {
 			String fileContents = MyFS.readFile("./web/" + endPoint);
 			return fileContents;
 		} catch (FileReadException e) {
-			FileInfo dbf = data.StaticDB.loadFile("web/" + endPoint, true, state.Data.StaticDB.getRootToolchain());
+			ReadVirtualFile dbf = data.StaticDB.loadRootFile("web/" + endPoint);
 			if (dbf != null) {
 				return dbf.Contents;
 			}

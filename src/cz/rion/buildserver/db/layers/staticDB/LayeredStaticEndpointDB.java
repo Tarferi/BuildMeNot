@@ -6,8 +6,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
-import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.DatabaseInitData;
+import cz.rion.buildserver.db.VirtualFileManager.UserContext;
+import cz.rion.buildserver.db.VirtualFileManager.VirtualFile;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
@@ -16,10 +17,12 @@ import cz.rion.buildserver.json.JsonValue.JsonString;
 
 public abstract class LayeredStaticEndpointDB extends LayeredDynDocDB {
 
-	public LayeredStaticEndpointDB(DatabaseInitData dbName) throws DatabaseException {
-		super(dbName);
-		this.makeTable("static_endpoints", true, KEY("ID"), TEXT("path"), BIGTEXT("contents"));
-		this.registerVirtualFile(new VirtualFile() {
+	private DatabaseInitData dbData;
+
+	@Override
+	public void afterInit() {
+		super.afterInit();
+		dbData.Files.registerVirtualFile(new VirtualFile("static_endpoints.ini", this.getRootToolchain()) {
 
 			private String getHeader() {
 				StringBuilder sb = new StringBuilder();
@@ -40,7 +43,7 @@ public abstract class LayeredStaticEndpointDB extends LayeredDynDocDB {
 			}
 
 			@Override
-			public String read() throws DatabaseException {
+			public String read(UserContext context) {
 				JsonObject obj = new JsonObject();
 				for (StaticEndpoint endpoint : getStaticEndpoints()) {
 					obj.add(endpoint.path, new JsonString(endpoint.contents));
@@ -67,25 +70,27 @@ public abstract class LayeredStaticEndpointDB extends LayeredDynDocDB {
 			}
 
 			@Override
-			public void write(String data) throws DatabaseException {
+			public boolean write(UserContext context, String newName, String data) {
 				JsonValue val = JsonValue.parse(stripHeader(data));
 				List<StaticEndpoint> nw = convert(val);
 				if (nw != null) {
-					updateStaticEndpoints(nw);
+					try {
+						updateStaticEndpoints(nw);
+					} catch (DatabaseException e) {
+						e.printStackTrace();
+						return false;
+					}
 				}
+				return true;
 			}
-
-			@Override
-			public String getName() {
-				return "static_endpoints.ini";
-			}
-
-			@Override
-			public String getToolchain() {
-				return Settings.getRootToolchain();
-			}
-
 		});
+
+	}
+
+	public LayeredStaticEndpointDB(DatabaseInitData dbData) throws DatabaseException {
+		super(dbData);
+		this.makeTable("static_endpoints", true, KEY("ID"), TEXT("path"), BIGTEXT("contents"));
+		this.dbData = dbData;
 	}
 
 	private void update(int id, String contents) throws DatabaseException {

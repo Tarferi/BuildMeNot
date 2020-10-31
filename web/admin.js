@@ -1180,7 +1180,7 @@ var AdminEditor = function(adminer) {
 		self.currentlyEditing = fn;
 		var fo = fn["fo"];
 		if (fo == 1) {
-			self.common.showError("Chyba", "Zadaný soubor neexistuje", true, err);
+			self.common.showError("Chyba", "Zadaný soubor neexistuje", true);
 			return;
 		}
 		var name = fn["name"];

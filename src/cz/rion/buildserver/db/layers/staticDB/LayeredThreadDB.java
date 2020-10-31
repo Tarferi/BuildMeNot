@@ -1,89 +1,89 @@
 package cz.rion.buildserver.db.layers.staticDB;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 
-import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.DatabaseInitData;
-import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
+import cz.rion.buildserver.db.VirtualFileManager.UserContext;
+import cz.rion.buildserver.db.VirtualFileManager.VirtualFile;
 import cz.rion.buildserver.exceptions.DatabaseException;
-import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 import cz.rion.buildserver.wrappers.MyThread;
+import cz.rion.buildserver.wrappers.MyThread.MyThreadObserver;
 
 public abstract class LayeredThreadDB extends LayeredUserDB {
 
-	private static int DB_THREAD_BASE = 0x002FFFFF;
 	private static final String ThreadsDir = "threads/";
 	private static final String ThreadsExtension = ".thread";
 	private static final String ThreadsAllThreads = "All Threads";
 
-	private final List<MyThread> threads = new ArrayList<>();
-
-	public LayeredThreadDB(DatabaseInitData dbName) throws DatabaseException {
-		super(dbName);
-	}
+	private final DatabaseInitData dbData;
 
 	@Override
-	public List<DatabaseFile> getFiles(Toolchain toolchain) {
-		List<DatabaseFile> lst = super.getFiles(toolchain);
+	public void afterInit() {
+		super.afterInit();
+		Map<MyThread, VirtualFile> known = new HashMap<MyThread, VirtualFile>();
+		MyThread.addThreadObserver(new MyThreadObserver() {
 
-		synchronized (threads) {
-			threads.clear();
-			MyThread.getThreads(threads);
-			lst.add(new DatabaseFile(DB_THREAD_BASE, ThreadsDir + ThreadsAllThreads + ThreadsExtension, "shared"));
-			int i = 1;
-			for (MyThread thread : threads) {
-				lst.add(new DatabaseFile(DB_THREAD_BASE + i, ThreadsDir + thread.getName() + ThreadsExtension, "shared"));
-				i++;
-			}
-		}
-		return lst;
-	}
+			@Override
+			public void ThreadStarted(MyThread thread) {
+				synchronized (known) {
+					if (!known.containsKey(thread)) {
+						VirtualFile vf = new VirtualFile(ThreadsDir + thread.getName() + ThreadsExtension, LayeredThreadDB.this.getSharedToolchain()) {
 
-	@Override
-	public FileInfo createFile(Toolchain toolchain, String name, String contents, boolean overwriteExisting) throws DatabaseException {
-		if (name.startsWith(ThreadsDir) && name.endsWith(ThreadsExtension)) {
-			throw new DatabaseException("Cannnot create " + name + ": reserved file name");
-		}
-		return super.createFile(toolchain, name, contents, overwriteExisting);
-	}
+							@Override
+							public String read(UserContext context) throws VirtualFileException {
+								return thread.getStackTrace();
+							}
 
-	@Override
-	public void storeFile(DatabaseFile file, String newFileName, String newContents) {
-		if (file.FileName.startsWith(ThreadsDir) && file.FileName.endsWith(ThreadsExtension)) { // No edit
-		} else {
-			super.storeFile(file, newFileName, newContents);
-		}
-	}
+							@Override
+							public boolean write(UserContext context, String newName, String value) throws VirtualFileException {
+								return false;
+							}
 
-	@Override
-	public FileInfo loadFile(String name, boolean decodeBigString, Toolchain toolchain) {
-		if (name.startsWith(ThreadsDir) && name.endsWith(ThreadsExtension)) {
-			String threadName = name.substring(ThreadsDir.length());
-			threadName = threadName.substring(0, threadName.length() - ThreadsExtension.length());
-			if (threadName.equals(ThreadsAllThreads)) {
-				return new FileInfo(DB_THREAD_BASE, name, getAllThreadsData(), toolchain.getName());
-			}
-			synchronized (threads) {
-				int i = 0;
-				for (MyThread thread : threads) {
-					if (thread.getName().equals(threadName)) {
-						return new FileInfo(DB_THREAD_BASE + i, name, thread.getStackTrace(), toolchain.getName());
+						};
+						dbData.Files.registerVirtualFile(vf);
+						known.put(thread, vf);
 					}
-					i++;
 				}
 			}
-			return new FileInfo(DB_THREAD_BASE, name, "Failed to load thread info: thread not found", toolchain.getName());
-		} else {
-			return super.loadFile(name, decodeBigString, toolchain);
-		}
+
+			@Override
+			public void ThreadFinished(MyThread thread) {
+				synchronized (known) {
+					if (known.containsKey(thread)) {
+						VirtualFile vf = known.get(thread);
+						dbData.Files.unregisterVirtualFile(vf);
+						known.remove(thread);
+					}
+				}
+			}
+
+		});
+		dbData.Files.registerVirtualFile(new VirtualFile(ThreadsDir + ThreadsAllThreads + ThreadsExtension, this.getSharedToolchain()) {
+
+			@Override
+			public String read(UserContext context) throws VirtualFileException {
+				return getAllThreadsData(known);
+			}
+
+			@Override
+			public boolean write(UserContext context, String newName, String value) throws VirtualFileException {
+				return false;
+			}
+		});
+
 	}
 
-	private String getAllThreadsData() {
+	public LayeredThreadDB(DatabaseInitData dbData) throws DatabaseException {
+		super(dbData);
+		this.dbData = dbData;
+	}
+
+	private String getAllThreadsData(Map<MyThread, VirtualFile> known) {
 		StringBuilder sb = new StringBuilder();
-		synchronized (threads) {
+		synchronized (known) {
 			int i = 0;
-			for (MyThread thr : threads) {
+			for (MyThread thr : known.keySet()) {
 				if (i > 0) {
 					sb.append("\r\n\r\n\r\n");
 				}
@@ -94,19 +94,5 @@ public abstract class LayeredThreadDB extends LayeredUserDB {
 			}
 		}
 		return sb.toString();
-	}
-
-	@Override
-	public FileInfo getFile(int fileID, boolean decodeBigString, Toolchain toolchain) throws DatabaseException {
-		if (fileID == DB_THREAD_BASE) { // All threads
-			return new FileInfo(fileID, ThreadsDir + ThreadsAllThreads + ThreadsExtension, getAllThreadsData(), toolchain.getName());
-		} else if (fileID > DB_THREAD_BASE && fileID < DB_THREAD_BASE + threads.size() + 1) {
-			synchronized (threads) {
-				MyThread thread = threads.get(fileID - (DB_THREAD_BASE + 1));
-				return new FileInfo(fileID, ThreadsDir + thread.getName() + ThreadsExtension, thread.getStackTrace(), toolchain.getName());
-			}
-		} else {
-			return super.getFile(fileID, decodeBigString, toolchain);
-		}
 	}
 }

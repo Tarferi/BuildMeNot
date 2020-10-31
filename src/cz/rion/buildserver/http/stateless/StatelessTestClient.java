@@ -8,11 +8,15 @@ import java.util.List;
 import java.util.Map;
 
 import cz.rion.buildserver.Settings;
+import cz.rion.buildserver.db.VirtualFileManager;
 import cz.rion.buildserver.db.RuntimeDB.BadResults;
 import cz.rion.buildserver.db.RuntimeDB.CodedHistory;
 import cz.rion.buildserver.db.RuntimeDB.CompletedTest;
 import cz.rion.buildserver.db.RuntimeDB.TestFeedback;
 import cz.rion.buildserver.db.RuntimeDB.TestHistory;
+import cz.rion.buildserver.db.VirtualFileManager.UserContext;
+import cz.rion.buildserver.db.VirtualFileManager.VirtualFile;
+import cz.rion.buildserver.db.VirtualFileManager.VirtualFile.VirtualFileException;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.db.layers.staticDB.LayeredPermissionDB.UsersPermission;
 import cz.rion.buildserver.exceptions.DatabaseException;
@@ -25,7 +29,6 @@ import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.json.JsonValue.JsonString;
 import cz.rion.buildserver.test.GenericTest;
 import cz.rion.buildserver.test.TestManager.TestResults;
-import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 import cz.rion.buildserver.utils.CachedData;
 import cz.rion.buildserver.utils.CachedDataGetter;
 import cz.rion.buildserver.utils.CachedDataWrapper2;
@@ -74,13 +77,45 @@ public class StatelessTestClient extends StatelessPresenceClient {
 		public CachedData<String> createData(int refreshIntervalInSeconds, final Toolchain toolchain) {
 			return new CachedDataWrapper2<String>(refreshIntervalInSeconds, new CachedDataGetter<String>() {
 
+				private VirtualFile loadFile(VirtualFileManager files, String name, UserContext context) {
+					List<VirtualFile> lst = new ArrayList<>();
+					files.getFiles(lst, context);
+					if (lst.isEmpty()) {
+						return null;
+					}
+					return lst.get(0);
+				}
+
+				private UserContext toolchainContext = new UserContext() {
+
+					@Override
+					public Toolchain getToolchain() {
+						return toolchain;
+					}
+
+					@Override
+					public String getLogin() {
+						return "root";
+					}
+
+					@Override
+					public String getAddress() {
+						return "0.0.0.0";
+					}
+
+				};
+
 				@Override
 				public String update() {
-					FileInfo fo = data.StaticDB.loadFile("FAQs/" + toolchain.getName() + ".faq", true, toolchain);
-					if (fo == null) {
-						return "FAQ neni pro tento toolchain dostupne";
+					VirtualFile fo = loadFile(data.Files, "FAQs/" + toolchain.getName() + ".faq", toolchainContext);
+					if (fo != null) {
+						try {
+							return fo.read(toolchainContext);
+						} catch (VirtualFileException e) {
+							e.printStackTrace();
+						}
 					}
-					return fo.Contents;
+					return "FAQ neni pro tento toolchain dostupne";
 				}
 			});
 		}

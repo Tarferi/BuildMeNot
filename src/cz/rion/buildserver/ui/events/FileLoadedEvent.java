@@ -2,18 +2,20 @@ package cz.rion.buildserver.ui.events;
 
 import javax.swing.SwingUtilities;
 
-import cz.rion.buildserver.db.layers.staticDB.LayeredFilesDB.DatabaseFile;
 import cz.rion.buildserver.ui.provider.RemoteUIClient;
 
 public class FileLoadedEvent extends Event {
 
 	public static final int ID = RemoteUIClient.RemoteOperation.FileLoaded.code;
 
-	public static class FileInfo extends DatabaseFile {
+	public static class FileInfo {
+		public final int FileID;
+		public final String Name;
 		public final String Contents;
 
 		public FileInfo(int id, String fileName, String contents, String toolchainName) {
-			super(id, fileName, toolchainName);
+			this.FileID = id;
+			this.Name = fileName;
 			this.Contents = contents;
 		}
 	}

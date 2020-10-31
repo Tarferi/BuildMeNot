@@ -10,6 +10,10 @@ import java.util.regex.Pattern;
 import cz.rion.buildserver.db.DatabaseInitData;
 import cz.rion.buildserver.db.RuntimeDB;
 import cz.rion.buildserver.db.StaticDB;
+import cz.rion.buildserver.db.VirtualFileManager;
+import cz.rion.buildserver.db.VirtualFileManager.UserContext;
+import cz.rion.buildserver.db.VirtualFileManager.VirtualDatabaseFile;
+import cz.rion.buildserver.db.VirtualFileManager.VirtualFile;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.db.layers.staticDB.LayeredImportDB;
 import cz.rion.buildserver.exceptions.DatabaseException;
@@ -18,7 +22,6 @@ import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.json.JsonValue.JsonString;
 import cz.rion.buildserver.json.JsonValue.JsonNumber;
-import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 
 public abstract class LayeredDBFileWrapperDB extends LayeredImportDB {
 
@@ -29,308 +32,263 @@ public abstract class LayeredDBFileWrapperDB extends LayeredImportDB {
 	public static final String viewFileSuffix = ".view";
 	public final String dbFilePrefix;
 
-	public LayeredDBFileWrapperDB(DatabaseInitData fileName) throws DatabaseException {
-		super(fileName);
+	private final DatabaseInitData dbData;
+
+	private VirtualViewManipulator RuntimeDBViewManipulator = null;
+
+	@Override
+	public void afterInit() {
+		super.afterInit();
+		initTableFiles((StaticDB) this, this, dbData.Files, this.getRootToolchain(), this.getSharedToolchain());
+	}
+
+	public LayeredDBFileWrapperDB(DatabaseInitData dbData) throws DatabaseException {
+		super(dbData);
 		this.dbFilePrefix = getDBFilePrefix(this);
+		this.dbData = dbData;
 	}
 
-	private static final String getDBFilePrefix(LayeredMetaDB db) {
-		return dbDirPrefix + db.metaDatabaseName + "/";
+	public static void initTableFiles(StaticDB sdb, LayeredMetaDB db, VirtualFileManager files, Toolchain rootToolchain, Toolchain sharedToolchain) {
+		if (db instanceof RuntimeDB) { // Ugliest piece of interconnection, but it works
+			((LayeredDBFileWrapperDB) sdb).RuntimeDBViewManipulator = db.ViewManipulator;
+		}
+		String prefix = getDBFilePrefix(db);
+		for (String name : db.getTables()) {
+			Toolchain toolchain = db.isRootOnly(name) ? rootToolchain : sharedToolchain;
+			files.registerVirtualFile(new VirtualTableFile(sdb, db, prefix + name + dbFileSuffix, toolchain, name));
+		}
 	}
 
-	private static FileInfo loadDBFile(LayeredMetaDB db, int id, String tableName, boolean decodeBigString, Toolchain toolchain) {
-		JsonArray res;
-		try {
-			res = db.readTable(tableName, decodeBigString, toolchain);
-			JsonObject result = new JsonObject();
-			if (res != null) {
-				if (res.isArray()) {
-					JsonArray arr = res.asArray(); // Row data of table contents
-					if (!arr.Value.isEmpty()) {
-						List<TableField> columns = db.getFields(tableName); // Fields definitions
-						if (columns != null) {
-							List<JsonValue> columnsjsn = new ArrayList<>();
-							for (TableField column : columns) {
-								if (!column.field.name.equals("toolchain") || toolchain.IsRoot) { // No toolchain columns for non roots
-									columnsjsn.add(new JsonString(column.field.getDecodableRepresentation()));
+	public static interface VirtualViewManipulator {
+		public DatabaseResult select_raw(String sql, Object... objects) throws DatabaseException;
+	}
+
+	private static class VirtualTableFile extends VirtualFile {
+
+		private final String tableName;
+		private final Toolchain toolchain;
+		private final LayeredMetaDB db;
+		private final StaticDB sdb;
+
+		public VirtualTableFile(StaticDB sdb, LayeredMetaDB db, String name, Toolchain toolchain, String tableName) {
+			super(name, toolchain);
+			this.tableName = tableName;
+			this.toolchain = toolchain;
+			this.db = db;
+			this.sdb = sdb;
+		}
+
+		private boolean editRow(JsonObject contents, UserContext context) {
+			if (!db.tableWriteable(tableName)) {
+				return false;
+			}
+			ValuedField[] values = new ValuedField[contents.getEntries().size() - 1];
+			TableField[] fields = new TableField[values.length];
+			TableField idField = null;
+			int ID = -1;
+			int index = 0;
+			try {
+				for (Entry<String, JsonValue> entry : contents.getEntries()) {
+					String name = entry.getKey();
+					JsonValue value = entry.getValue();
+					if (name.equals("ID")) {
+						if (!value.isNumber()) { // Non numeric ID
+							return false;
+						}
+						ID = value.asNumber().Value;
+						idField = db.getField(tableName, name);
+						continue;
+					}
+					if (index == values.length) { // No ID
+						return false;
+					}
+					Object val = null;
+					if (value.isNumber()) {
+						val = value.asNumber().asLong();
+					} else if (value.isString()) {
+						val = value.asString().Value;
+					} else {
+						return false;
+					}
+					try {
+						fields[index] = db.getField(tableName, name);
+						values[index] = new ValuedField(fields[index], val);
+					} catch (DatabaseException e) { // No such column
+						e.printStackTrace();
+						return false;
+					}
+					index++;
+				}
+				if (index != values.length) { // Multiple IDs
+					return false;
+				}
+				// Get current data
+
+				if (sdb != null) {
+					JsonArray original = db.select(tableName, fields, true, new ComparisionField(idField, ID));
+					JsonObject obj = new JsonObject();
+					obj.add("original", original);
+					obj.add("new", contents);
+					obj.add("ID", new JsonNumber(ID));
+					obj.add("table", new JsonString(tableName));
+					sdb.adminLog(toolchain, context.getAddress(), context.getLogin(), "editRow:" + ID + ":" + Name, obj.getJsonString());
+				}
+
+				db.update(tableName, ID, values);
+				return true;
+			} catch (DatabaseException e) {
+				e.printStackTrace();
+				return false;
+			}
+		}
+
+		@Override
+		public String read(UserContext context) throws VirtualFileException {
+			Toolchain toolchain = context.getToolchain();
+			JsonArray res;
+			try {
+				res = db.readTable(tableName, true, context);
+				JsonObject result = new JsonObject();
+				if (res != null) {
+					if (res.isArray()) {
+						JsonArray arr = res.asArray(); // Row data of table contents
+						if (!arr.Value.isEmpty()) {
+							List<TableField> columns = db.getFields(tableName); // Fields definitions
+							if (columns != null) {
+								List<JsonValue> columnsjsn = new ArrayList<>();
+								for (TableField column : columns) {
+									if (!column.field.name.equals("toolchain") || toolchain.IsRoot) { // No toolchain columns for non roots
+										columnsjsn.add(new JsonString(column.field.getDecodableRepresentation()));
+									}
 								}
-							}
-							JsonValue first = arr.Value.get(0);
-							if (first.isObject()) {
-								JsonArray resultData = new JsonArray(new ArrayList<JsonValue>());
-								result.add("columns", new JsonArray(columnsjsn));
-								result.add("data", resultData);
-								for (JsonValue val : arr.Value) {
-									if (val.isObject()) {
-										List<JsonValue> values = new ArrayList<>();
-										JsonObject vobj = val.asObject();
-										for (TableField col : columns) {
-											if (!col.field.name.equals("toolchain") || toolchain.IsRoot) { // No toolchain columns for non roots
-												JsonValue colValue = vobj.get(col.field.name);
-												values.add(colValue);
+								JsonValue first = arr.Value.get(0);
+								if (first.isObject()) {
+									JsonArray resultData = new JsonArray(new ArrayList<JsonValue>());
+									result.add("columns", new JsonArray(columnsjsn));
+									result.add("data", resultData);
+									for (JsonValue val : arr.Value) {
+										if (val.isObject()) {
+											List<JsonValue> values = new ArrayList<>();
+											JsonObject vobj = val.asObject();
+											for (TableField col : columns) {
+												if (!col.field.name.equals("toolchain") || toolchain.IsRoot) { // No toolchain columns for non roots
+													JsonValue colValue = vobj.get(col.field.name);
+													values.add(colValue);
+												}
 											}
+											resultData.add(new JsonArray(values));
 										}
-										resultData.add(new JsonArray(values));
 									}
 								}
 							}
 						}
 					}
 				}
+				return result.getJsonString();
+			} catch (DatabaseException e) {
+				e.printStackTrace();
+				return null;
 			}
-			return new FileInfo(id, getDBFilePrefix(db) + tableName + dbFileSuffix, result.getJsonString(), toolchain.getName());
-		} catch (DatabaseException e) {
-			e.printStackTrace();
-			return null;
+		}
+
+		@Override
+		public boolean write(UserContext context, String newName, String value) throws VirtualFileException {
+			JsonValue val = JsonValue.parse(value);
+			if (val != null) {
+				if (val.isObject()) {
+					JsonObject obj = val.asObject();
+					return editRow(obj, context);
+				}
+			}
+			return false;
 		}
 	}
 
+	public class VirtualViewFile extends VirtualDatabaseFile {
+
+		public VirtualViewFile(int fileID, String name, Toolchain toolchain, DatabaseFileManipulator source) {
+			super(fileID, name, toolchain, source);
+		}
+
+		private final DatabaseResult select_raw(String sql) throws DatabaseException {
+			VirtualViewManipulator rawSQL = Name.startsWith(dbDirPrefix + metaDatabaseName) ? ViewManipulator : RuntimeDBViewManipulator;
+			if (rawSQL == null) {
+				return null;
+			} else {
+				return rawSQL.select_raw(sql);
+			}
+		}
+
+		@Override
+		public String read(UserContext context) throws VirtualFileException {
+			String SQL = super.read(context);
+			if (SQL != null) {
+				JsonValue result = null;
+				int code = 1; // Error
+
+				String freeSQL = FreeSQLSyntaxMatcher.matcher(SQL).replaceAll("$2");
+
+				try {
+					freeSQL = Pattern.compile("\\%NOW\\%", Pattern.MULTILINE).matcher(freeSQL).replaceAll(new Date().getTime() + "");
+					String tSQL = freeSQL.toLowerCase();
+					final String[] bannedKW = new String[] { "update", "insert", "delete", "drop", "alter", "create" };
+					for (String banned : bannedKW) {
+						if (tSQL.contains(banned)) {
+							throw new DatabaseException("Forbidden command: " + banned);
+						}
+					}
+					DatabaseResult res = select_raw(freeSQL); // TODO
+
+					// Parse query
+					List<TableField> fields_lst = new ArrayList<>();
+					Matcher matcher = LayeredDBFileWrapperDB.FreeSQLSyntaxMatcher.matcher(SQL);
+					while (matcher.find()) {
+						String fn = matcher.group(1);
+						String field = matcher.group(2);
+						if (fn.equals("BIGTEXT")) {
+							fields_lst.add(new TableField(new Field(field, "", FieldType.BIGSTRING), ""));
+						}
+					}
+
+					TableField[] fields = new TableField[fields_lst.size()];
+					for (int i = 0; i < fields.length; i++) {
+						fields[i] = fields_lst.get(i);
+					}
+
+					result = res.getJSON(true, fields, context.getToolchain());
+					if (result != null) { // The only non-error scenario
+						code = 0;
+					}
+				} catch (Exception e) { // No need to print exception, not our SQL to handle
+					result = new JsonString(e.getMessage());
+				}
+				JsonObject robj = new JsonObject();
+				robj.add("SQL", new JsonString(SQL));
+				robj.add("freeSQL", new JsonString(freeSQL));
+				robj.add("code", new JsonNumber(code));
+				robj.add("result", result);
+				return robj.getJsonString();
+			}
+			return null;
+		}
+
+	}
+
+	private static final String getDBFilePrefix(LayeredMetaDB db) {
+		return dbDirPrefix + db.metaDatabaseName + "/";
+	}
+
 	@Override
-	public FileInfo createFile(Toolchain toolchain, String name, String contents, boolean overwriteExisting) throws DatabaseException {
+	public VirtualDatabaseFile createFile(UserContext context, String name, String contents) throws DatabaseException {
 		if (name.startsWith(dbFilePrefix)) {
 			if (name.endsWith(viewFileSuffix)) {
-				return super.createFile(toolchain, name, contents, overwriteExisting);
+				return super.createFile(context, name, contents);
 			} else {
 				return null;
 			}
 		} else {
-			return super.createFile(toolchain, name, contents, overwriteExisting);
+			return super.createFile(context, name, contents);
 		}
 	}
 
-	@Override
-	public FileInfo getFile(int fileID, boolean decodeBigString, Toolchain toolchain) throws DatabaseException {
-		if (fileID >= DB_FILE_FIRST_ID && fileID < DB_FILE_FIRST_ID + DB_FILE_SIZE) {
-			return loadDBFile(this, fileID, this.getTables().get(fileID - DB_FILE_FIRST_ID), decodeBigString, toolchain);
-		} else {
-			FileInfo fo = super.getFile(fileID, decodeBigString, toolchain);
-			return fo;
-		}
-	}
-
-	public static FileInfo processPostLoadedFile(LayeredMetaDB db, FileInfo fi, boolean decodeBigString, Toolchain toolchain) {
-		if (fi != null) {
-			if (fi.FileName.startsWith(dbDirPrefix + db.metaDatabaseName + "/") && fi.FileName.endsWith(viewFileSuffix)) {
-				return handleView(db, fi, fi.FileName, fi.ID, decodeBigString, toolchain);
-			}
-		}
-		return fi;
-	}
-
-	public static FileInfo getFile(LayeredMetaDB db, int fileID, boolean decodeBigString, Toolchain toolchain) throws DatabaseException {
-		if (fileID >= db.DB_FILE_FIRST_ID && fileID < db.DB_FILE_FIRST_ID + DB_FILE_SIZE) {
-			List<String> tables = db.getTables();
-			if (fileID - db.DB_FILE_FIRST_ID < tables.size()) { // Valid
-				return loadDBFile(db, fileID, tables.get(fileID - db.DB_FILE_FIRST_ID), decodeBigString, toolchain);
-			} else if (db instanceof RuntimeDB) { // Something fucky
-				return ((RuntimeDB) db).getSpecialFile(fileID, false);
-			}
-		}
-		return null;
-	}
-
-	public static final void loadDatabaseFiles(LayeredMetaDB db, List<DatabaseFile> files, Toolchain toolchain) {
-		if (files != null) {
-			int index = 0;
-			for (String name : db.getTables()) {
-				if (toolchain.IsRoot || !db.isRootOnly(name)) {
-					files.add(new DatabaseFile(index + db.DB_FILE_FIRST_ID, dbDirPrefix + db.metaDatabaseName + "/" + name + dbFileSuffix, toolchain.getName()));
-				}
-				index++;
-			}
-			if (db instanceof RuntimeDB) {
-				((RuntimeDB) db).addSpecialFiles(files, index, dbDirPrefix + db.metaDatabaseName + "/", viewFileSuffix, toolchain);
-			}
-		}
-	}
-
-	@Override
-	public List<DatabaseFile> getFiles(Toolchain toolchain) {
-		List<DatabaseFile> lst = super.getFiles(toolchain);
-		loadDatabaseFiles(this, lst, toolchain);
-		return lst;
-	}
-
-	public static final boolean editRow(LayeredMetaDB db, FileInfo file, JsonObject contents, Toolchain toolchain) {
-		return editRow(null, null, null, db, file, contents, toolchain);
-	}
-
-	public static final String getTableNameForFile(LayeredMetaDB db, FileInfo file) {
-		if (file.ID >= db.DB_FILE_FIRST_ID && file.ID < db.DB_FILE_FIRST_ID + DB_FILE_SIZE) { // Owned by the DB -> table exists in db
-			String tableName = db.getTables().get(file.ID - db.DB_FILE_FIRST_ID);
-			return tableName;
-		}
-		return null;
-	}
-
-	public static final boolean editRow(StaticDB sdb, String login, String address, LayeredMetaDB db, FileInfo file, JsonObject contents, Toolchain toolchain) {
-		try {
-			if (file.ID >= db.DB_FILE_FIRST_ID && file.ID < db.DB_FILE_FIRST_ID + DB_FILE_SIZE) { // Owned by the DB -> table exists in db
-				if (contents.containsNumber("ID")) {
-					String tableName = db.getTables().get(file.ID - db.DB_FILE_FIRST_ID);
-
-					if (!db.tableWriteable(tableName)) {
-						return false;
-					}
-					ValuedField[] values = new ValuedField[contents.getEntries().size() - 1];
-					TableField[] fields = new TableField[values.length];
-					TableField idField = null;
-					int ID = -1;
-					int index = 0;
-					try {
-						for (Entry<String, JsonValue> entry : contents.getEntries()) {
-							String name = entry.getKey();
-							JsonValue value = entry.getValue();
-							if (name.equals("ID")) {
-								if (!value.isNumber()) { // Non numeric ID
-									return false;
-								}
-								ID = value.asNumber().Value;
-								idField = db.getField(tableName, name);
-								continue;
-							}
-							if (index == values.length) { // No ID
-								return false;
-							}
-							Object val = null;
-							if (value.isNumber()) {
-								val = value.asNumber().asLong();
-							} else if (value.isString()) {
-								val = value.asString().Value;
-							} else {
-								return false;
-							}
-							try {
-								fields[index] = db.getField(tableName, name);
-								values[index] = new ValuedField(fields[index], val);
-							} catch (DatabaseException e) { // No such column
-								e.printStackTrace();
-								return false;
-							}
-							index++;
-						}
-						if (index != values.length) { // Multiple IDs
-							return false;
-						}
-						// Get current data
-
-						if (sdb != null && login != null && address != null) {
-							JsonArray original = db.select(tableName, fields, true, new ComparisionField(idField, ID));
-							JsonObject obj = new JsonObject();
-							obj.add("original", original);
-							obj.add("new", contents);
-							obj.add("ID", new JsonNumber(ID));
-							obj.add("table", new JsonString(tableName));
-							sdb.adminLog(toolchain, address, login, "editRow:" + file.ID + ":" + file.FileName, obj.getJsonString());
-						}
-
-						db.update(tableName, ID, values);
-						return true;
-					} catch (DatabaseException e) {
-						e.printStackTrace();
-						return false;
-					}
-				}
-			}
-			return false;
-		} finally {
-			db.clearCache();
-		}
-	}
-
-	@Override
-	public void storeFile(DatabaseFile file, String newFileName, String newContents) {
-		if (file.ID >= DB_FILE_FIRST_ID && file.ID < DB_FILE_FIRST_ID + DB_FILE_SIZE) {
-			return;
-		} else {
-			super.storeFile(file, newFileName, newContents);
-		}
-	}
-
-	private static FileInfo handleSpecialView(LayeredMetaDB db, String name, int fileID) {
-		if (db instanceof RuntimeDB) {
-			return ((RuntimeDB) db).handleSpecialView(name, fileID, true);
-		}
-		return null;
-	}
-
-	private static FileInfo handleView(LayeredMetaDB db, FileInfo sqlFile, String name, int fileID, boolean decodeBigString, Toolchain toolchain) {
-		if (db instanceof RuntimeDB && name != null) {
-			if (((RuntimeDB) db).ownsFile(name)) {
-				return handleSpecialView(db, name, fileID);
-			}
-		} else if (sqlFile == null) { // Pass error
-			return handleSpecialView(db, name, fileID);
-		}
-		JsonValue result = null;
-		int code = 1; // Error
-
-		String SQL = sqlFile.Contents; // Strip all metas
-		String freeSQL = FreeSQLSyntaxMatcher.matcher(SQL).replaceAll("$2");
-
-		try {
-			freeSQL = Pattern.compile("\\%NOW\\%", Pattern.MULTILINE).matcher(freeSQL).replaceAll(new Date().getTime() + "");
-			String tSQL = freeSQL.toLowerCase();
-			final String[] bannedKW = new String[] { "update", "insert", "delete", "drop", "alter", "create" };
-			for (String banned : bannedKW) {
-				if (tSQL.contains(banned)) {
-					throw new DatabaseException("Forbidden command: " + banned);
-				}
-			}
-			@SuppressWarnings("deprecation")
-			DatabaseResult res = db.select_raw(freeSQL); // TODO
-
-			// Parse query
-			List<TableField> fields_lst = new ArrayList<>();
-			Matcher matcher = LayeredDBFileWrapperDB.FreeSQLSyntaxMatcher.matcher(SQL);
-			while (matcher.find()) {
-				String fn = matcher.group(1);
-				String field = matcher.group(2);
-				if (fn.equals("BIGTEXT")) {
-					fields_lst.add(new TableField(new Field(field, "", FieldType.BIGSTRING), ""));
-				}
-			}
-
-			TableField[] fields = new TableField[fields_lst.size()];
-			for (int i = 0; i < fields.length; i++) {
-				fields[i] = fields_lst.get(i);
-			}
-
-			result = res.getJSON(decodeBigString, fields, toolchain);
-			if (result != null) { // The only non-error scenario
-				code = 0;
-			}
-		} catch (Exception e) { // No need to print exception, not our SQL to handle
-			result = new JsonString(e.getMessage());
-		}
-		JsonObject robj = new JsonObject();
-		robj.add("SQL", new JsonString(SQL));
-		robj.add("freeSQL", new JsonString(freeSQL));
-		robj.add("code", new JsonNumber(code));
-		robj.add("result", result);
-		return new FileInfo(sqlFile.ID, sqlFile.FileName, robj.getJsonString(), toolchain.getName());
-	}
-
-	@Override
-	public FileInfo loadFile(String name, boolean decodeBigString, Toolchain toolchain) {
-		if (name.startsWith(dbFilePrefix)) {
-			if (name.endsWith(viewFileSuffix)) { // SQL view
-				FileInfo sqlFile = super.loadFile(name, decodeBigString, toolchain);
-				return handleView(this, sqlFile, name, -1, decodeBigString, toolchain);
-			}
-
-			int index = super.getTables().indexOf(name);
-			if (index < 0) {
-				return null;
-			}
-			name = name.substring(dbFilePrefix.length());
-			if (!name.endsWith(dbFileSuffix)) {
-				return null;
-			}
-			name = name.substring(0, name.length() - dbFileSuffix.length());
-			return loadDBFile(this, index + DB_FILE_FIRST_ID, name, decodeBigString, toolchain);
-		} else {
-			return super.loadFile(name, decodeBigString, toolchain);
-		}
-	}
 }

@@ -10,6 +10,8 @@ import java.util.Map;
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.RuntimeDB.BadResults;
 import cz.rion.buildserver.db.StaticDB;
+import cz.rion.buildserver.db.VirtualFileManager;
+import cz.rion.buildserver.db.VirtualFileManager.UserContext;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.ExecutionResult;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.ToolchainLogger;
@@ -23,7 +25,6 @@ import cz.rion.buildserver.json.JsonValue.JsonString;
 import cz.rion.buildserver.utils.CachedData;
 import cz.rion.buildserver.utils.CachedDataGetter;
 import cz.rion.buildserver.utils.CachedDataWrapper2;
-import cz.rion.buildserver.utils.CachedToolchainData;
 import cz.rion.buildserver.utils.CachedToolchainData2;
 import cz.rion.buildserver.utils.CachedToolchainDataGetter2;
 import cz.rion.buildserver.utils.CachedToolchainDataWrapper2;
@@ -147,13 +148,32 @@ public class TestManager {
 		public CachedData<TestCollection> createData(int refreshIntervalInSeconds, final Toolchain toolchain) {
 
 			return new CachedDataWrapper2<>(refreshIntervalInSeconds, new CachedDataGetter<TestCollection>() {
+				
+				private final UserContext toolchainContext = new UserContext() {
+
+					@Override
+					public Toolchain getToolchain() {
+						return toolchain;
+					}
+
+					@Override
+					public String getLogin() {
+						return "root";
+					}
+
+					@Override
+					public String getAddress() {
+						return "0.0.0.0";
+					}
+
+				};
 
 				@Override
 				public TestCollection update() {
 					TestCollection collection = new TestCollection();
 					collection.tests.clear();
 					collection.mtest.clear();
-					List<GenericTest> jsonTests = JsonTestManager.load(sdb, testDirectory, toolchain);
+					List<GenericTest> jsonTests = JsonTestManager.load(files, sdb, testDirectory, toolchainContext);
 					for (GenericTest test : jsonTests) {
 						String toolchain = test.getToolchain().toLowerCase();
 						if (!collection.tests.containsKey(toolchain)) {
@@ -181,9 +201,12 @@ public class TestManager {
 	private final String testDirectory;
 	private final StaticDB sdb;
 
-	public TestManager(StaticDB sdb, String testDirectory) {
+	private final VirtualFileManager files;
+
+	public TestManager(VirtualFileManager files, StaticDB sdb, String testDirectory) {
 		this.testDirectory = testDirectory;
 		this.sdb = sdb;
+		this.files = files;
 	}
 
 	public void reloadTests() {
