@@ -100,7 +100,7 @@ public class RuntimeDB extends LayeredMetaDB {
 
 	public final static class TestHistory implements JsonValuable {
 		public final int ID;
-		public final int UserID;
+		public final String Login;
 		public final String Toolchain;
 		public final String TestID;
 		public final String Result;
@@ -109,9 +109,9 @@ public class RuntimeDB extends LayeredMetaDB {
 		public final String LastFeedbackLogin;
 		public final long CreationTime;
 
-		private TestHistory(int ID, String toolchain, int userID, String testID, String result, long creation_time, JsonNumber totalFeedbacks, JsonNumber lastFeedbackDate, String lastFeedbackLogin) {
+		private TestHistory(int ID, String toolchain, String login, String testID, String result, long creation_time, JsonNumber totalFeedbacks, JsonNumber lastFeedbackDate, String lastFeedbackLogin) {
 			this.ID = ID;
-			this.UserID = userID;
+			this.Login = login;
 			this.Toolchain = toolchain;
 			this.TestID = testID;
 			this.Result = result;
@@ -125,7 +125,7 @@ public class RuntimeDB extends LayeredMetaDB {
 		public JsonValue getValue() {
 			JsonObject obj = new JsonObject();
 			obj.add("ID", this.ID);
-			obj.add("UserID", this.UserID);
+			obj.add("Login", this.Login);
 			obj.add("Toolchain", this.Toolchain);
 			obj.add("TestID", this.TestID);
 			obj.add("Result", this.Result);
@@ -241,28 +241,30 @@ public class RuntimeDB extends LayeredMetaDB {
 	public List<TestHistory> getHistory(Toolchain toolchain, UsersPermission perms, String testID, boolean onlyMine) throws DatabaseException {
 		List<TestHistory> lst = new ArrayList<>();
 		final String tableName = "compilations";
-		TableField[] fields = new TableField[] { getField(tableName, "ID"), getField(tableName, "toolchain"), getField(tableName, "result"), getField(tableName, "user_id"), getField(tableName, "creation_time"), getField(tableName, "test_id") };
+		final String tableName2 = "users";
+
+		TableField[] fields = new TableField[] { getField(tableName, "ID"), getField(tableName2, "login"), getField(tableName, "toolchain"), getField(tableName, "result"), getField(tableName, "user_id"), getField(tableName, "creation_time"), getField(tableName, "test_id") };
 		ComparisionField tidc = new ComparisionField(getField(tableName, "test_id"), testID);
 		ComparisionField tuidc = new ComparisionField(getField(tableName, "user_id"), perms.getUserID());
 
 		ComparisionField[] conjunctions = onlyMine ? new ComparisionField[] { tidc, tuidc } : new ComparisionField[] { tidc };
-		JsonArray res = this.select(tableName, fields, true, conjunctions);
+		JsonArray res = this.select(tableName, fields, conjunctions, new TableJoin[] { new TableJoin(getField(tableName, "user_id"), getField(tableName2, "ID")) }, true);
 		for (JsonValue val : res.Value) {
 			if (val.isObject()) {
 				JsonObject obj = val.asObject();
-				if (obj.containsNumber("ID") && obj.containsNumber("user_id") && obj.containsNumber("creation_time") && obj.containsString("toolchain") && obj.containsString("test_id") && obj.containsString("result")) {
+				if (obj.containsNumber("ID") && obj.containsString("login") && obj.containsNumber("creation_time") && obj.containsString("toolchain") && obj.containsString("test_id") && obj.containsString("result")) {
 					int id = obj.getNumber("ID").Value;
 					String tc = obj.getString("toolchain").Value;
 					String test_id = obj.getString("test_id").Value;
 					String result = obj.getString("result").Value;
-					int user_id = obj.getNumber("user_id").Value;
+					String login = obj.getString("login").Value;
 					long creation_time = obj.getNumber("creation_time").asLong();
 					if (toolchain.IsRoot || toolchain.getName().equals(tc)) {
 						Object[] x = getTotalFeedbacksWithLastFeedback(toolchain, id);
 						JsonNumber cnt = (JsonNumber) x[0];
 						JsonNumber last = (JsonNumber) x[1];
 						String lastLogin = (String) x[2];
-						lst.add(new TestHistory(id, tc, user_id, test_id, result, creation_time, cnt, last, lastLogin));
+						lst.add(new TestHistory(id, tc, login, test_id, result, creation_time, cnt, last, lastLogin));
 					}
 				}
 			}
