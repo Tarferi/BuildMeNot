@@ -536,22 +536,22 @@ var Common = function() {
 	self.activeLoader = undefined;
 	
 	self.showLoader = function() {
-		if(self.activeLoader === undefined) {
-			self.activeLoader = document.createElement("div");
-			self.activeLoader.style.position = "fixed";
-			self.activeLoader.style.left = "0px";
-			self.activeLoader.style.right = "0px";
-			self.activeLoader.style.top = "0px";
-			self.activeLoader.style.bottom = "0px";
-			self.activeLoader.style.background = "#00000066";
-			document.body.appendChild(self.activeLoader);
-		}
+		self.hideLoader();
+		self.activeLoader = document.createElement("div");
+		self.activeLoader.style.position = "fixed";
+		self.activeLoader.style.left = "0px";
+		self.activeLoader.style.right = "0px";
+		self.activeLoader.style.top = "0px";
+		self.activeLoader.style.bottom = "0px";
+		self.activeLoader.style.background = "#00000066";
+		document.body.appendChild(self.activeLoader);
 		self.activeLoader.style.display = "block";
 	}
 	
 	self.hideLoader = function() {
 		if(self.activeLoader !== undefined) {
-			self.activeLoader.style.display = "none";
+			self.activeLoader.parentElement.removeChild(self.activeLoader);
+			self.activeLoader = undefined;
 		}
 	}
 	
