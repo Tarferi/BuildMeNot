@@ -5,25 +5,22 @@ var tester = function() {
 	var self = this;
 	self.common = new Common();
 	
-	self.allTests = [];
-	self.mres = function() {
-		for(var i = 0; i < self.allTests.length; i++) {
-			self.allTests[i].handleResize();
-		}
-	}
+	self.root = document.createElement("div");
+	document.body.appendChild(self.root);
 	
+	self.allTests = [];
 	
 	self.testI = function(data, tester, common) {
 		this.data = data;
 		var self = this;
 		var tester = tester;
-		var common = common;
+		self.common = common;
 		
 		this.ta = null;
 		this.b1 = null;
 		this.rs = null;
 		
-		var UI = {
+		var UIOld = {
 		  "type": "div",
 		  "class": "w0",
 		  "contents": [
@@ -117,31 +114,424 @@ var tester = function() {
 		    }
 		  ]
 		};
-	
-		this.handleResize = function() {
-			var parentHeight = self.ta.parentElement.clientHeight;
-			var parentWidth = self.ta.parentElement.offsetWidth;
-			
-			var paddingBottom = 45;
-			parentHeight -= paddingBottom;
-			
-			// Handle text area width
-			self.ta.style.width = parentWidth+"px";
-			var currentWidth = self.ta.offsetWidth;
-			var fixedWidth = parentWidth - (currentWidth - parentWidth);
-			self.ta.style.width = fixedWidth+"px";
-			
-			// Handle text area height
-			self.ta.style.height = parentHeight+"px";
-			var currentHeight = self.ta.clientHeight;
-			var fixedHeight = parentHeight - (currentHeight - parentHeight);
-			self.ta.style.height = fixedHeight +"px";
-			
+		
+		var btnStyle = "height: 30px; padding-left: 20px; padding-right: 20px;";
+		
+		var UI = {
+			"type": "table",
+			"class": "tester_tbl",
+			"style": "border-collapse: collapse; border-spacing: 0px; border: 1px solid black;width:80%;min-width: 840px;margin-bottom: 80px;font-family: Tahoma;left: 10%;position: relative;",
+			"contents": [
+				{
+					"type": "thead",
+					"contents": [
+						{
+							"type": "tr",
+							"id": "nwBorder",
+							"style": "background-color: #eeeeee;line-height: 50px;font-size: 20pt;font-weight: normal; border-bottom: 1px solid black",
+							"contents": [
+								{
+									"type": "td",
+									"innerHTML": "Header",
+									"id": "txtBrief",
+									"style": "width: 100%;padding-left:20px;"
+								},
+								{
+									"type": "td",
+									"style": "padding-right: 10px;width: 200px;text-align: right;",
+									"contents": [
+										{
+											"type": "button",
+											"innerHTML": "Skrýt",
+											"id": "btnHide",
+											"style": (btnStyle + "; position: relative; top: -5px; text-align: center; display: inline-block; width: 80px;padding: 0px;")
+										}
+									]		
+								}
+							]
+						}
+					]
+				},
+				{
+					"type": "tbody",
+					"contents": [
+						{
+							"type": "tr",
+							"id": "pnlMain",
+							"style": "border-bottom: 1px solid black",
+							"contents": [
+								{
+									"type": "td",
+									"colSpan": 2,
+									"style": "margin: 0px; padding: 0px;",
+									"contents": [
+										{
+											"type": "table",
+											"style": "border-collapse: collapse; border: 0px; width: 100%; margin: 0px; padding: 0px;",
+											"contents": [
+												{
+													"type": "tbody",
+													"contents": [
+														{
+															"type": "tr",
+															"contents": [
+																{
+																	"type": "td",
+																	"contents": [
+																		{
+																			"type": "textarea",
+																			"id": "txtArea",
+																			"style": "width: calc(100% - 5px); min-height: 230px; padding-left: 5px; padding-right: 0px; outline: none; border-left: none; border-right: none; border-top: none; border-bottom: 1px solid black; background: #fafafa; font-family: courier; resize: vertical;",
+																		}
+																	]
+																},
+																{
+																	"type": "td",
+																	"rowSpan": 2,
+																	"style": "vertical-align: top; width: 33%; border-left: 1px solid black; border-right: 1px solid black;margin: 0px; padding: 0px;",
+																	"contents":[
+																		{
+																			"type": "div",
+																			"style": "height: 40px; background-color: #daffff;margin: 0px; padding: 0px;text-align: center;line-height: 40px; font-size: 20pt;border-bottom: 1px solid black",
+																			"innerHTML": "Zadání"
+																		},
+																		{
+																			"type": "div",
+																			"style": "min-height: 230px;height: 100%;padding: 5px;font-family: times;",
+																			"id": "txtDescr"
+																		}
+																	]	
+																},
+																{
+																	"type": "td",
+																	"rowSpan": 2,
+																	"style": "width: 20%;min-width: 320px; vertical-align: top;",
+																	"colSpan": 3,
+																	"contents":[
+																		{
+																			"type": "div",
+																			"style": "height: 40px; background-color: #ffddcc;margin: 0px; padding: 0px;text-align: center;line-height: 40px; font-size: 20pt;border-bottom: 1px solid black",
+																			"innerHTML": "Řešení"
+																		},
+																		{
+																			"type": "div",
+																			"style": "min-height: 230px;height: 100%;padding: 5px;font-family: times;",
+																			"id": "txtSolution"
+																		}
+																	]
+																}
+															]
+														},
+														{
+															"type": "tr",
+															"contents": [
+																{
+																	"type": "td",
+																	"style": "padding-right: 10px;width: 33%;",
+																	"contents": [
+																		{
+																			"type": "button",
+																			"innerHTML": "Otestovat řešení",
+																			"id": "runtests",
+																			"style": btnStyle + "; width: 80px;position: relative;margin-left: 5px;margin-bottom: 6px; width: 150px; height: 28px;"
+																		},
+																		{
+																			"type": "button",
+																			"innerHTML": "Historie řešení",
+																			"id": "showhist",
+																			"style": btnStyle + "; width: 80px;position: relative;margin-left: 5px;margin-bottom: 6px; width: 150px; height: 28px;"
+																		}
+																	]	
+																}	
+															]
+														}
+													]
+												}
+											]
+										}
+									]
+								}
+							]
+						},
+						{
+							"type": "tr",
+							"style": "",
+							"contents": [
+								{	
+									"type": "td",
+									"id": "feedbackPnl",
+									"colSpan": 2,
+									"style": "padding: 0px; margin: 0px; display: none"
+								}	
+							]
+						}
+					]
+				}
+			]
 		}
+		
+		var feedbackListRowUI = {
+			"type": "tr",
+			"style": "border-top: 1px solid black",
+			"contents": [
+			     {
+					"type": "td",
+					"id": "turndate",
+					"style": "padding-right: 10px; padding-top: 3px; padding-bottom: 3px;border-right: 1px solid black; text-align: right",
+					"innerHTML": "01.01.1970 22:00"
+				 },
+				 {
+					"type": "td",
+					"id": "results",
+					"style": "padding-right: 10px; padding-top: 3px; padding-bottom: 3px;border-right: 1px solid black; text-align: right",
+					"innerHTML": "Chyba: abc"
+				 },
+			 	 {
+					"type": "td",
+					"id": "comments",
+					"style": "padding-right: 10px; padding-top: 3px; padding-bottom: 3px;border-right: 1px solid black; text-align: right",
+					"innerHTML": "0"
+				 },
+			 	 {
+					"type": "td",
+					"style": "padding-right: 10px; padding-top: 3px; padding-bottom: 3px;border-right: 1px solid black; text-align: left",
+					"contents": [
+						{
+							"type": "span",
+							"style": "margin-left: 10px",
+							"id": "lastcommentlogin"
+						},
+						{
+							"type": "span",
+							"style": "float: right;margin-right: 5px;",
+							"id": "lastcomment"
+						}
+					]
+				 },
+			 	 {
+					"type": "td",
+					"style": "padding-right: 5px; padding-top: 5px; padding-bottom: 5px;border-right: 1px solid black; text-align: right; min-width: 170px;",
+					"contents": [
+						{
+							"type": "button",
+							"id": "btnComment",
+							"style": btnStyle,
+							"innerHTML": "Zobrazit komentáře"
+						}
+					]
+				 }
+			]
+		}
+		
+		var feedbackListUI = {
+			"type": "table",
+			"style": "border-collapse: collapse; border: 0px; width: 100%; margin: 0px; padding: 0px;",
+			"contents": [
+				{
+					"type": "thead",
+					"contents": [
+						{
+							"type":"tr",
+							"style": "border-bottom: 1px solid black",
+							"contents": [
+								{
+									"type": "td",
+									"style": "border-right: 1px solid black; height: 40px; background-color: #aaddee;margin: 0px; padding: 0px;text-align: center;line-height: 40px; font-size: 20pt;width: 15%;",
+									"innerHTML": "Datum odevzdání",
+								},
+								{
+									"type": "td",
+									"style": "border-right: 1px solid black; height: 40px; background-color: #aaddee;margin: 0px; padding: 0px;text-align: center;line-height: 40px; font-size: 20pt;width: 30%;",
+									"innerHTML": "Výsledek testů",
+								},
+								{
+									"type": "td",
+									"style": "border-right: 1px solid black; height: 40px; background-color: #aaddee;margin: 0px; padding: 0px;text-align: center;line-height: 40px; font-size: 20pt;width: 15%;",
+									"innerHTML": "Počet komentářů",
+								},
+								{
+									"type": "td",
+									"style": "border-right: 1px solid black; height: 40px; background-color: #aaddee;margin: 0px; padding: 0px;text-align: center;line-height: 40px; font-size: 20pt;width: 20%;",
+									"innerHTML": "Poslední komentář",
+								},
+								{
+									"type": "td",
+									"style": "height: 40px; background-color: #aaddee;margin: 0px; padding: 0px;text-align: center;line-height: 40px; font-size: 20pt;width: 150px;",
+									"innerHTML": "Akce"
+								}
+							]
+						}
+					]
+				},
+				{
+					"type": "tbody",
+					"id": "feedback_contents"
+				}
+			]
+		}
+		
+		var commentUI = {
+			"type": "table",
+			"style": "border-collapse: collapse; border-top: 0px; width: 100%; margin: 0px; padding: 0px;",
+			"contents": [
+				{
+					"type": "tbody",
+					"contents": [
+						{
+							"type":"tr",
+							"contents": [
+								{
+									"type": "td",
+									"style": "border-bottom: 1px solid black; border-right: 1px solid black; height: 40px; background-color: #aaddee;margin: 0px; padding: 0px;text-align: center;line-height: 40px; font-size: 20pt;width: 50%;",
+									"innerHTML": "Odevzdaný kód",
+								},
+								{
+									"type": "td",
+									"rowSpan": 2,
+									"style": "border-right: 1px solid black; height: 100%; margin: 0px; padding: 0px;width: calc(50% - 200px); vertical-align: top;",
+									"contents": [
+										{
+											"type": "table",
+											"style": "border-collapse: collapse; border: 0px; width: 100%; height: 100%; margin: 0px; padding: 0px;",
+											"contents": [
+												{
+													"type": "thead",
+													"contents": [
+														{
+															"type": "tr",
+															"contents": [
+																{
+																	"type": "td",
+																	"colSpan": 2,
+																	"style": "border-bottom: 1px solid black; height: 40px; background-color: #aaddee;margin: 0px; padding: 0px;text-align: center;line-height: 40px; font-size: 20pt;width: 200px;",
+																	"innerHTML": "Komentáře"
+																},
+															]
+														}
+													]
+												},
+												{
+													"type": "tbody",
+													"id": "commentcontents"
+												}
+											]
+										},
+										{
+											"type": "table",
+											"style": "border-collapse: collapse; border: 0px; width: 100%; height: 40px; margin: 0px; padding: 0px;",
+											"contents": [
+												{
+													"type": "thead",
+													"contents": [
+														{
+															"type": "tr",
+															"contents": [
+																{
+																	"type": "td",
+																	"style": "border-bottom: 1px solid black; border-right: 1px solid black; height: 40px; background-color: #aaddee;margin: 0px; padding: 0px;text-align: center;line-height: 40px; font-size: 20pt;width: 200px;",
+																	"innerHTML": "Označení"
+																},
+																{
+																	"type": "td",
+																	"style": "border-bottom: 1px solid black; height: 40px; background-color: #aaddee;margin: 0px; padding: 0px;text-align: center;line-height: 40px; font-size: 20pt;width: calc(100% - 200px);",
+																	"innerHTML": "Komentář"
+																}
+															]
+														}
+													]
+												},
+												{
+													"type": "tbody",
+													"style": "border-collapse: collapse; border: 0px; width: 100%; height: 40px; margin: 0px; padding: 0px;",
+													"contents": [
+														{
+															"type": "tr",
+															"contents": [
+																{
+																	"type": "td",
+																	"style": "border-right: 1px solid black; padding: 10px; vertical-align: top;",
+																	"id": "commentSel"
+																},
+																{
+																	"type": "td",
+																	"contents": [
+																		{
+																			"type": "textarea",
+																			"id": "commentArea",
+																			"style": "min-height: 120px; position: relative; top: 5px; font-family: Verdana; font-size: 14pt; resize: vertical; height: calc(100% - 10px); width: calc(100% - 10px); outline: none; border: 0px;"
+																		}
+																	]																	
+																}
+															]
+														}
+													]
+												}
+											]
+										}
+									]
+								},
+								{
+									"type": "td",
+									"style": "border-bottom: 1px solid black; height: 40px; background-color: #aaddee;margin: 0px; padding: 0px;text-align: center;line-height: 40px; font-size: 20pt;width: 200px;",
+									"innerHTML": "Akce"
+								}
+							]
+						},
+						{
+							"type": "tr",
+							"contents": [
+								{
+									"type": "td",
+									"style": "height: 100%;vertical-align: top;",
+									"contents": [
+										{
+											"type": "textarea",
+											"style": "min-height: 150px; padding: 5x; font-family: Courier; font-size: 12pt; border-right: 1px solid black;outline: none; width: calc(100% - 10px); height: calc(100% - 10px); resize: vertical;border: 0px",
+											"id": "codecontents"
+										}
+									]
+								},
+								{
+									"type": "td",
+									"style": "border-left: 1px solid black; vertical-align: top; text-align: right;padding-right: 5px; padding-top: 5px; padding-bottom: 5px;",
+									"contents": [
+										{
+											"type": "button",
+											"id": "btnComment",
+											"style": btnStyle,
+											"innerHTML": "Přidat komentář"
+										},
+										{
+											"type": "button",
+											"id": "btnSave",
+											"style": btnStyle + "; margin-top: 5px;display: none",
+											"innerHTML": "Uložit komentář"
+										},
+										{
+											"type": "button",
+											"id": "btnAddSel",
+											"style": btnStyle + "; margin-top: 5px;",
+											"innerHTML": "Přidat označení"
+										},
+										{
+											"type": "button",
+											"id": "btnCancelEdit",
+											"style": btnStyle + "; margin-top: 5px;display: none",
+											"innerHTML": "Zrušit editaci"
+										}
+									]
+								}
+							]
+						}
+					]
+				}
+			]
+		};
 		
 		this.setComponentsEnabled  = function(enabled) {
 			self.ta.readOnly = !enabled;
 			self.b1.disabled = !enabled;
+			self.btnHist.disabled = !enabled;
 		}
 		
 		this.getID = function() {
@@ -159,8 +549,6 @@ var tester = function() {
 		this.setSolution = function(data) {
 			this.rs.innerHTML = data;
 		}
-		
-
 		
 		var setup = function() {
 			// Mame vytvorenu strukturu a ulozeny jednotlive komponenty, nasadime callbacky
@@ -191,7 +579,525 @@ var tester = function() {
 				};
 				
 				self.btnHide.addEventListener("click", clickCB);
+				self.btnHist.addEventListener("click", self.showHistory);
 			}
+		}
+		
+		this.materializeFeedback = function(data) {
+			if(data.sort) {
+				data = data.sort(function(a, b) {
+					if(a.CreationTime < b.CreationTime) {
+						return 1;
+					} else if(a.CreationTime > b.CreationTime) {
+						return -1;
+					} else {
+						return 0;
+					}
+				});
+			}
+			var d = self.common.reconstructUI(feedbackListUI);
+			var node = d[0];
+			var ids = d[1];
+			
+			self.feedbackPnl.innerHTML = "";
+			self.feedbackPnl.appendChild(node);
+			
+			
+			var materializeRow = function(item) {
+				var du = self.common.reconstructUI(feedbackListRowUI);
+				var dnode = du[0];
+				var dids = du[1];
+				
+				dids.results.innerHTML = item.Result;
+				try {
+					var jresult = JSON.parse(item.Result);
+					if(jresult && jresult.result) {
+						dids.results.innerHTML = jresult.result;
+					}					 
+				} catch (e) {
+				}
+
+				var commentsRow = document.createElement("tr");
+				var commentsCell = document.createElement("td");
+				commentsCell.colSpan = 5;
+				commentsRow.style.borderTop = "1px solid black";
+				commentsCell.innerHTML = "";
+				commentsRow.appendChild(commentsCell);
+				commentsRow.style.display = "none";
+				
+				dids.turndate.innerHTML = self.common.convertDateTime(item.CreationTime);
+				dids.comments.innerHTML = item.TotalComments;
+				dids.lastcomment.innerHTML = item.LastComment > 0 ? self.common.convertDateTime(item.LastComment) : "";
+				dids.lastcommentlogin.innerHTML = item.LastCommentLogin !== undefined && item.LastCommentLogin !== "" ? item.LastCommentLogin : "";
+				var openFN = function() {
+					// load comments and show them
+					var showLbl = "Skrýt komentáře";
+					if(dids.btnComment.innerHTML == showLbl) {
+						dids.btnComment.innerHTML = "Zobrazit komentáře";
+						commentsCell.innerHTML = "";
+						commentsRow.style.display = "none";
+						dnode.style.borderLeft = "0px";
+						dnode.style.borderRight = "0px";
+						dnode.style.borderTop = "1px solid black";
+						
+						return;
+					}
+					
+					var codeFmt = function(code) {
+						var repl = [
+							["&", "&amp;"],
+							["<", "&lt;"],
+							["\"", "&quot;"],
+							[">", "&gt;"],
+							["\t", "&nbsp;&nbsp;&nbsp;&nbsp;"],
+							[" ", "&nbsp;"],
+							["\n", "<br />"]
+						]
+						
+						var splitter = function(item) {
+							code = code.split(item[0]).join(item[1]);
+						}
+						repl.map(splitter);
+						return code;
+					}
+					
+					// Load comments UI
+					self.common.showLoader();
+					var cbFail = function(data) {
+						self.common.hideLoader();
+						self.common.showError("Chyba", "Nepodařilo se nahrát historii", true, data);
+					};
+					var reloadCB = function() {
+						self.common.showError("Chyba", "Tohle by nemělo nikdy nastat");
+					}
+					
+					var createCommentElements = function(root, selections, text, codeBlocks) {
+						var findSel = function(id) {
+							for(var i = 0; i < selections.length; i++) {
+								if(selections[i][0] == id){
+									return selections[i];
+								}
+							}
+							return false;
+						}
+						
+						var appendRaw = function(txt) {
+							var span = document.createElement("span");
+							span.innerHTML = codeFmt(txt);
+							root.appendChild(span);
+						}
+						
+						var appendSel = function(txt, begin, end) {
+							var span = document.createElement("span");
+							span.innerHTML = codeFmt(txt);
+							span.style.cursor = "pointer";
+							span.style.textDecoration = "underline";
+							span.addEventListener("mouseover", function() {
+								codeBlocks.setSelectionRange(begin, end);
+								codeBlocks.focus();
+							});
+							span.addEventListener("click", function() {
+								codeBlocks.setSelectionRange(begin, end);
+								codeBlocks.focus();
+							});
+							root.appendChild(span);
+						}
+						
+						
+						var str = "";
+						var code_0 = "0".charCodeAt(0);
+						var code_9 = "9".charCodeAt(0);
+						var code_delim = "@".charCodeAt(0);
+						
+						for(var i = 0; i < text.length; i++) {
+							var c  = text.substr(i, 1);
+							if(c == '\\' && i + 1 < text.length) { // Escape whatever
+								i++;
+								str +=  text.substr(i, 1);
+							} else if(c != '@') {
+								str += c;
+							} else  {
+								if(str != "") {
+									appendRaw(str);
+									str = "";
+								}
+								// find a number
+								var num = 0;
+								var foundEnd = false;
+								i++;
+								for(var o = i; o < text.length; o++, i++) {
+									var code = text.substr(o, 1).charCodeAt(0);
+									if(code >= code_0 && code <= code_9) {
+										num *= 10;
+										num += (code - code_0);
+									} else if (code == code_delim) {
+										foundEnd = true;
+										break;
+									} else { // Error
+										root.innerHTML = "";
+										appendRaw(text);
+										return;
+									}
+								}
+								if(!foundEnd) {
+									root.innerHTML = "";
+									appendRaw(text);
+									return;
+								}
+								i++;
+								var selection = findSel(num);
+								if(selection === false) {
+									root.innerHTML = "";
+									appendRaw(text);
+									return;
+								}
+
+								// Have selection, get the text
+								foundEnd = false; 
+								var txt = "";
+								for(var o = i; o < text.length; o++, i++) {
+									var c = text.substr(o, 1);
+									if(c == "\\" && o + 1 < text.length) {
+										i++;
+										o++;
+										txt += text.substr(o, 1);
+									} else if(c == "@") {
+										var toExpect = '@/' + num + '@';
+										var following = text.substr(i, toExpect.length);
+										if(toExpect == following) { // Valid sequence
+											i += toExpect.length;
+											foundEnd = true;
+											break;
+										} else {
+											root.innerHTML = "";
+											appendRaw(text);
+										}
+									} else {
+										txt += c;
+									}
+								}					
+								if(!foundEnd) {
+									root.innerHTML = "";
+									appendRaw(text);
+								}				
+								appendSel(txt, selection[1], selection[2]);
+								i--;
+							}
+						}
+						if(str != "") {
+							appendRaw(str);
+							str = "";
+						}
+					}
+					
+					var cbOk = function(data) {
+						self.common.hideLoader();
+						if(data && data.comments && data.comments.length !== undefined && data.data && data.data.Code){
+							commentsRow.style.display = "";
+							var xd = self.common.reconstructUI(commentUI);
+							var xnode = xd[0];
+							var xids = xd[1];
+							
+							xids.codecontents.readOnly=true;
+							
+							xids.commentcontents.innerHTML = "";
+							
+							var projectSelectionsToEditView = function(){
+								self.common.showError("Chyba", "Tohle by se stát nemělo");
+							}
+							
+							if(data.comments.sort) {
+								data.comments = data.comments.sort(function(a, b) {
+									if(a.Creation < b.Creation) {
+										return 1;
+									} else if(a.Creation > b.Creation) {
+										return -1;
+									} else {
+										return 0;
+									}
+								});
+							}
+							
+							data.comments.map(function(comment) {
+								if(comment.AuthorLogin && comment.Data && comment.Data.selections && comment.Data.selections.length !== undefined && comment.Data.text !== undefined && comment.Creation) {
+									var login = comment.AuthorLogin;
+									var cdata = comment.Data
+									
+									var rowUI = {
+										"type": "tr",
+										"style": "border-bottom: 1px solid black",
+										"contents": [
+											{
+												"type": "td",
+												"colSpan": 2,
+												"contents": [
+													{
+														"type": "div",
+														"style": "width: 100%; display: block;background:#aaffdd;line-height: 30px;border-bottom: 1px solid black;",
+														"contents": [
+															{
+																"type": "span",
+																"style": "padding-left:10px;",
+																"id": "idlogin"
+															},
+															{
+																"type": "span",
+																"style":"float:right;padding-right: 10px;",
+																"contents": [
+																	{
+																		"type": "span",
+																		"style": "display: inline-block; padding-right: 30px; ",
+																		"id": "iddate"
+																	},
+																	{
+																		"type": "button",
+																		"id":"btnEdit",
+																		"style": "padding-left: 10px; padding-right:10px;",
+																		"innerHTML": "Editovat"
+																	}
+																]
+															}
+															
+														]
+													},
+													{
+														"type": "div",
+														"style": "display: block; width: 100%; padding-bottom: 50px;padding-left: 5px; padding-top: 5px;",
+														"id": "ctext"
+													}
+												]
+											}
+										]
+									}
+									
+									var yd = self.common.reconstructUI(rowUI);
+									var ynode = yd[0];
+									var yids = yd[1];
+									
+									yids.idlogin.innerHTML = login;
+									yids.iddate.innerHTML = self.common.convertDateTime(comment.Creation);
+									if(!comment.Editable) {
+										yids.btnEdit.style.display = "none";
+									} else {
+										yids.btnEdit.addEventListener("click", function(){ // Set to editable field
+											projectSelectionsToEditView(comment.Data.selections, comment.Data.text, comment.ID);
+										});
+									}
+									
+									createCommentElements(yids.ctext, cdata.selections, cdata.text, xids.codecontents);
+									
+									xids.commentcontents.appendChild(ynode);
+								}
+							});
+							
+							var totalSelsCnt = 0;
+							var selections = [];
+			
+							var addCurentSelection = function(start, end, selID) {
+								var start = start === undefined ? xids.codecontents.selectionStart : start;
+								var end = end === undefined ? xids.codecontents.selectionEnd : end;
+								var len = end - start;
+								if(len > 0) {
+									var selID = selID === undefined ? totalSelsCnt : 0
+									totalSelsCnt = selID + 1;
+									var el = document.createElement("div");
+									el.style.display = "block";
+									el.style.width = "100%";
+									
+									var selData = [selID, start, end]
+									selections.push(selData);
+									
+									var zn = len == 1 ? "znak" : len >= 2 && len <= 4 ? "znaky" : "znaků";
+									
+									
+									var el2 = document.createElement("div");
+									el2.style.display = "inline-block";
+									el.appendChild(el2);
+									
+									var el3 = document.createElement("div");
+									el3.style.display = "inline-block";
+									el3.style.float = "right";
+									el3.innerHTML = "[X]";
+									el3.addEventListener("click", function() {
+										// Delete this selection
+										xids.commentSel.removeChild(el);
+										
+										selections = selections.filter(function(q) {return q[0] != selData[0]; });
+									})
+									
+									el.appendChild(el3);
+									
+									el2.innerHTML = "[" + selID + "] (" + len + " " + zn + ")";
+									el.style.cursor = "pointer";
+									
+									el2.addEventListener("mouseover", function(){
+										xids.codecontents.setSelectionRange(start, end);
+										xids.codecontents.focus();
+									});
+									el2.addEventListener("click", function(){
+										xids.codecontents.setSelectionRange(start, end);
+										xids.codecontents.focus();
+										
+										var editStart = xids.commentArea.selectionStart;
+										var editEnd = xids.commentArea.selectionEnd;
+										var originalPos = xids.commentArea.value.length - editEnd;  
+										
+										var pre = xids.commentArea.value.substr(0, editStart);
+										var post = xids.commentArea.value.substr(editEnd);
+										
+										var str = xids.commentArea.value.substr(editStart, editEnd - editStart);
+										
+										var preTag = "@" + selID + "@";
+										var postTag= "@/" + selID + "@";
+										
+										
+										str = str == "" ? "popis označení" : str;
+										
+										str = pre + preTag + str + postTag + post;
+										
+										xids.commentArea.value = str;
+										var newPos = str.length - originalPos;
+										xids.commentArea.setSelectionRange(newPos, newPos);
+										xids.commentArea.focus();
+									});
+									
+									
+									xids.commentSel.appendChild(el);
+								}
+							};
+							
+							var lastEditingCommendID = -1;
+							
+							var cancelProjectionToEditView = function() {
+								selections = [];
+								xids.commentSel.innerHTML = ""
+								xids.btnSave.style.display = "none"
+								xids.btnCancelEdit.style.display = "none"
+								xids.btnComment.style.display = ""
+								xids.commentArea.value = "";
+								lastEditingCommendID = -1;
+							}
+							
+							var projectSelectionsToEditView = function(sels, text, ID) {
+								selections = [];
+								xids.commentSel.innerHTML = ""
+								xids.btnSave.style.display = ""
+								xids.btnCancelEdit.style.display = ""
+								xids.btnComment.style.display = "none"
+								lastEditingCommendID = ID;
+								
+								sels.map(function(sel) {addCurentSelection(sel[1], sel[2], sel[0]); });
+								xids.commentArea.value = text;
+							}
+											
+							xids.btnCancelEdit.addEventListener("click", cancelProjectionToEditView);
+							xids.btnSave.addEventListener("click", function(){
+								var text = xids.commentArea.value.trim();
+								var del = text == "";
+								var query = {"selections": selections, "text": text};
+								self.common.showLoader();
+								var cbFailNewComment = function(err) {
+									self.common.hideLoader();
+									self.common.showError("Chyba", "Nepodařilo se uložit komentář", true, err);
+								}
+								var cbOkNewComment = function(data) {
+									self.common.hideLoader();
+									commentsCell.removeChild(xnode);
+									reloadCB();
+								}
+								
+								var data = {"action":"EDIT_FEEDBACK", "feedbackID": lastEditingCommendID, "feedbackData": query, "del": del};
+								self.common.async(data, cbOkNewComment, cbFailNewComment, false);
+							});
+							
+							// Create table for comments
+
+							xids.codecontents.value = data.data.Code;
+							xids.btnAddSel.addEventListener("click", function() {addCurentSelection()})
+							xids.btnComment.addEventListener("click", function() {
+								
+								var text = xids.commentArea.value.trim();
+								if(text.length == 0) {
+									self.common.showError("Chyba", "Nelze uložit prázdný komentář", true);
+									return;
+								}
+								
+								// Save comment and reload
+								var query = {"selections": selections, "text": text};
+								self.common.showLoader();
+								var cbFailNewComment = function(err) {
+									self.common.hideLoader();
+									self.common.showError("Chyba", "Nepodařilo se uložit komentář", true, err);
+								}
+								var cbOkNewComment = function(data) {
+									self.common.hideLoader();
+									commentsCell.removeChild(xnode);
+									reloadCB();
+								}
+								
+								var data = {"action":"STORE_FEEDBACK", "compilationID": item.ID, "feedbackData": query};
+								self.common.async(data, cbOkNewComment, cbFailNewComment, false);
+							});
+							
+							commentsCell.appendChild(xnode);							
+						} else {
+							cbFail("Neplatná příchozí struktura");
+						}
+					};
+					var data = {"action":"COLLECT_FEEDBACK", "compilationID": item.ID};
+					reloadCB = function() {
+						self.common.async(data, cbOk, cbFail, false);
+					}
+					reloadCB();
+					
+		
+					dids.btnComment.innerHTML = showLbl;
+					commentsRow.style.display = "";
+					dnode.style.borderLeft = "5px solid black";
+					dnode.style.borderRight = "5px solid black";
+					dnode.style.borderTop = "5px solid black";
+					commentsRow.style.borderLeft = "5px solid black";
+					commentsRow.style.borderRight = "5px solid black";
+					commentsRow.style.borderBottom = "5px solid black";
+				};
+				
+				dids.btnComment.addEventListener("click", openFN);
+				
+				ids.feedback_contents.appendChild(dnode);
+				ids.feedback_contents.appendChild(commentsRow);
+				
+			}
+			
+			for(var i = 0; i < data.length; i++) {
+				materializeRow(data[i]);
+			}
+		}
+		
+		this.showHistory = function() {
+			var hideLbl = "Skrýt historii";
+			if(self.btnHist.innerHTML == hideLbl) {
+				self.feedbackPnl.style.display = "none";
+				self.btnHist.innerHTML = "Historie řešení";
+				return;
+			}
+			
+			self.common.showLoader();
+			var cbFail = function(data) {
+				self.common.hideLoader();
+				self.common.showError("Chyba", "Nepodařilo se nahrát historii", true, data);
+			};
+			var cbOk = function(data) {
+				self.common.hideLoader();
+				if(data.length === undefined) {
+					cbFail("Neplatná příchozí struktura");
+				} else {
+					self.btnHist.innerHTML = hideLbl;
+					self.feedbackPnl.style.display = "";
+					self.materializeFeedback(data);					
+				}
+			};
+			var data = {"action":"COLLECT_HISTORY", "testID": self.data.id+""};
+			self.common.async(data, cbOk, cbFail, false);
 		}
 		
 		this.setFinished = function(collapse) {
@@ -208,15 +1114,17 @@ var tester = function() {
 		}
 		
 		this.setCollapsed = function(collapsed) {
-			self.mainPnl.style.display = collapsed ?  "none" : "table";
+			self.mainPnl.style.display = collapsed ?  "none" : "";
+			if(self.marginPnl) { // True for new UI
+				self.marginPnl.style.marginBottom = collapsed ? "10px": "80px";
+			}
 			if(self.btnHide){
 				self.btnHide.innerHTML = collapsed ? "Zobrazit" : "Skrýt";
 			}
-			if(self.nwBorder){
+			if(self.nwBorder && !self.marginPnl){
 				self.nwBorder.style.borderLeft = collapsed ? "1px solid black" : "";
 				self.nwBorder.style.borderRight = collapsed ? "1px solid black" : "";
 			}
-			tester.mres();
 		}
 		
 		this.getElement = function() {
@@ -224,6 +1132,7 @@ var tester = function() {
 			var el = struct[0];
 			var ids = struct[1];
 			var solvStr = data.finished_date ? " (vyřešeno "+data.finished_date+")" : "";
+			
 			ids.txtArea.innerHTML = data.finished_code ? data.finished_code :  data.init;
 			ids.txtBrief.innerHTML = data.title+solvStr;
 			ids.txtDescr.innerHTML = data.zadani;
@@ -234,7 +1143,10 @@ var tester = function() {
 			self.rs = ids.txtSolution;
 			self.mainPnl = ids.pnlMain;
 			self.btnHide = ids.btnHide
+			self.btnHist = ids.showhist;
 			self.nwBorder = ids.nwBorder;
+			self.feedbackPnl = ids.feedbackPnl;
+			self.marginPnl = el;
 			setup();
 			return el;
 		}
@@ -243,9 +1155,8 @@ var tester = function() {
 			this.b1.style.display = ex ? "": "none";
 			self.ta.readOnly = !ex;
 		}
-	
 		return this;
-	}
+	};
 	
 	self.submit = function(id, asm, cbOK, cbFail) {
 		var data = {"asm":asm, "id": id}
@@ -358,7 +1269,7 @@ var tester = function() {
 	
 	self.materialize = function(data, waiter) {
 		window.waiter=waiter;
-		id_indiv.innerHTML = "";
+		self.root.innerHTML = "";
 		self.allTests = [];
 		for(var i = 0; i <data.length; i++) {
 			data[i].title = data[i].title;
@@ -367,7 +1278,11 @@ var tester = function() {
 			data[i].init = data[i].init;
 			var dataI = new self.testI(data[i], self, self.common);
 			self.allTests[self.allTests.length] = dataI;
-			id_indiv.appendChild(dataI.getElement());
+			var node = dataI.getElement();
+			if(i == 0) {
+				node.style.marginTop = "80px";
+			}
+			self.root.appendChild(node);
 			if(data[i].finished_date){
 				dataI.setFinished(true);
 			}
@@ -390,19 +1305,18 @@ var tester = function() {
 			localStorage.setItem("rion.seen_faq." + self.TOOLCHAIN, 1);
 			window.setTimeout(self.showFaq, 1000);
 		}
-	    window.setTimeout(self.mres, 1000);
 	}
 	
 	self.loadRemoteTests = function() {
+		self.common.showInitLoader("Nahrávám testy...", "green");
 		var cbFail = function(data) {
-			id_loader.innerHTML = data;
-			id_loader.classList.remove("loader");
-			id_loader.classList.add("loader_error");
+			self.common.showInitLoader("Nepodařilo se nahrát testy:<br />" + data);
 		};
 		var cbOk = function(data) {
 			if(data && data.tests) {
 				self.materialize(data.tests, data.wait);
-				self.showLoginPanel();
+				self.common.setLoginPanelVisible(true);
+				self.common.hideInitLoader();
 			} else {
 				cbFail("Nepodařilo se nahrát testy");
 			}
@@ -436,7 +1350,7 @@ var tester = function() {
 	}
 	
 	self.materializeGraphs = function(data) {
-		var root = id_stats_contents;
+		var root = self.graphRootContent
 		root.innerHTML = "";
 		var rc = document.createElement("center");
 		rc.style.display = "block";
@@ -445,8 +1359,6 @@ var tester = function() {
 		root.appendChild(rc);
 		root = rc;
 		
-		id_stats_loader.style.display = "none";
-		id_stats_contents.style.dipslay = "block";
 		for(var dataI = 0; dataI < data.length; dataI++){
 			var graphData = data[dataI];
 			var child = document.createElement("div");
@@ -460,73 +1372,104 @@ var tester = function() {
 		}
 	}
 	
+	var setBigPanel = function(root, closeCB) {
+		root.style.display = "block";
+		root.style.position = "fixed";
+		root.style.left = "0px";
+		root.style.right = "0px";
+		root.style.top = "0px";
+		root.style.bottom = "0px";
+		root.style.background = "black";
+		root.style.color = "white";
+		
+		var btn = document.createElement("button");
+		btn.style.float = "right";
+		btn.style.marginRight = "10px";
+		btn.style.marginTop = "10px";
+		btn.style.background = "black";
+		btn.style.border = "1px solid white";
+		btn.style.color = "white";
+		btn.style.padding = "3px";
+		btn.style.fontSize = "13pt";
+		btn.style.paddingLeft = "50px";
+		btn.style.paddingRight = "50px";
+		btn.style.display = "block";
+		btn.addEventListener("click", closeCB);
+		btn.innerHTML = "Zavřít"
+		
+		var content = document.createElement("div");
+		content.style.display ="block";
+		content.style.position = "fixed"
+		content.style.top = "40px";
+		content.style.left = "0px";
+		content.style.bottom = "0px";
+		content.style.right= "0px";
+	    content.style.overflowY = "auto";
+
+		
+		root.appendChild(btn);
+		root.appendChild(content);
+		
+		return content;
+	}
+	
+
 	self.showFaq = function() {
-		id_indiv.style.display = "none";
-		id_faq.style.display = "block";
-		txtHeader.style.display = "none";
-		document.body.style.background = "black";
+		self.common.setLoginPanelVisible(false);
+		var d = document.getElementById("id_faq").innerHTML;
+		self.faqRootContent.innerHTML = d;
+		document.body.removeChild(self.root);
+		document.body.appendChild(self.faqRoot);
 	}
 	
 	self.hideFaq = function() {
-		id_indiv.style.display = "block";
-		id_faq.style.display = "none";
-		txtHeader.style.display = "block";
-		document.body.style.background = "";
+		self.common.setLoginPanelVisible(true);
+		document.body.removeChild(self.faqRoot);
+		document.body.appendChild(self.root);
 	}
 	
-	self.hideStats = function(){
-		id_indiv.style.display = "block";
-		id_stats.style.display = "none";
-		txtHeader.style.display = "block";
-		document.body.style.background = "";
+	self.hideStats = function() {
+		self.common.setLoginPanelVisible(true);
+		document.body.removeChild(self.graphRoot);
+		document.body.appendChild(self.root);
 	}
 	
 	self.showStats = function() {
-		id_indiv.style.display = "none";
-		id_stats_contents.innerHTML = "";
-		id_stats.style.display = "block";
-		id_stats_loader.style.display = "block";
-		id_stats_contents.style.dipslay = "none";
-		txtHeader.style.display = "none";
-		document.body.style.background = "black";
-		
+		self.common.setLoginPanelVisible(false);
+		document.body.appendChild(self.graphRoot);
+		document.body.removeChild(self.root);
+		self.common.showInitLoader("Nahrávám statistiky", "green", "transparent", "white", self.graphRootContent);
 		var cbFail = function(data) {
+			self.common.hideInitLoader();
 			self.hideStats();
 		};
 		var cbOk = function(data) {
+			self.common.hideInitLoader();
 			self.materializeGraphs(data);
 		};
 		var data = {"action":"GRAPHS"}
 		self.common.async(data, cbOk, cbFail);
 	}
+	
+	self.faqRoot = document.createElement("div");
+	self.graphRoot = document.createElement("div");
+	self.faqRootContent = setBigPanel(self.faqRoot, self.hideFaq);
+	self.graphRootContent = setBigPanel(self.graphRoot, self.hideStats);
+	
 
 	
 	self.aload = function() {
+		self.common.addLoginPanel();
+		self.common.setLoginPanelVisible(false);
+		self.common.addButtonToLoginPanel("Statistiky", self.showStats);
+		self.common.addButtonToLoginPanel("FAQ", self.showFaq);
 		self.loadRemoteTests();
-		window.addEventListener("resize", self.mres);
-		self.common.addButtonToLoginPanel = undefined
 		
-		txtLogin.innerHTML = self.common.identity.name + " ("+self.common.identity.primary+"@"+self.common.identity.group+")";
-		btnLogout.addEventListener("click", function(){self.common.logout();});
-		btnStats.addEventListener("click", function(){self.showStats();});
-		btnFaq.addEventListener("click", function(){self.showFaq();});
-		btnCloseStats.addEventListener("click", function() {self.hideStats();});
-		btnCloseFaq.addEventListener("click", function() {self.hideFaq();});
-		pnlWarnID.addEventListener("click", function() {self.showFaq();});
-		if(window.Admin){
-			var admin = new Admin(self.common);
+		if(window.pastAload){
+			window.pastAload();
+			//var admin = new Admin(self.common);
 		}
 	}
-	
-	self.showLoginPanel =  function() {
-		txtHeader.style.display="block";
-	}
-	
-	self.hideLoginPanel =  function() {
-		txtHeader.style.display="none";
-	}
-	
-	self.use_old_ui  = false;
 	
 	self.reloadNewUI  = function() {
 		use_old_ui = false;

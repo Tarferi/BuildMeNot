@@ -9,33 +9,9 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@2.8.0"></script>
 </head>
 <body onload="aload();">
-	<div class="txtHeader" id="txtHeader">
-		<span class="txtHeader1">
-			Přihlášený uživatel:
-			<span id="txtLogin"></span>
-		</span>
-		<button id="btnFaq">FAQ</button>
-		<button id="btnStats">Statistiky</button>
-		<button id="btnLogout">Odhlásit</button>
-	</div>
-	<span class="pnlWarn" id="pnlWarnID" style="display:none;cursor:pointer">
-		<b>Upozornění:</b> Testy pouze pro čtení!
-	</span>
-	<div id=id_indiv class="txtTest">
-		<div class="loader" id=id_loader>Nahrávám testy...</div>
-	</div>
-	<div class="stats" id="id_stats">
-		<div class="loader loader_black" id=id_stats_loader>
-			<center>Nahrávám statistiky</center>
-		</div>
-		<button id="btnCloseStats" class ="btnCloseStats">Zavřít</button>
-		<div id="id_stats_contents"></div>
-	</div>
-	<div class="stats" id="id_faq">
-		<button id="btnCloseFaq" class ="btnCloseStats">Zavřít</button>
-		<div class="faq_contents">
+
+	<div id="id_faq" style="display: none";>
 		$FAQ_CONTENTS$
-		</div>
 	</div>
 </body>
 </html>

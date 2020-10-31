@@ -151,8 +151,8 @@ public abstract class LayeredDBFileWrapperDB extends LayeredImportDB {
 		return lst;
 	}
 
-	public static final boolean editRow(LayeredMetaDB db, FileInfo file, JsonObject contents) {
-		return editRow(null, null, null, db, file, contents);
+	public static final boolean editRow(LayeredMetaDB db, FileInfo file, JsonObject contents, Toolchain toolchain) {
+		return editRow(null, null, null, db, file, contents, toolchain);
 	}
 
 	public static final String getTableNameForFile(LayeredMetaDB db, FileInfo file) {
@@ -163,7 +163,7 @@ public abstract class LayeredDBFileWrapperDB extends LayeredImportDB {
 		return null;
 	}
 
-	public static final boolean editRow(StaticDB sdb, String login, String address, LayeredMetaDB db, FileInfo file, JsonObject contents) {
+	public static final boolean editRow(StaticDB sdb, String login, String address, LayeredMetaDB db, FileInfo file, JsonObject contents, Toolchain toolchain) {
 		try {
 			if (file.ID >= db.DB_FILE_FIRST_ID && file.ID < db.DB_FILE_FIRST_ID + DB_FILE_SIZE) { // Owned by the DB -> table exists in db
 				if (contents.containsNumber("ID")) {
@@ -221,7 +221,7 @@ public abstract class LayeredDBFileWrapperDB extends LayeredImportDB {
 							obj.add("new", contents);
 							obj.add("ID", new JsonNumber(ID));
 							obj.add("table", new JsonString(tableName));
-							sdb.adminLog(address, login, "editRow:" + file.ID + ":" + file.FileName, obj.getJsonString());
+							sdb.adminLog(toolchain, address, login, "editRow:" + file.ID + ":" + file.FileName, obj.getJsonString());
 						}
 
 						db.update(tableName, ID, values);
@@ -277,8 +277,6 @@ public abstract class LayeredDBFileWrapperDB extends LayeredImportDB {
 					throw new DatabaseException("Forbidden command: " + banned);
 				}
 			}
-			String fl = freeSQL.toLowerCase();
-
 			@SuppressWarnings("deprecation")
 			DatabaseResult res = db.select_raw(freeSQL); // TODO
 

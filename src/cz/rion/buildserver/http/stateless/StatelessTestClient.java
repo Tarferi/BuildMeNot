@@ -9,8 +9,12 @@ import java.util.Map;
 
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.RuntimeDB.BadResults;
+import cz.rion.buildserver.db.RuntimeDB.CodedHistory;
 import cz.rion.buildserver.db.RuntimeDB.CompletedTest;
+import cz.rion.buildserver.db.RuntimeDB.TestFeedback;
+import cz.rion.buildserver.db.RuntimeDB.TestHistory;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
+import cz.rion.buildserver.db.layers.staticDB.LayeredPermissionDB.UsersPermission;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.http.HTTPRequest;
 import cz.rion.buildserver.http.HTTPResponse;
@@ -102,7 +106,11 @@ public class StatelessTestClient extends StatelessPresenceClient {
 	}
 
 	private JsonObject execute_tests(ProcessState state, String testID, String code) {
-		state.setIntention(Intention.PERFORM_TEST);
+		JsonObject idata = new JsonObject();
+		idata.add("testID", testID);
+		idata.add("code", code);
+		idata.add("success", false);
+		state.setIntention(Intention.PERFORM_TEST, idata);
 		JsonObject returnValue = new JsonObject();
 		returnValue.add("code", new JsonNumber(1));
 		returnValue.add("result", new JsonString("Internal error"));
@@ -112,6 +120,8 @@ public class StatelessTestClient extends StatelessPresenceClient {
 		try {
 			badResults = state.Data.RuntimeDB.GetBadResultsForUser(state.getPermissions().getUserID(), state.Toolchain);
 		} catch (DatabaseException e) {
+			idata.add("reason", "Failed to get bad results history");
+			idata.add("exception", e.description);
 			e.printStackTrace();
 			returnValue.add("code", new JsonNumber(53));
 			returnValue.add("result", new JsonString("Not logged in"));
@@ -121,6 +131,7 @@ public class StatelessTestClient extends StatelessPresenceClient {
 		boolean canBypassTimeout = canBypassTimeout(state);
 
 		if (!state.getPermissions().allowExecute(testID)) {
+			idata.add("reason", "No permission to execute this test");
 			returnValue.add("code", new JsonNumber(55));
 			returnValue.add("result", new JsonString("Hacking much?"));
 			return returnValue;
@@ -131,11 +142,12 @@ public class StatelessTestClient extends StatelessPresenceClient {
 		if (diff > 10000 && !canBypassTimeout) { // 10 seconds allowance
 			returnValue.add("code", new JsonNumber(54));
 			returnValue.add("result", new JsonString("Hacking much?"));
+			idata.add("reason", "There is a timeout still (" + (diff / 1000) + " more seconds)");
 			return returnValue;
 		}
 
 		TestResults res = state.Data.Tests.run(badResults, state.BuilderID, state.Toolchain, testID, code, state.getPermissions().Login);
-
+		idata.add("success", true);
 		returnValue.add("code", new JsonNumber(res.ResultCode));
 		returnValue.add("result", new JsonString(res.ResultDescription));
 
@@ -144,6 +156,7 @@ public class StatelessTestClient extends StatelessPresenceClient {
 			returnValue.add("bad", new JsonNumber(res.BadTests));
 			if (res.Details != null) {
 				returnValue.add("details", new JsonString(res.Details));
+				idata.add("details", true);
 			}
 		}
 
@@ -169,7 +182,7 @@ public class StatelessTestClient extends StatelessPresenceClient {
 			}
 		}
 		if (canBypassTimeout) {
-			returnValue.add("wait", new JsonNumber(0, (new Date().getTime() - 10000) + ""));
+			returnValue.add("wait", new JsonNumber(0, (System.currentTimeMillis() - 10000) + ""));
 		} else if (Settings.getForceTimeoutOnErrors()) {
 			returnValue.add("wait", new JsonNumber(0, (badResults.AllowNext.getTime()) + ""));
 		}
@@ -177,8 +190,123 @@ public class StatelessTestClient extends StatelessPresenceClient {
 		return returnValue;
 	}
 
+	private JsonObject execute_getHistory(ProcessState state, String testID) {
+		JsonObject obj = new JsonObject();
+		obj.add("code", 1);
+		try {
+			List<TestHistory> hist = state.Data.RuntimeDB.getHistory(state.Toolchain, state.getPermissions(), testID, !state.getPermissions().allowEditHistoryOfSomeoneElsesTest(state.Toolchain));
+			JsonArray h = JsonArray.get(hist);
+			obj.add("result", h);
+			obj.add("code", 0);
+		} catch (DatabaseException e) {
+			e.printStackTrace();
+			obj.add("code", 1);
+			obj.add("result", e.description);
+		}
+		return obj;
+	}
+
+	private JsonObject execute_getFeedback(ProcessState state, int compilationID) {
+		JsonObject obj = new JsonObject();
+		obj.add("code", 1);
+		try {
+			UsersPermission perms = state.getPermissions();
+			boolean canEditAnything = perms.allowEditHistoryOfSomeoneElsesTest(state.Toolchain);
+			CodedHistory history = state.Data.RuntimeDB.getSingleHistory(state.Toolchain, compilationID);
+			if (history.AuthorID != perms.getUserID()) { // Editing something we don't own
+				if (!perms.allowEditHistoryOfSomeoneElsesTest(state.Toolchain)) {
+					obj.add("result", "Nelze editovat historii nìkoho cizího");
+					return obj;
+				}
+			} else { // Editing our own
+			}
+
+			List<TestFeedback> feedbacks = state.Data.RuntimeDB.getFeedbacks(state.Toolchain, compilationID, perms.getUserID(), canEditAnything);
+			JsonArray h = JsonArray.get(feedbacks);
+
+			JsonObject r = new JsonObject();
+			r.add("comments", h);
+			r.add("data", history);
+
+			obj.add("result", r);
+			obj.add("code", 0);
+		} catch (DatabaseException e) {
+			e.printStackTrace();
+			obj.add("code", 1);
+			obj.add("result", e.description);
+		}
+		return obj;
+	}
+
+	private JsonObject execute_saveFeedback(ProcessState state, int feedbackID, JsonValue jsonValue, boolean del) {
+		JsonObject obj = new JsonObject();
+		obj.add("code", 1);
+		try {
+			UsersPermission perms = state.getPermissions();
+			boolean canEditAnything = perms.allowEditHistoryOfSomeoneElsesTest(state.Toolchain);
+			TestFeedback existing = state.Data.RuntimeDB.getSingleFeedback(state.Toolchain, feedbackID, perms.getUserID(), canEditAnything);
+			if (existing == null) {
+				obj.add("result", "Záznam komentáøe s tímto ID neexistuje");
+				return obj;
+			}
+			if (existing.AuthorID != perms.getUserID()) { // Editing something we don't own
+				if (!canEditAnything) {
+					obj.add("result", "Nelze editovat komentáø nìkoho cizího");
+					return obj;
+				}
+			} else { // Editing our own
+			}
+			state.Data.RuntimeDB.updateFeedback(state.Toolchain, feedbackID, jsonValue, del);
+			if (del) {
+				obj.add("result", "OK");
+			} else {
+				existing = state.Data.RuntimeDB.getSingleFeedback(state.Toolchain, feedbackID, perms.getUserID(), canEditAnything);
+				obj.add("result", existing);
+			}
+			obj.add("code", 0);
+		} catch (DatabaseException e) {
+			e.printStackTrace();
+			obj.add("code", 1);
+			obj.add("result", e.description);
+			return obj;
+		}
+
+		return obj;
+	}
+
+	private JsonObject execute_addFeedback(ProcessState state, int compilation_id, JsonValue data) {
+		JsonObject obj = new JsonObject();
+		obj.add("code", 1);
+		try {
+			CodedHistory existing = state.Data.RuntimeDB.getSingleHistory(state.Toolchain, compilation_id);
+			if (existing == null) {
+				obj.add("result", "Záznam kompilace s tímto ID neexistuje");
+				return obj;
+			}
+			UsersPermission perms = state.getPermissions();
+			if (existing.AuthorID != perms.getUserID()) { // Editing something we don't own
+				if (!perms.allowEditHistoryOfSomeoneElsesTest(state.Toolchain)) {
+					obj.add("result", "Nelze editovat historii nìkoho cizího");
+					return obj;
+				}
+			} else { // Editing our own
+			}
+			state.Data.RuntimeDB.storeFeedback(state.Toolchain, state.getPermissions().getUserID(), compilation_id, data);
+			existing = state.Data.RuntimeDB.getSingleHistory(state.Toolchain, compilation_id);
+			obj.add("result", existing);
+			obj.add("code", 0);
+		} catch (DatabaseException e) {
+			e.printStackTrace();
+			obj.add("code", 1);
+			obj.add("result", e.description);
+			return obj;
+		}
+
+		return obj;
+	}
+
 	private JsonObject execute_collect(ProcessState state) {
-		state.setIntention(Intention.COLLECT_TESTS);
+		state.setIntention(Intention.COLLECT_TESTS, new JsonObject());
 		JsonObject returnValue = new JsonObject();
 		returnValue.add("code", new JsonNumber(1));
 		returnValue.add("result", new JsonString("Internal error"));
@@ -259,7 +387,7 @@ public class StatelessTestClient extends StatelessPresenceClient {
 	}
 
 	private JsonObject execute_graphs(ProcessState state) {
-		state.setIntention(Intention.COLLECT_GRAPHS);
+		state.setIntention(Intention.COLLECT_GRAPHS, new JsonObject());
 		JsonValue graphs = loadGraphs(state);
 		JsonObject returnValue = new JsonObject();
 		returnValue.add("code", new JsonNumber(0));
@@ -268,17 +396,17 @@ public class StatelessTestClient extends StatelessPresenceClient {
 	}
 
 	private JsonObject execute_admin(ProcessState state, JsonObject data) {
-		state.setIntention(Intention.ADMIN_COMMAND);
+		state.setIntention(Intention.ADMIN_COMMAND, new JsonObject());
 		return handleAdminEvent(state, data);
 	}
 
 	private JsonObject execute_terms(ProcessState state, JsonObject data) {
-		state.setIntention(Intention.TERM_COMMAND);
+		state.setIntention(Intention.TERM_COMMAND, new JsonObject());
 		return handleTermsEvent(state, data);
 	}
 
 	private JsonObject execute_exams(ProcessState state, JsonObject data) {
-		state.setIntention(Intention.EXAM_COMMAND);
+		state.setIntention(Intention.EXAM_COMMAND, new JsonObject());
 		return handleExamsEvent(state, data);
 	}
 
@@ -309,6 +437,14 @@ public class StatelessTestClient extends StatelessPresenceClient {
 				return execute_terms(state, input);
 			} else if (act.equals("HANDLE_EXAMS")) {
 				return execute_exams(state, input);
+			} else if (act.equals("COLLECT_HISTORY") && input.containsString("testID")) {
+				return execute_getHistory(state, input.getString("testID").Value);
+			} else if (act.equals("COLLECT_FEEDBACK") && input.containsNumber("compilationID")) {
+				return execute_getFeedback(state, input.getNumber("compilationID").Value);
+			} else if (act.equals("STORE_FEEDBACK") && input.containsNumber("compilationID") && input.contains("feedbackData")) {
+				return execute_addFeedback(state, input.getNumber("compilationID").Value, input.get("feedbackData"));
+			} else if (act.equals("EDIT_FEEDBACK") && input.containsNumber("feedbackID") && input.contains("feedbackData") && input.containsBoolean("del")) {
+				return execute_saveFeedback(state, input.getNumber("feedbackID").Value, input.get("feedbackData"), input.getBoolean("del").Value);
 			}
 		}
 		JsonObject obj = new JsonObject();

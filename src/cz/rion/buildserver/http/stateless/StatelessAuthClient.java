@@ -138,12 +138,16 @@ public class StatelessAuthClient extends StatelessTestClient {
 				if (session != null) { // Logged in, set cookie and redirect once more to here
 					String host = state.Request.headers.containsKey("host") ? state.Request.headers.get("host") : null;
 					if (host != null) {
-						redirectLocation = state.Request.protocol_norm + "://" + host + "/" + state.Request.path;
+						redirectLocation = state.Request.protocol_norm + "://" + host + (state.Request.path.startsWith("/") ? "" : "/") + state.Request.path;
 						redirectMessage = "Logged in, redirect once more";
 						// Create new cookies
 						cookieLines = new ArrayList<>();
 						cookieLines.add(Settings.getCookieName(state.Toolchain) + "=" + session + "; Max-Age=2592000; Domain=" + host + "; Path=/");
-						return getJSRedirect(state, cookieLines, Settings.getCookieName(state.Toolchain), session);
+						if (Settings.DoJsRedirect()) {
+							return getJSRedirect(state, cookieLines, Settings.getCookieName(state.Toolchain), session);
+						} else {
+
+						}
 					}
 				}
 			} catch (Exception e) {

@@ -489,7 +489,11 @@ var Common = function() {
 	
 	self.activeInitLoader = undefined;
 	
-	self.showInitLoader = function(title, color) {
+	self.showInitLoader = function(title, color, bgColor, textColor, root) {
+		if(self.activeInitLoader !== undefined) {
+			self.hideInitLoader();
+		}
+		
 		if(self.activeInitLoader === undefined) {
 			self.activeInitLoader = document.createElement("div");
 			self.activeInitLoader.style.position = "fixed";
@@ -497,7 +501,7 @@ var Common = function() {
 			self.activeInitLoader.style.right = "0px";
 			self.activeInitLoader.style.top = "0px";
 			self.activeInitLoader.style.bottom = "0px";
-			self.activeInitLoader.style.background = "#ffffff";
+			self.activeInitLoader.style.background = bgColor === undefined ? "#ffffff" : bgColor;
 			
 			var chd = document.createElement("div");
 			chd.style.position = "fixed";
@@ -508,18 +512,23 @@ var Common = function() {
 			chd.style.padding = "80px";
 			chd.style.display = "block";
 			chd.style.textAlign = "center";
+			chd.style.color = textColor === undefined ? "black" : textColor
 			
-			self.activeInitLoader.appendChild(chd);
-			
-			document.body.appendChild(self.activeInitLoader);
+			if(root === undefined) {
+				self.activeInitLoader.appendChild(chd);
+				document.body.appendChild(self.activeInitLoader);
+			} else {
+				self.activeInitLoader = chd;
+				root.appendChild(self.activeInitLoader);
+			}
+			chd.style.border = "5px solid " + color;
+			chd.innerHTML = title;
 		}	
-		self.activeInitLoader.children[0].style.border = "5px solid " + color;
-		self.activeInitLoader.children[0].innerHTML = title;
 	}
 	
 	self.hideInitLoader = function() {
 		if(self.activeInitLoader !== undefined) {
-			document.body.removeChild(self.activeInitLoader);
+			self.activeInitLoader.parentElement.removeChild(self.activeInitLoader);
 			self.activeInitLoader = undefined;
 		}
 	}
@@ -554,6 +563,7 @@ var Common = function() {
 		self.loginPnl.appendChild(btn);
 		self.loginPnl.appendChild(self.btnLogout);
 		btn.addEventListener("click", callback);
+		btn.style.marginRight = "5px";
 		return btn;
 	}
 	

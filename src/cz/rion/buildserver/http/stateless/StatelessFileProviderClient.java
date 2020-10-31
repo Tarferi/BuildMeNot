@@ -339,7 +339,11 @@ public class StatelessFileProviderClient extends StatelessAdminClient {
 					String contents = readFileOrDBFile(state, allowed);
 					if (contents != null) {
 						data = contents.getBytes(Settings.getDefaultCharset());
-						state.setIntention(Intention.GET_RESOURCE);
+						JsonObject idata = new JsonObject();
+						idata.add("requested", state.Request.path.substring(1));
+						idata.add("host", state.Request.host);
+						idata.add("responded", allowed);
+						state.setIntention(Intention.GET_RESOURCE, idata);
 						if (allowed.endsWith(".html")) {
 							type = "text/html; charset=UTF-8";
 						} else if (allowed.endsWith(".js")) {
@@ -361,9 +365,16 @@ public class StatelessFileProviderClient extends StatelessAdminClient {
 						returnCode = 404;
 						returnCodeDescription = "Not Found";
 						data = ("Nemuzu precist: " + endPoint).getBytes(Settings.getDefaultCharset());
+						JsonObject idata = new JsonObject();
+						idata.add("requested", state.Request.path.substring(1));
+						idata.add("host", state.Request.host);
+						state.setIntention(Intention.GET_INVALID_RESOURCE, idata);
 					}
 				} else {
-					state.setIntention(Intention.GET_INVALID_RESOURCE);
+					JsonObject idata = new JsonObject();
+					idata.add("host", state.Request.host);
+					idata.add("requested", state.Request.path.substring(1));
+					state.setIntention(Intention.GET_INVALID_RESOURCE, idata);
 				}
 				return new HTTPResponse(state.Request.protocol, returnCode, returnCodeDescription, data, type, state.Request.cookiesLines);
 			}

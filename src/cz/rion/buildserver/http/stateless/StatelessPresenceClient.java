@@ -136,23 +136,32 @@ public class StatelessPresenceClient extends StatelessExamClient {
 		result.add("code", new JsonNumber(1));
 		result.add("result", new JsonString("Invalid admin command"));
 
+		JsonObject idata = new JsonObject();
+		idata.add("success", false);
+
 		if (obj.containsString("term_data")) {
 			String term_data = obj.getString("term_data").Value;
+			idata.add("action", term_data);
 			if (term_data.equals("getTerms")) {
 				result.add("code", new JsonNumber(0));
 				result.add("result", new JsonString(collectSlots(state.Data.StaticDB, state.Toolchain, state.getPermissions()).getJsonString()));
+				idata.add("success", true);
 			} else if (term_data.equals("subscribe") && obj.containsNumber("slotID") && obj.containsString("variantID")) {
 				int slotCode = obj.getNumber("slotID").Value;
 				String variantID = obj.getString("variantID").Value;
+				idata.add("slotID", slotCode);
+				idata.add("variantID", variantID);
 				if (state.Data.StaticDB.addUserPresence(state.Toolchain, state.getPermissions().getStaticUserID(), slotCode, variantID, state.getPermissions())) {
 					result.add("code", new JsonNumber(0));
 					result.add("result", new JsonString(collectSlots(state.Data.StaticDB, state.Toolchain, state.getPermissions()).getJsonString()));
+					idata.add("success", true);
 				} else {
 					result.add("code", new JsonNumber(1));
 					result.add("result", new JsonString("Nepodaøilo se pøihlásit na daný termín"));
 				}
 			}
 		}
+		state.setIntention(Intention.TERM_COMMAND, idata);
 		return result;
 	}
 

@@ -62,7 +62,7 @@ public class StatelessPermissionClient extends AbstractStatelessClient {
 	protected void loadPermissions(ProcessState state, int sessionID, String login) {
 		UsersPermission perms = contexts.get(state.Toolchain).usersPermissionByLogin.get(login);
 		if (perms != null) {
-			state.setLoggedIn(perms);
+			state.setLoggedIn(perms.getSessionedInstance(sessionID));
 		}
 	}
 

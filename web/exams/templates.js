@@ -94,29 +94,6 @@ var UITemplates = function() {
 	            }
 	          ]
 	        },
-			{
-	          "type": "tr",
-			  "id": "eval_headerrow2",
-	          "contents": [
-	            {
-	              "type": "th",
-	              "innerHTML": "Zveřejnit hodnocení",
-	              "class": "hcol1"
-	            },
-	            {
-	              "type": "td",
-				  "colSpan": 3, 
-	              "class": "hcol2",
-				  "contents": [
-					{
-						"type": "checkbox",
-	              	    "id": "eval_headerrow_publish_eval",
-						"baseType": "input" 						
-					}
-				  ]
-	            }
-	          ]
-	        },
 	        {
 	          "type": "tr",
 	          "contents": [
@@ -149,6 +126,7 @@ var UITemplates = function() {
 	          "contents": [
 	            {
 	              "type": "th",
+				  "id": "pnl_time_left_lbl",
 	              "innerHTML": "Čas na vyplnění",
 	              "class": "hcol1"
 	            },
@@ -158,6 +136,29 @@ var UITemplates = function() {
 	              "innerHTML": "1:00:00",
 	              "class": "hcol2",
 				  "colSpan": 3
+	            }
+	          ]
+	        },
+			{
+	          "type": "tr",
+			  "id": "eval_headerrow2",
+	          "contents": [
+	            {
+	              "type": "th",
+	              "innerHTML": "Zveřejnit hodnocení",
+	              "class": "hcol1"
+	            },
+	            {
+	              "type": "td",
+				  "colSpan": 3, 
+	              "class": "hcol2",
+				  "contents": [
+					{
+						"type": "checkbox",
+	              	    "id": "eval_headerrow_publish_eval",
+						"baseType": "input" 						
+					}
+				  ]
 	            }
 	          ]
 	        },

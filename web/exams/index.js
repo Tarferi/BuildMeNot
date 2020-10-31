@@ -366,6 +366,7 @@ var ExamMainHeader = function(data, startCB, turnCB, saveCB, fromAdmin) {
 		self.pnlDate = ids.pnl_date_now;
 		self.pnlTime = ids.pnl_time_now;
 		self.pnlCountdown = ids.pnl_time_left;
+		self.pnlCountdownLbl = ids.pnl_time_left_lbl;
 		
 		self.btnStart.addEventListener("click", function(){startCB(data.ExamID)});
 		self.btnTurn.addEventListener("click", function(){turnCB(data.ExamID)});
@@ -408,6 +409,7 @@ var ExamMainHeader = function(data, startCB, turnCB, saveCB, fromAdmin) {
 			self.btnStart.style.display = "none";
 			self.btnTurn.style.display = "none";
 			self.pnlCountdown.innerHTML =self.common.convertDate(data.AnswerTime) + " "+  self.common.convertOnlyTime(data.AnswerTime);
+			self.pnlCountdownLbl.innerHTML = "Čas vyplnění";
 			if(!fromAdmin) {
 				ids.row_act.style.display = "none"
 			}

@@ -6,6 +6,8 @@ import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Map.Entry;
+
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.http.CompatibleSocketClient;
 import cz.rion.buildserver.json.JsonValue;
@@ -24,6 +26,8 @@ import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 import cz.rion.buildserver.ui.events.FileSavedEvent;
 import cz.rion.buildserver.ui.events.FileSavedEvent.FileSaveResult;
 import cz.rion.buildserver.ui.events.PingEvent;
+import cz.rion.buildserver.ui.events.SettingsLoadedEvent;
+import cz.rion.buildserver.ui.events.SettingsLoadedEvent.SettingsCategory;
 import cz.rion.buildserver.ui.events.EventManager.Status;
 import cz.rion.buildserver.ui.events.FileCreatedEvent;
 import cz.rion.buildserver.ui.events.FileCreatedEvent.FileCreationInfo;
@@ -227,6 +231,8 @@ public class UIDriver {
 					return new DatabaseTableRowEditEvent(readDatabaseEditResult(inBuffer));
 				} else if (code == PingEvent.ID) {
 					return new PingEvent(inBuffer.readString());
+				} else if (code == SettingsLoadedEvent.ID) {
+					return new SettingsLoadedEvent(readSettings(inBuffer.readString()));
 				} else {
 					throw new IOException("Invalid OP code: " + code);
 				}
@@ -238,6 +244,27 @@ public class UIDriver {
 
 		}
 		return new StatusChangeEvent(Status.DISCONNECTED);
+	}
+
+	private List<SettingsCategory> readSettings(String readString) {
+		List<SettingsCategory> lst = new ArrayList<>();
+		JsonValue val = JsonValue.parse(readString);
+		if (val != null) {
+			if (val.isObject()) {
+				for (Entry<String, JsonValue> entry : val.asObject().getEntries()) {
+					String name = entry.getKey();
+					JsonValue v = entry.getValue();
+					SettingsCategory cat = SettingsCategory.get(name, v);
+					if (cat == null) {
+						lst.clear();
+						return lst;
+					} else {
+						lst.add(cat);
+					}
+				}
+			}
+		}
+		return lst;
 	}
 
 	private boolean readDatabaseEditResult(InputPacketRequest inBuffer) throws IOException {
@@ -436,6 +463,14 @@ public class UIDriver {
 
 	public void sengPing(String pinger) {
 		addJob(PingEvent.ID, pinger);
+	}
+
+	public void loadSettings() {
+		addJob(SettingsLoadedEvent.ID, 0);
+	}
+
+	public void saveSettings(String string) {
+		addJob(SettingsLoadedEvent.ID, 1, string);
 	}
 
 }

@@ -20,7 +20,7 @@ public class MainWindow extends JFrame implements StatusChangeListener, PingEven
 
 	private final ConnectionPanel pnlConnect;
 	private final StatusPanel pnlStatus;
-	private final UsersPanel pnlUsers;
+	private final SettingsPanel pnlSettings;
 	private final FilesPanel pnlFiles;
 	private final UIDriver driver;
 	private Status status = Status.DISCONNECTED;
@@ -29,7 +29,7 @@ public class MainWindow extends JFrame implements StatusChangeListener, PingEven
 	private void update() {
 		pnlConnect.update(status);
 		pnlStatus.update(status);
-		pnlUsers.update(status);
+		pnlSettings.update(status);
 		pnlFiles.update(status);
 	}
 
@@ -52,8 +52,8 @@ public class MainWindow extends JFrame implements StatusChangeListener, PingEven
 		pnlStatus = new StatusPanel(driver);
 		tabbedPane.addTab(pnlStatus.getTabName(), null, pnlStatus, null);
 
-		pnlUsers = new UsersPanel(driver);
-		tabbedPane.addTab(pnlUsers.getTabName(), null, pnlUsers, null);
+		pnlSettings = new SettingsPanel(driver);
+		tabbedPane.addTab(pnlSettings.getTabName(), null, pnlSettings, null);
 
 		pnlFiles = new FilesPanel(driver);
 		tabbedPane.addTab(pnlFiles.getTabName(), null, pnlFiles, null);

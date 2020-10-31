@@ -7,6 +7,8 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 
+import cz.rion.buildserver.db.RuntimeDB.TestHistory;
+
 public abstract class JsonValue {
 
 	@Override
@@ -463,6 +465,10 @@ public abstract class JsonValue {
 
 	}
 
+	public static interface JsonValuable {
+		JsonValue getValue();
+	}
+
 	public static final class JsonArray extends JsonValue {
 
 		public final List<JsonValue> Value;
@@ -482,6 +488,18 @@ public abstract class JsonValue {
 
 		public JsonArray(List<JsonValue> values) {
 			this.Value = values;
+		}
+
+		private static List<JsonValue> getConverted(List<? extends JsonValuable> lst) {
+			List<JsonValue> val = new ArrayList<>();
+			for (JsonValuable item : lst) {
+				val.add(item.getValue());
+			}
+			return val;
+		}
+
+		public static JsonArray get(List<? extends JsonValuable> data) {
+			return new JsonArray(getConverted(data));
 		}
 
 		@Override
@@ -668,6 +686,10 @@ public abstract class JsonValue {
 
 		public void add(String name, long value) {
 			add(name, new JsonNumber(0, "" + value));
+		}
+
+		public void add(String key, JsonValuable existing) {
+			add(key, existing.getValue());
 		}
 	}
 }

@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 
 import cz.rion.buildserver.Settings;
+import cz.rion.buildserver.db.RuntimeDB;
 import cz.rion.buildserver.exceptions.HTTPClientException;
 import cz.rion.buildserver.exceptions.NoFurhterParseException;
 import cz.rion.buildserver.exceptions.SwitchClientException;
@@ -23,7 +24,7 @@ public class HTTPSyncClientFactory implements HTTPClientFactory, HTTPResponseWri
 
 	public HTTPSyncClientFactory(CompatibleSocketClient client, boolean isSSL) {
 		this.client = client;
-		this.isSSL= isSSL;
+		this.isSSL = isSSL;
 	}
 
 	private String readLine() throws HTTPClientException {
@@ -65,6 +66,21 @@ public class HTTPSyncClientFactory implements HTTPClientFactory, HTTPResponseWri
 		} catch (Throwable t) {
 			return false;
 		}
+	}
+
+	private String getAddress(String address) {
+		String[] add = address.replaceAll("/", "").split(":");
+		if (add.length == 2) { // IPv4 ?
+			address = add[0];
+		} else { // IPv6 ?
+			address = address.replaceAll("\\[", "").replaceAll("\\]", "").replaceAll("/", "");
+			String[] parts = address.split(":");
+			int last = Integer.parseInt(parts[parts.length - 1]);
+			if (last > 0xff) {
+				address = address.substring(0, address.lastIndexOf(":"));
+			}
+		}
+		return address;
 	}
 
 	private HTTPRequest handle(String method, String path, String protocol) throws HTTPClientException, SwitchClientException, NoFurhterParseException {
@@ -130,7 +146,7 @@ public class HTTPSyncClientFactory implements HTTPClientFactory, HTTPResponseWri
 			throw new HTTPClientException("Invalid hostname");
 		}
 		String host = header.get("host");
-		HTTPRequest req = new HTTPRequest(method, host, protocol, path, data, header, cookiesLines, client.getRemoteSocketAddress(), isSSL);
+		HTTPRequest req = new HTTPRequest(method, host, protocol, path, data, header, cookiesLines, getAddress(client.getRemoteSocketAddress()), isSSL);
 		return req;
 	}
 

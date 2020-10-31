@@ -11,5 +11,6 @@
 	<classpathentry kind="lib" path="acme4j-client-2.10.jar"/>
 	<classpathentry kind="lib" path="acme4j-utils-2.10.jar"/>
 	<classpathentry kind="lib" path="closure-compiler-v20200920.jar"/>
+	<classpathentry kind="lib" path="jgoodies-forms-1.8.0.jar" sourcepath="jgoodies-forms-1.8.0-sources.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

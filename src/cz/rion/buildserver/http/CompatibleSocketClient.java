@@ -4,10 +4,11 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
-import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
+
+import cz.rion.buildserver.utils.ByteBufferWrapper;
 
 public class CompatibleSocketClient {
 
@@ -73,8 +74,8 @@ public class CompatibleSocketClient {
 		sock.configureBlocking(b);
 	}
 
-	public int asyncRead(ByteBuffer asyncRawBuffer) throws IOException {
-		return sock.read(asyncRawBuffer);
+	public int asyncRead(ByteBufferWrapper asyncRawBuffer) throws IOException {
+		return sock.read(asyncRawBuffer.getBuffer());
 	}
 
 	public void writeSync(byte[] data) throws IOException {
@@ -84,7 +85,7 @@ public class CompatibleSocketClient {
 	public void writeAsync(byte[] data) throws IOException {
 		int written = 0;
 		while (written != data.length) {
-			int writ = sock.write(ByteBuffer.wrap(data, written, data.length - written));
+			int writ = sock.write(ByteBufferWrapper.wrap(data, written, data.length - written).getBuffer());
 			if (writ < 0) {
 				throw new IOException("Socket write error");
 			}

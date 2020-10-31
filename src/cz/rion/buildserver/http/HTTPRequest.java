@@ -40,6 +40,9 @@ public final class HTTPRequest {
 		this.headers = headers;
 		this.authData = authData;
 		this.cookiesLines = cookiesLines;
+		if(remoteAddress.startsWith("/")) {
+			remoteAddress = remoteAddress.substring(1);
+		}
 		this.remoteAddress = remoteAddress;
 		this.isSSL = isSSL;
 		this.protocol_norm = isSSL ? "https" : "http";

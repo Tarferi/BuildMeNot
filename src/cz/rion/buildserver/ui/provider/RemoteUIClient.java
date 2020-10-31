@@ -1,17 +1,17 @@
 package cz.rion.buildserver.ui.provider;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.Selector;
 import java.util.Date;
 
 import cz.rion.buildserver.http.CompatibleSocketClient;
+import cz.rion.buildserver.utils.ByteBufferWrapper;
 
 public class RemoteUIClient {
 
 	public static enum RemoteOperation {
-		BuildersLoad(0), BuildersUpdate(1), FileCreated(2), FileListLoaded(3), FileLoaded(4), FileSaved(5), StatusChanged(6), StatusMessage(7), UsersLoaded(8), DatabaseTableTowEdit(9), Ping(10);
+		BuildersLoad(0), BuildersUpdate(1), FileCreated(2), FileListLoaded(3), FileLoaded(4), FileSaved(5), StatusChanged(6), StatusMessage(7), UsersLoaded(8), DatabaseTableTowEdit(9), Ping(10), LoadSettings(11);
 
 		public final int code;
 
@@ -109,7 +109,6 @@ public class RemoteUIClient {
 		try {
 			client.close();
 		} catch (Throwable t) {
-
 		}
 	}
 
@@ -135,7 +134,7 @@ public class RemoteUIClient {
 	}
 
 	private MemoryBuffer asyncBuffer = new MemoryBuffer.BroadcastMemoryBuffer(32);
-	private final ByteBuffer asyncRawBuffer = ByteBuffer.allocate(512);
+	private final ByteBufferWrapper asyncRawBuffer = ByteBufferWrapper.allocate(512);
 
 	public void processAvailableBytes() throws IOException {
 		asyncRawBuffer.clear();

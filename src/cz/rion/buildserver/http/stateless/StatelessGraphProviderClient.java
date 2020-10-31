@@ -53,12 +53,12 @@ public class StatelessGraphProviderClient extends StatelessFileProviderClient {
 		return fo;
 	}
 
-	private FileInfo loadView(Map<String, Integer> fileIds, String view, boolean decodeBigString, Toolchain toolchain) {
+	private FileInfo loadView(Map<String, Integer> fileIds, String view, boolean decodeBigString, Toolchain toolchain, Toolchain rootToolchain) {
 		RuntimeDB db = data.RuntimeDB;
 		StaticDB sdb = data.StaticDB;
 		if (fileIds.containsKey(view)) {
 			int fileID = fileIds.get(view);
-			FileInfo fo = LayeredDBFileWrapperDB.processPostLoadedFile(db, LayeredDBFileWrapperDB.processPostLoadedFile(sdb, getFile(fileID, decodeBigString, toolchain), decodeBigString, toolchain), decodeBigString, toolchain);
+			FileInfo fo = LayeredDBFileWrapperDB.processPostLoadedFile(db, LayeredDBFileWrapperDB.processPostLoadedFile(sdb, getFile(fileID, decodeBigString, rootToolchain), decodeBigString, rootToolchain), decodeBigString, rootToolchain);
 			if (fo != null) {
 				JsonValue jsn = JsonValue.parse(fo.Contents);
 				if (jsn != null) {
@@ -90,7 +90,7 @@ public class StatelessGraphProviderClient extends StatelessFileProviderClient {
 		return null;
 	}
 
-	private CachedToolchainData2<JsonValue> graphCache = new CachedToolchainDataWrapper2<>(60, new CachedToolchainDataGetter2<JsonValue>() {
+	private CachedToolchainData2<JsonValue> graphCache = new CachedToolchainDataWrapper2<>(1, new CachedToolchainDataGetter2<JsonValue>() {
 
 		@Override
 		public CachedData<JsonValue> createData(int refreshIntervalInSeconds, final Toolchain toolchain) {
@@ -107,7 +107,7 @@ public class StatelessGraphProviderClient extends StatelessFileProviderClient {
 					}
 
 					// Load tests
-					FileInfo src = data.StaticDB.loadFile("graphs.cfg", true, toolchain);
+					FileInfo src = data.StaticDB.loadFile("graphs.cfg", true, data.StaticDB.getRootToolchain());
 
 					if (src != null) {
 						JsonValue val = JsonValue.parse(src.Contents);
@@ -126,7 +126,7 @@ public class StatelessGraphProviderClient extends StatelessFileProviderClient {
 
 										JsonObject res = new JsonObject();
 
-										FileInfo loadedView = loadView(fileIds, view, true, toolchain);
+										FileInfo loadedView = loadView(fileIds, view, true, toolchain, data.StaticDB.getRootToolchain());
 										if (loadedView == null) {
 											continue;
 										}
@@ -211,7 +211,7 @@ public class StatelessGraphProviderClient extends StatelessFileProviderClient {
 				String returnCodeDescription = "OK";
 				JsonValue graphs = loadGraphs(state);
 				String data = graphs == null ? "[]" : graphs.getJsonString();
-				state.setIntention(Intention.COLLECT_GRAPHS);
+				state.setIntention(Intention.COLLECT_GRAPHS, new JsonObject());
 				return new HTTPResponse(state.Request.protocol, returnCode, returnCodeDescription, data, type, state.Request.cookiesLines);
 			}
 		}

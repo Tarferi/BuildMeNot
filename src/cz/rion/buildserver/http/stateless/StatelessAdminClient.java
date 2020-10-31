@@ -87,7 +87,7 @@ public class StatelessAdminClient extends StatelessPermissionClient {
 		JsonObject obj = new JsonObject();
 		if (fo == null) {
 			if (log) {
-				state.Data.StaticDB.adminLog(state.Request.remoteAddress, state.getPermissions().Login, "load", "load:" + fileID);
+				state.Data.StaticDB.adminLog(state.Toolchain, state.Request.remoteAddress, state.getPermissions().Login, "load", "load:" + fileID);
 			}
 			obj.add("fo", new JsonNumber(1));
 			return obj;
@@ -98,7 +98,7 @@ public class StatelessAdminClient extends StatelessPermissionClient {
 				obj.add("ID", new JsonNumber(fo.ID));
 				obj.add("contents", new JsonString(new String(fo.Contents.getBytes(Settings.getDefaultCharset()), StandardCharsets.UTF_8)));
 				if (log) {
-					state.Data.StaticDB.adminLog(state.Request.remoteAddress, state.getPermissions().Login, "load", "load:" + fileID + ":" + fo.FileName);
+					state.Data.StaticDB.adminLog(state.Toolchain, state.Request.remoteAddress, state.getPermissions().Login, "load", "load:" + fileID + ":" + fo.FileName);
 				}
 				return obj;
 			} else {
@@ -114,15 +114,20 @@ public class StatelessAdminClient extends StatelessPermissionClient {
 		result.add("result", new JsonString("Invalid admin command"));
 		StaticDB sdb = state.Data.StaticDB;
 
+		JsonObject idata = new JsonObject();
+		idata.add("invalid", true);
 		if (obj.containsObject("admin_data")) {
 			JsonObject data = obj.getObject("admin_data");
 			if (data.containsString("action")) {
 				String action = data.getString("action").Value;
 				if (action.equals("getFiles")) {
+					idata.add("action", action);
 					result.add("code", new JsonNumber(0));
 					result.add("result", new JsonString(collectFiles(state).getJsonString()));
-					sdb.adminLog(state.Request.remoteAddress, state.getPermissions().Login, "getFiles", data.getJsonString());
+					sdb.adminLog(state.Toolchain, state.Request.remoteAddress, state.getPermissions().Login, "getFiles", data.getJsonString());
 				} else if (action.equals("load") && data.containsNumber("fileID")) {
+					idata.add("action", action);
+					idata.add("fileID", data.getNumber("fileID").Value);
 					int fileID = data.getNumber("fileID").Value;
 					result.add("code", new JsonNumber(0));
 					result.add("result", new JsonString(loadFile(state, fileID, true).getJsonString()));
@@ -131,6 +136,9 @@ public class StatelessAdminClient extends StatelessPermissionClient {
 					String newContents = data.getString("contents").Value;
 					boolean isSavingRawFile = action.equals("save");
 					boolean isEditingRow = action.equals("tableEdit");
+					idata.add("action", action);
+					idata.add("fileID", fileID);
+					idata.add("contents", newContents);
 					StringBuilder log = new StringBuilder();
 					if (isSavingRawFile) { // Log handled internally
 						if (this.saveFile(state, fileID, newContents, log)) {
@@ -151,26 +159,30 @@ public class StatelessAdminClient extends StatelessPermissionClient {
 					}
 				} else if (action.equals("create") && data.containsString("name")) {
 					String fileName = data.getString("name").Value;
+					idata.add("action", action);
+					idata.add("name", fileName);
 					if (!fileName.isEmpty()) {
 						try {
 							sdb.createFile(state.Toolchain, fileName, "", false);
 							result.add("code", new JsonNumber(0));
 							result.add("result", new JsonString("File created"));
-							sdb.adminLog(state.Request.remoteAddress, state.getPermissions().Login, "create", "create:0:" + fileName);
+							sdb.adminLog(state.Toolchain, state.Request.remoteAddress, state.getPermissions().Login, "create", "create:0:" + fileName);
 						} catch (DatabaseException e) {
 							e.printStackTrace();
 							result.add("code", new JsonNumber(1));
 							result.add("result", new JsonString("Failed to create new file: " + fileName));
-							sdb.adminLog(state.Request.remoteAddress, state.getPermissions().Login, "create", "create:1:" + fileName);
+							sdb.adminLog(state.Toolchain, state.Request.remoteAddress, state.getPermissions().Login, "create", "create:1:" + fileName);
 						}
 					} else {
+						idata.add("action", action);
 						result.add("code", new JsonNumber(1));
 						result.add("result", new JsonString("Cannot create new file: " + fileName));
-						sdb.adminLog(state.Request.remoteAddress, state.getPermissions().Login, "create", "create:1:" + fileName);
+						sdb.adminLog(state.Toolchain, state.Request.remoteAddress, state.getPermissions().Login, "create", "create:1:" + fileName);
 					}
 				}
 			}
 		}
+		state.setIntention(Intention.ADMIN_COMMAND, idata);
 		return result;
 	}
 
@@ -193,7 +205,7 @@ public class StatelessAdminClient extends StatelessPermissionClient {
 						String tn = LayeredDBFileWrapperDB.getTableNameForFile(state.Data.StaticDB, f);
 						if (tn != null) {
 							if ((state.Data.StaticDB.isRootOnly(tn) && toolchain.IsRoot) || !state.Data.StaticDB.isRootOnly(tn)) {
-								if (LayeredDBFileWrapperDB.editRow(state.Data.StaticDB, login, address, state.Data.StaticDB, f, obj)) {
+								if (LayeredDBFileWrapperDB.editRow(state.Data.StaticDB, login, address, state.Data.StaticDB, f, obj, state.Toolchain)) {
 									return true;
 								}
 							}
@@ -205,7 +217,7 @@ public class StatelessAdminClient extends StatelessPermissionClient {
 							String tn = LayeredDBFileWrapperDB.getTableNameForFile(state.Data.RuntimeDB, f);
 							if (tn != null) {
 								if (state.Data.RuntimeDB.isRootOnly(tn) && toolchain.IsRoot || !state.Data.RuntimeDB.isRootOnly(tn)) {
-									if (LayeredDBFileWrapperDB.editRow(state.Data.StaticDB, login, address, state.Data.RuntimeDB, f, obj)) {
+									if (LayeredDBFileWrapperDB.editRow(state.Data.StaticDB, login, address, state.Data.RuntimeDB, f, obj, state.Toolchain)) {
 										return true;
 									}
 								}
@@ -239,7 +251,7 @@ public class StatelessAdminClient extends StatelessPermissionClient {
 							JsonObject obj = new JsonObject();
 							obj.add("original", new JsonString(fo.Contents));
 							obj.add("new", new JsonString(newContents));
-							state.Data.StaticDB.adminLog(state.Request.remoteAddress, state.getPermissions().Login, "saveFile:" + fileID + ":" + fo.FileName, obj.getJsonString());
+							state.Data.StaticDB.adminLog(state.Toolchain, state.Request.remoteAddress, state.getPermissions().Login, "saveFile:" + fileID + ":" + fo.FileName, obj.getJsonString());
 							state.Data.StaticDB.storeFile(f, f.FileName, newContents);
 							return true;
 						} else {
@@ -249,7 +261,7 @@ public class StatelessAdminClient extends StatelessPermissionClient {
 					}
 				} else {
 					log.append("Zadaný soubor nelze uložit, protože se ho nepodařilo načíst");
-					state.Data.StaticDB.adminLog(state.Request.remoteAddress, state.getPermissions().Login, "saveFile:" + fileID, "saveFile:" + fileID);
+					state.Data.StaticDB.adminLog(state.Toolchain, state.Request.remoteAddress, state.getPermissions().Login, "saveFile:" + fileID, "saveFile:" + fileID);
 					return false;
 				}
 			}

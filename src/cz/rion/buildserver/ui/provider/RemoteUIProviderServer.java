@@ -37,6 +37,7 @@ import cz.rion.buildserver.ui.events.FileLoadedEvent;
 import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 import cz.rion.buildserver.ui.events.FileSavedEvent;
 import cz.rion.buildserver.ui.events.PingEvent;
+import cz.rion.buildserver.ui.events.SettingsLoadedEvent;
 import cz.rion.buildserver.ui.events.StatusMessageEvent;
 import cz.rion.buildserver.ui.events.UsersLoadedEvent;
 import cz.rion.buildserver.wrappers.MyThread;
@@ -135,8 +136,34 @@ public class RemoteUIProviderServer {
 		} else if (code == PingEvent.ID) {
 			sender.updateLastOperation();
 			return true;
+		} else if (code == SettingsLoadedEvent.ID) {
+			return handleSettingsLoaded(inBuffer, outBuffer);
 		}
 		return false;
+	}
+
+	private boolean handleSettingsLoaded(InputPacketRequest inBuffer, MemoryBuffer outBuffer) throws IOException {
+		int act = inBuffer.readInt();
+		if (act == 1) {
+			boolean saved = false;
+			String str = inBuffer.readString();
+			JsonValue val = JsonValue.parse(str);
+			if (val != null) {
+				if (val.isObject()) {
+					JsonObject o = val.asObject();
+					if (Settings.set(o)) {
+						saved = true;
+					}
+				}
+			}
+			if (!saved) {
+				throw new IOException("Failed to save settings");
+			}
+		}
+		JsonValue v = Settings.get();
+		outBuffer.writeInt(SettingsLoadedEvent.ID);
+		outBuffer.writeString(v.getJsonString());
+		return true;
 	}
 
 	private void handleEditDatabaseTableRow(InputPacketRequest inBuffer, MemoryBuffer outBuffer) throws IOException {
@@ -151,13 +178,13 @@ public class RemoteUIProviderServer {
 			try {
 				f = this.sdb.getFile(fileID, false, sdb.getRootToolchain());
 				if (f != null) { // SDB database
-					if (LayeredDBFileWrapperDB.editRow(sdb, f, obj)) {
+					if (LayeredDBFileWrapperDB.editRow(sdb, f, obj, sdb.getRootToolchain())) {
 						returnCode = 42;
 					}
 				} else { // DB database ?
 					f = LayeredDBFileWrapperDB.getFile(db, fileID, false, sdb.getRootToolchain());
 					if (f != null) {
-						if (LayeredDBFileWrapperDB.editRow(db, f, obj)) {
+						if (LayeredDBFileWrapperDB.editRow(db, f, obj, sdb.getRootToolchain())) {
 							returnCode = 42;
 						}
 					}
@@ -259,7 +286,7 @@ public class RemoteUIProviderServer {
 		outBuffer.writeInt(lst.size());
 		for (DatabaseFile file : lst) {
 			outBuffer.writeInt(file.ID);
-			if (file.ToolchainName.equals(Settings.getRootToolchain())) {
+			if (file.ToolchainName.equals(Settings.getRootToolchain()) || file.ToolchainName.equals("shared")) {
 				outBuffer.writeString(file.FileName);
 			} else {
 				outBuffer.writeString("data/" + file.ToolchainName + "/" + file.FileName);

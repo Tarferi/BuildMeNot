@@ -11,6 +11,7 @@ import cz.rion.buildserver.ui.events.FileListLoadedEvent.FileListLoadedListener;
 import cz.rion.buildserver.ui.events.FileLoadedEvent.FileLoadedListener;
 import cz.rion.buildserver.ui.events.FileSavedEvent.FileSavedListener;
 import cz.rion.buildserver.ui.events.PingEvent.PingEventListener;
+import cz.rion.buildserver.ui.events.SettingsLoadedEvent.SettingsLoadedListener;
 import cz.rion.buildserver.ui.events.StatusChangeEvent.StatusChangeListener;
 import cz.rion.buildserver.ui.events.StatusMessageEvent.StatusMessageListener;
 import cz.rion.buildserver.ui.events.UsersLoadedEvent.UserListLoadedListener;
@@ -28,6 +29,7 @@ public class EventManager {
 	protected final List<FileCreatedListener> fileCreatedListeners = new ArrayList<>();
 	protected final List<DatabaseRowEditEventListener> databaseRowEditEventListeners = new ArrayList<>();
 	protected final List<PingEventListener> pingEventListeners = new ArrayList<>();
+	protected final List<SettingsLoadedListener> settingsLoadedListeners = new ArrayList<>();
 
 	protected Status status = Status.DISCONNECTED;
 

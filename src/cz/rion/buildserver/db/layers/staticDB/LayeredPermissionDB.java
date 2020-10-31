@@ -23,7 +23,6 @@ import cz.rion.buildserver.utils.CachedDataWrapper2;
 import cz.rion.buildserver.utils.CachedToolchainData2;
 import cz.rion.buildserver.utils.CachedToolchainDataGetter2;
 import cz.rion.buildserver.utils.CachedToolchainDataWrapper2;
-import cz.rion.buildserver.utils.ToolchainedPermissionCache;
 
 public abstract class LayeredPermissionDB extends LayeredTestDB {
 
@@ -83,6 +82,18 @@ public abstract class LayeredPermissionDB extends LayeredTestDB {
 			return obj;
 		}
 
+		public UsersPermission getSessionedInstance(int sessionID) {
+			UsersPermission np = new UsersPermission(Toolchain, Login, sessionID, db, rdb);
+			np.permissions = permissions;
+			np.primaries = primaries;
+			np.fullName = fullName;
+			np.email = email;
+			np.userGroup = userGroup;
+			np.StaticUserID = StaticUserID;
+			np.userID = userID;
+			return np;
+		}
+
 		private UsersPermission(Toolchain toolchain, String login, int sessionID, LayeredPermissionDB db, RuntimeDB rdb) {
 			this.db = db;
 			this.Login = login;
@@ -97,6 +108,10 @@ public abstract class LayeredPermissionDB extends LayeredTestDB {
 
 		public final boolean allowSee(String test_id) {
 			return can(WebPermission.SeeTest(Toolchain, test_id));
+		}
+
+		public final boolean allowSeeOwnHistory(String test_id) {
+			return can(WebPermission.SeeOwnHistoryFor(Toolchain, test_id));
 		}
 
 		public boolean allowExecute(String test_id) {
@@ -179,6 +194,9 @@ public abstract class LayeredPermissionDB extends LayeredTestDB {
 			return this.fullName;
 		}
 
+		public boolean allowEditHistoryOfSomeoneElsesTest(Toolchain tc) {
+			return can(WebPermission.EditSomeoneElsesHistory.toBranch(tc));
+		}
 	}
 
 	private final PermissionManager manager = new PermissionManager(this, Settings.GetDefaultUsername());

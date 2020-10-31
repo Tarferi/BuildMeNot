@@ -16,14 +16,17 @@ import cz.rion.buildserver.db.crypto.CryptoManager;
 import cz.rion.buildserver.db.layers.common.LayeredMetaDB;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.db.layers.staticDB.LayeredFilesDB.DatabaseFile;
+import cz.rion.buildserver.db.layers.staticDB.LayeredPermissionDB.UsersPermission;
 import cz.rion.buildserver.db.layers.staticDB.LayeredStaticDB.ToolchainCallback;
 import cz.rion.buildserver.exceptions.ChangeOfSessionAddressException;
+import cz.rion.buildserver.exceptions.CompressionException;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonNumber;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.json.JsonValue.JsonString;
+import cz.rion.buildserver.json.JsonValue.JsonValuable;
 import cz.rion.buildserver.ui.events.FileLoadedEvent.FileInfo;
 import cz.rion.buildserver.utils.CachedData;
 
@@ -32,7 +35,6 @@ public class RuntimeDB extends LayeredMetaDB {
 	private final Crypto crypto;
 
 	private final Object syncer_compilations = new Object();
-	private final Object syncer_compilations_v1 = new Object();
 	private final Object syncer_users = new Object();
 	private final Object syncer_sessions = new Object();
 	private final Object syncer_compilation_stats = new Object();
@@ -49,11 +51,316 @@ public class RuntimeDB extends LayeredMetaDB {
 		makeTable("users", false, KEY("ID"), TEXT("login"), TEXT("toolchain"));
 		makeTable("session", false, KEY("ID"), TEXT("address"), TEXT("hash"), NUMBER("live"), NUMBER("user_id"), DATE("last_action"), DATE("creation_time"), TEXT("toolchain"));
 		makeTable("compilations", false, KEY("ID"), NUMBER("session_id"), TEXT("toolchain"), TEXT("test_id"), NUMBER("user_id"), TEXT("address"), NUMBER("port"), BIGTEXT("asm"), DATE("creation_time"), NUMBER("code"), BIGTEXT("result"), BIGTEXT("full"), NUMBER("good_tests"), NUMBER("bad_tests"), BIGTEXT("bad_tests_details"));
-		makeTable("pageLoads", false, KEY("ID"), NUMBER("session_id"), TEXT("address"), NUMBER("port"), TEXT("target"), DATE("creation_time"), NUMBER("result"));
-		makeTable("crypto_expire_log", true, KEY("ID"), TEXT("address"), BIGTEXT("crypto"), NUMBER("creation_time"), TEXT("description"), TEXT("toolchain"));
+		makeTable("compilations_feedback", false, KEY("ID"), NUMBER("compilation_id"), NUMBER("author_id"), BIGTEXT("data"), DATE("creation_time"), NUMBER("valid"), TEXT("toolchain"));
+		makeTable("page_loads", false, KEY("ID"), NUMBER("session_id"), TEXT("toolchain"), TEXT("address"), TEXT("host"), TEXT("path"), DATE("creation_time"), NUMBER("result"));
+		makeTable("crypto_expire_log", true, KEY("ID"), TEXT("address"), BIGTEXT("crypto"), DATE("creation_time"), TEXT("description"), TEXT("toolchain"));
 		makeTable("user_timeouts", false, KEY("ID"), NUMBER("user_id"), DATE("last_time"), DATE("allow_next"), NUMBER("bad_instr"), NUMBER("bad_segfaults"), NUMBER("bad_base"), NUMBER("bad_uncompilable"), NUMBER("live"), TEXT("toolchain"));
 		makeCompilationStatsTable();
 		makeRetestsTable();
+	}
+
+	public final static class TestFeedback implements JsonValuable {
+		public final int ID;
+		public final int AuthorID;
+		public final String AuthorLogin;
+		public final String AuthorFullName;
+		public final String Toolchain;
+		public final JsonValue Data;
+		public final long CreationTime;
+
+		public final int CurrentUserID;
+		public final boolean CanEditAnything;
+
+		public TestFeedback(int id, int authorID, String authorLogin, String authorFullName, String toolchain, JsonValue data, long creationTime, int cuid, boolean admin) {
+			this.ID = id;
+			this.AuthorID = authorID;
+			this.Toolchain = toolchain;
+			this.AuthorFullName = authorFullName;
+			this.AuthorLogin = authorLogin;
+			this.Data = data;
+			this.CreationTime = creationTime;
+			this.CurrentUserID = cuid;
+			this.CanEditAnything = admin;
+		}
+
+		@Override
+		public JsonValue getValue() {
+			JsonObject obj = new JsonObject();
+			obj.add("ID", ID);
+			obj.add("AuthorID", AuthorID);
+			obj.add("AuthorLogin", AuthorLogin);
+			obj.add("AuthorName", AuthorFullName);
+			obj.add("Toolchain", Toolchain);
+			obj.add("Data", Data);
+			obj.add("Creation", CreationTime);
+			obj.add("Editable", CurrentUserID == AuthorID || CanEditAnything);
+			return obj;
+		}
+	}
+
+	public final static class TestHistory implements JsonValuable {
+		public final int ID;
+		public final int UserID;
+		public final String Toolchain;
+		public final String TestID;
+		public final String Result;
+		public final JsonNumber TotalFeedbacks;
+		public final JsonNumber LastFeedbackDate;
+		public final String LastFeedbackLogin;
+		public final long CreationTime;
+
+		private TestHistory(int ID, String toolchain, int userID, String testID, String result, long creation_time, JsonNumber totalFeedbacks, JsonNumber lastFeedbackDate, String lastFeedbackLogin) {
+			this.ID = ID;
+			this.UserID = userID;
+			this.Toolchain = toolchain;
+			this.TestID = testID;
+			this.Result = result;
+			this.TotalFeedbacks = totalFeedbacks;
+			this.LastFeedbackDate = lastFeedbackDate;
+			this.CreationTime = creation_time;
+			this.LastFeedbackLogin = lastFeedbackLogin;
+		}
+
+		@Override
+		public JsonValue getValue() {
+			JsonObject obj = new JsonObject();
+			obj.add("ID", this.ID);
+			obj.add("UserID", this.UserID);
+			obj.add("Toolchain", this.Toolchain);
+			obj.add("TestID", this.TestID);
+			obj.add("Result", this.Result);
+			obj.add("TotalComments", this.TotalFeedbacks);
+			obj.add("LastComment", this.LastFeedbackDate);
+			obj.add("LastCommentLogin", this.LastFeedbackLogin);
+			obj.add("CreationTime", this.CreationTime);
+			return obj;
+		}
+	}
+
+	public final static class CodedHistory implements JsonValuable {
+		public final String TestID;
+		public final String Code;
+		public final int AuthorID;
+
+		private CodedHistory(String testID, String code, int authorID) {
+			this.TestID = testID;
+			this.Code = code;
+			this.AuthorID = authorID;
+		}
+
+		@Override
+		public JsonValue getValue() {
+			JsonObject obj = new JsonObject();
+			obj.add("TestID", this.TestID);
+			obj.add("Code", this.Code);
+			obj.add("AuthorID", this.AuthorID);
+			return obj;
+		}
+	}
+
+	public void updateFeedback(Toolchain toolchain, int feedbackID, JsonValue data, boolean delete) throws DatabaseException {
+		final String tableName = "compilations_feedback";
+		ValuedField[] fields = delete ? new ValuedField[] { new ValuedField(getField(tableName, "valid"), 0) } : new ValuedField[] { new ValuedField(getField(tableName, "data"), data.getJsonString()) };
+		this.update(tableName, feedbackID, fields);
+	}
+
+	public void storeFeedback(Toolchain toolchain, int userID, int compilation_id, JsonValue data) throws DatabaseException {
+		final String tableName = "compilations_feedback";
+		ValuedField[] fields = new ValuedField[] { new ValuedField(getField(tableName, "compilation_id"), compilation_id), new ValuedField(getField(tableName, "data"), data.getJsonString()), new ValuedField(getField(tableName, "author_id"), userID), new ValuedField(getField(tableName, "compilation_id"), compilation_id), new ValuedField(getField(tableName, "creation_time"), System.currentTimeMillis()), new ValuedField(getField(tableName, "valid"), 1), new ValuedField(getField(tableName, "toolchain"), toolchain.getName()) };
+		this.insert(tableName, fields);
+	}
+
+	public List<TestFeedback> getFeedbacks(Toolchain toolchain, int compilationID, int currentUserID, boolean canEditAnything) throws DatabaseException {
+		List<TestFeedback> lst = new ArrayList<>();
+		final String tableName = "compilations_feedback";
+		final String tableName2 = "users";
+		TableField[] fields = new TableField[] { getField(tableName, "ID"), getField(tableName, "author_id"), getField(tableName, "data"), getField(tableName, "creation_time"), getField(tableName, "toolchain"), getField(tableName2, "login") };
+		ComparisionField t_valid = new ComparisionField(getField(tableName, "valid"), 1);
+		ComparisionField t_compilation_id = new ComparisionField(getField(tableName, "compilation_id"), compilationID);
+		ComparisionField[] conjunctions = new ComparisionField[] { t_valid, t_compilation_id };
+
+		JsonArray res = this.select(tableName, fields, conjunctions, new TableJoin[] { new TableJoin(getField(tableName, "author_id"), getField(tableName2, "ID")) }, true);
+		for (JsonValue val : res.Value) {
+			if (val.isObject()) {
+				JsonObject obj = val.asObject();
+				if (obj.containsNumber("ID") && obj.containsNumber("author_id") && obj.containsString("data") && obj.containsNumber("creation_time") && obj.containsString("login") && obj.containsString("toolchain")) {
+					int id = obj.getNumber("ID").Value;
+					int author_id = obj.getNumber("author_id").Value;
+					String data = obj.getString("data").Value;
+					long creation = obj.getNumber("creation_time").asLong();
+					String login = obj.getString("login").Value;
+					String tc = obj.getString("toolchain").Value;
+					JsonValue dataV = JsonValue.parse(data);
+					if (dataV != null) {
+						TestFeedback tf = new TestFeedback(id, author_id, login, "", tc, dataV, creation, currentUserID, canEditAnything);
+						lst.add(tf);
+					}
+				}
+			}
+		}
+		return lst;
+	}
+
+	private JsonValue getNumberFromResult(Toolchain toolchain, boolean dec, String sql, String table, String column, Object... params) throws DatabaseException {
+		@SuppressWarnings("deprecation")
+		DatabaseResult data = this.select_raw(sql, params);
+		JsonArray res;
+		try {
+			res = data.getJSON(false, new TableField[] { getField(table, column) }, toolchain);
+		} catch (CompressionException e) {
+			throw new DatabaseException("Failed to decode compilation count data", e);
+		}
+		if (res.Value.size() == 1) {
+			JsonValue val = res.Value.get(0);
+			if (val.isObject()) {
+				JsonObject obj = val.asObject();
+				if (dec) {
+					if (obj.contains(column)) {
+						return obj.get(column);
+					}
+				} else {
+					return obj;
+				}
+			}
+		}
+		return new JsonNumber(0);
+	}
+
+	private Object[] getTotalFeedbacksWithLastFeedback(Toolchain toolchain, int compilationID) throws DatabaseException {
+		JsonValue cnt = getNumberFromResult(toolchain, true, "SELECT count(*) as id FROM compilations_feedback WHERE compilation_id=? AND valid=1 AND toolchain=?", "compilations_feedback", "id", compilationID, toolchain.getName());
+		JsonValue last = getNumberFromResult(toolchain, false, "SELECT creation_time as id, users.login as login FROM compilations_feedback, users WHERE users.id = compilations_feedback.author_id AND  compilations_feedback.compilation_id=? AND compilations_feedback.valid=1 AND compilations_feedback.toolchain=? ORDER BY compilations_feedback.creation_time DESC LIMIT 1", "compilations_feedback", "id", compilationID, toolchain.getName());
+		if (last.isObject()) {
+			JsonObject o = last.asObject();
+			if (o.containsNumber("id") && o.containsString("login")) {
+				return new Object[] { cnt, o.getNumber("id"), o.getString("login").Value };
+			}
+		}
+		return new Object[] { cnt, new JsonNumber(0), "" };
+	}
+
+	public List<TestHistory> getHistory(Toolchain toolchain, UsersPermission perms, String testID, boolean onlyMine) throws DatabaseException {
+		List<TestHistory> lst = new ArrayList<>();
+		final String tableName = "compilations";
+		TableField[] fields = new TableField[] { getField(tableName, "ID"), getField(tableName, "toolchain"), getField(tableName, "result"), getField(tableName, "user_id"), getField(tableName, "creation_time"), getField(tableName, "test_id") };
+		ComparisionField tidc = new ComparisionField(getField(tableName, "test_id"), testID);
+		ComparisionField tuidc = new ComparisionField(getField(tableName, "user_id"), perms.getUserID());
+
+		ComparisionField[] conjunctions = onlyMine ? new ComparisionField[] { tidc, tuidc } : new ComparisionField[] { tidc };
+		JsonArray res = this.select(tableName, fields, true, conjunctions);
+		for (JsonValue val : res.Value) {
+			if (val.isObject()) {
+				JsonObject obj = val.asObject();
+				if (obj.containsNumber("ID") && obj.containsNumber("user_id") && obj.containsNumber("creation_time") && obj.containsString("toolchain") && obj.containsString("test_id") && obj.containsString("result")) {
+					int id = obj.getNumber("ID").Value;
+					String tc = obj.getString("toolchain").Value;
+					String test_id = obj.getString("test_id").Value;
+					String result = obj.getString("result").Value;
+					int user_id = obj.getNumber("user_id").Value;
+					long creation_time = obj.getNumber("creation_time").asLong();
+					if (toolchain.IsRoot || toolchain.getName().equals(tc)) {
+						Object[] x = getTotalFeedbacksWithLastFeedback(toolchain, id);
+						JsonNumber cnt = (JsonNumber) x[0];
+						JsonNumber last = (JsonNumber) x[1];
+						String lastLogin = (String) x[2];
+						lst.add(new TestHistory(id, tc, user_id, test_id, result, creation_time, cnt, last, lastLogin));
+					}
+				}
+			}
+		}
+		return lst;
+	}
+
+	public TestFeedback getSingleFeedback(Toolchain toolchain, int feedbackID, int currentUserID, boolean canEditAnything) throws DatabaseException {
+		final String tableName = "compilations_feedback";
+		final String tableName2 = "users";
+		TableField[] fields = new TableField[] { getField(tableName, "ID"), getField(tableName, "author_id"), getField(tableName, "data"), getField(tableName, "creation_time"), getField(tableName, "toolchain"), getField(tableName2, "login") };
+		ComparisionField t_valid = new ComparisionField(getField(tableName, "valid"), 1);
+		ComparisionField t_compilation_id = new ComparisionField(getField(tableName, "ID"), feedbackID);
+		ComparisionField[] conjunctions = new ComparisionField[] { t_valid, t_compilation_id };
+
+		JsonArray res = this.select(tableName, fields, conjunctions, new TableJoin[] { new TableJoin(getField(tableName, "author_id"), getField(tableName2, "ID")) }, true);
+		for (JsonValue val : res.Value) {
+			if (val.isObject()) {
+				JsonObject obj = val.asObject();
+				if (obj.containsNumber("ID") && obj.containsNumber("author_id") && obj.containsString("data") && obj.containsNumber("creation_time") && obj.containsString("login") && obj.containsString("toolchain")) {
+					int id = obj.getNumber("ID").Value;
+					int author_id = obj.getNumber("author_id").Value;
+					String data = obj.getString("data").Value;
+					long creation = obj.getNumber("creation_time").asLong();
+					String login = obj.getString("login").Value;
+					String tc = obj.getString("toolchain").Value;
+					JsonValue dataV = JsonValue.parse(data);
+					if (dataV != null) {
+						TestFeedback tf = new TestFeedback(id, author_id, login, "", tc, dataV, creation, currentUserID, canEditAnything);
+						return tf;
+					}
+				}
+			}
+		}
+		return null;
+	}
+
+	public CodedHistory getSingleHistory(Toolchain toolchain, int ID) throws DatabaseException {
+		final String tableName = "compilations";
+		TableField[] fields = new TableField[] { getField(tableName, "test_id"), getField(tableName, "user_id"), getField(tableName, "asm"), getField(tableName, "toolchain") };
+		ComparisionField tidc = new ComparisionField(getField(tableName, "ID"), ID);
+
+		ComparisionField[] conjunctions = new ComparisionField[] { tidc };
+		JsonArray res = this.select(tableName, fields, true, conjunctions);
+		for (JsonValue val : res.Value) {
+			if (val.isObject()) {
+				JsonObject obj = val.asObject();
+				if (obj.containsNumber("user_id") && obj.containsString("test_id") && obj.containsString("asm") && obj.containsString("toolchain")) {
+					int user_id = obj.getNumber("user_id").Value;
+					String test_id = obj.getString("test_id").Value;
+					String asm = obj.getString("asm").Value;
+					String tc = obj.getString("toolchain").Value;
+					if (toolchain.IsRoot || toolchain.getName().equals(tc)) {
+						return new CodedHistory(test_id, asm, user_id);
+					}
+				}
+			}
+		}
+		return null;
+	}
+
+	public TestFeedback fetchSingleFeedback(Toolchain toolchain, int ID, int currentUserID, boolean canEditAnything) throws DatabaseException {
+		final String tableName = "compilations_feedback";
+		final String tableName2 = "users";
+		TableField[] fields = new TableField[] { getField(tableName, "ID"), getField(tableName, "author_id"), getField(tableName, "data"), getField(tableName, "creation_time"), getField(tableName, "toolchain"), getField(tableName2, "login") };
+		ComparisionField t_valid = new ComparisionField(getField(tableName, "valid"), 1);
+		ComparisionField t_compilation_id = new ComparisionField(getField(tableName, "id"), ID);
+		ComparisionField[] conjunctions = new ComparisionField[] { t_valid, t_compilation_id };
+
+		JsonArray res = this.select(tableName, fields, conjunctions, new TableJoin[] { new TableJoin(getField(tableName, "author_id"), getField(tableName2, "ID")) }, true);
+		for (JsonValue val : res.Value) {
+			if (val.isObject()) {
+				JsonObject obj = val.asObject();
+				if (obj.containsNumber("ID") && obj.containsNumber("author_id") && obj.containsString("data") && obj.containsNumber("creation_time") && obj.containsString("login") && obj.containsString("toolchain")) {
+					int id = obj.getNumber("ID").Value;
+					int author_id = obj.getNumber("author_id").Value;
+					String data = obj.getString("data").Value;
+					long creation = obj.getNumber("creation_time").asLong();
+					String login = obj.getString("login").Value;
+					String tc = obj.getString("toolchain").Value;
+					JsonValue dataV = JsonValue.parse(data);
+					if (dataV != null) {
+						TestFeedback tf = new TestFeedback(id, author_id, login, "", tc, dataV, creation, currentUserID, canEditAnything);
+						return tf;
+					}
+				}
+			}
+		}
+		return null;
+	}
+
+	public void logPageLoad(int session_id, Toolchain toolchain, String address, String host, String path, int result) {
+		final String tableName = "page_loads";
+		try {
+			this.insert(tableName, new ValuedField(getField(tableName, "session_id"), session_id), new ValuedField(getField(tableName, "toolchain"), toolchain.getName()), new ValuedField(getField(tableName, "address"), address), new ValuedField(getField(tableName, "host"), host), new ValuedField(getField(tableName, "path"), path), new ValuedField(getField(tableName, "creation_time"), System.currentTimeMillis()), new ValuedField(getField(tableName, "result"), result));
+		} catch (DatabaseException e) {
+			e.printStackTrace();
+		}
 	}
 
 	public enum BadResultType {
@@ -168,7 +475,7 @@ public class RuntimeDB extends LayeredMetaDB {
 
 	private void log_expired_crypto(String address, String crypto, String description, Toolchain toolchain) throws DatabaseException {
 		final String tableName = "crypto_expire_log";
-		this.insert(tableName, new ValuedField(getField(tableName, "description"), description), new ValuedField(getField(tableName, "address"), address), new ValuedField(getField(tableName, "crypto"), crypto), new ValuedField(getField(tableName, "toolchain"), toolchain.getName()), new ValuedField(getField(tableName, "creation_time"), new Date().getTime()));
+		this.insert(tableName, new ValuedField(getField(tableName, "description"), description), new ValuedField(getField(tableName, "address"), address), new ValuedField(getField(tableName, "crypto"), crypto), new ValuedField(getField(tableName, "toolchain"), toolchain.getName()), new ValuedField(getField(tableName, "creation_time"), System.currentTimeMillis()));
 	}
 
 	private void makeCompilationStatsTable() throws DatabaseException {
@@ -230,22 +537,6 @@ public class RuntimeDB extends LayeredMetaDB {
 			e.printStackTrace();
 		}
 		return result;
-	}
-
-	public void storev1Compilation(String remoteAddress, Date time, String asm, String test_id, int resultCode, String result, String full) throws DatabaseException {
-		synchronized (syncer_compilations_v1) {
-			String[] addrParts = reverse(remoteAddress).split(":", 2);
-			String address = remoteAddress;
-			int port = 0;
-			if (addrParts.length == 2) {
-				address = reverse(addrParts[1]);
-				port = Integer.parseInt(reverse(addrParts[0]));
-			}
-			final String tableName = result.contains(":)") ? "dbV1Good" : "dbV1";
-
-			ValuedField[] updateData = new ValuedField[] { new ValuedField(this.getField(tableName, "address"), address), new ValuedField(this.getField(tableName, "port"), port), new ValuedField(this.getField(tableName, "asm"), asm), new ValuedField(this.getField(tableName, "test_id"), test_id), new ValuedField(this.getField(tableName, "creation_time"), time.getTime()), new ValuedField(this.getField(tableName, "code"), resultCode), new ValuedField(this.getField(tableName, "result"), result), new ValuedField(this.getField(tableName, "full"), full) };
-			insert(tableName, updateData);
-		}
 	}
 
 	private void createCompilationStats(int user_id, Toolchain toolchain, boolean storeEvenEmptyStats) throws DatabaseException {
@@ -408,23 +699,8 @@ public class RuntimeDB extends LayeredMetaDB {
 		return sb.toString();
 	}
 
-	private String getAddress(String address) {
-		String[] add = address.replaceAll("/", "").split(":");
-		if (add.length == 2) { // IPv4 ?
-			address = add[0];
-		} else { // IPv6 ?
-			address = address.replaceAll("\\[", "").replaceAll("\\]", "").replaceAll("/", "");
-			String[] parts = address.split(":");
-			int last = Integer.parseInt(parts[parts.length - 1]);
-			if (last > 0xff) {
-				address = address.substring(0, address.lastIndexOf(":"));
-			}
-		}
-		return address;
-	}
-
 	public String storeSessionKnownLogin(String address, String authToken, String login, boolean allowChangeAddress, Toolchain toolchain) throws Exception {
-		long now = new Date().getTime() / 1000;
+		long now = System.currentTimeMillis();
 		final String tableName = "session";
 		synchronized (syncer_sessions) {
 			int user_id = getUserIDFromLogin(login, toolchain);
@@ -479,9 +755,6 @@ public class RuntimeDB extends LayeredMetaDB {
 	}
 
 	public String storeSession(String address, String authToken, Toolchain toolchain) throws Exception {
-
-		address = getAddress(address);
-
 		if (crypto == null) {
 			throw new Exception("No crypto");
 		}
@@ -524,7 +797,6 @@ public class RuntimeDB extends LayeredMetaDB {
 	}
 
 	public int getSessionIDFromSession(String address, String session, boolean allowChangeOfAddress, Toolchain toolchain) throws DatabaseException, ChangeOfSessionAddressException {
-		address = getAddress(address);
 		synchronized (syncer_sessions) {
 			final String tableName = "session";
 			JsonArray res = this.select(tableName, new TableField[] { this.getField(tableName, "ID"), this.getField(tableName, "address") }, false, new ComparisionField(this.getField(tableName, "hash"), session), new ComparisionField(this.getField(tableName, "live"), 1), new ComparisionField(this.getField(tableName, "toolchain"), toolchain.getName()));
@@ -549,7 +821,6 @@ public class RuntimeDB extends LayeredMetaDB {
 	}
 
 	public String getLogin(String address, String sessionToken, Toolchain toolchain) throws DatabaseException, ChangeOfSessionAddressException {
-		address = getAddress(address);
 		synchronized (syncer_sessions) {
 			synchronized (syncer_users) {
 				final String tableName = "session";
@@ -873,7 +1144,7 @@ public class RuntimeDB extends LayeredMetaDB {
 	private final CachedBypassedClientDataCls CachedBypassedClientData;
 
 	public BypassedClient getBypassedClientData(String remoteSocketAddress) {
-		return CachedBypassedClientData.get().get(getAddress(remoteSocketAddress));
+		return CachedBypassedClientData.get().get(remoteSocketAddress);
 	}
 
 	public void registerToolchainUpdator(ToolchainCallback cb) {

@@ -20,6 +20,8 @@ import cz.rion.buildserver.db.layers.staticDB.LayeredStaticEndpointDB.StaticEndp
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.http.HTTPRequest;
 import cz.rion.buildserver.http.HTTPResponse;
+import cz.rion.buildserver.json.JsonValue;
+import cz.rion.buildserver.json.JsonValue.JsonObject;
 
 public class AbstractStatelessClient {
 
@@ -43,17 +45,31 @@ public class AbstractStatelessClient {
 		UNKNOWN, GET_RESOURCE, GET_INVALID_RESOURCE, PERFORM_TEST, COLLECT_TESTS, COLLECT_GRAPHS, ADMIN_COMMAND, TERM_COMMAND, EXAM_COMMAND
 	}
 
+	private static class IntentionData {
+		public final Intention Intention;
+		public final JsonValue Data;
+
+		private IntentionData(Intention intention, JsonValue data) {
+			this.Intention = intention;
+			this.Data = data;
+		}
+
+		private IntentionData() {
+			this(AbstractStatelessClient.Intention.UNKNOWN, new JsonObject());
+		}
+	}
+
 	protected static final class ProcessState {
 		public final StatelessInitData Data;
 		public final Toolchain Toolchain;
 		public final HTTPRequest Request;
 		private final UsersPermission defaultPerms;
 		private UsersPermission perms = null;
-		private Intention intention = Intention.UNKNOWN;
+		private IntentionData Intention = new IntentionData();
 		public final int BuilderID;
 
-		public void setIntention(Intention intention) {
-			this.intention = intention;
+		public void setIntention(Intention intention, JsonValue value) {
+			this.Intention = new IntentionData(intention, value);
 		}
 
 		private ProcessState(StatelessInitData data, HTTPRequest request, Toolchain toolchain, UsersPermission defaultPerms, int BuilderID) {
@@ -141,7 +157,20 @@ public class AbstractStatelessClient {
 	}
 
 	private void log(ProcessState state) {
-
+		if (state.Intention.Intention != Intention.ADMIN_COMMAND) { // TODO: remove current admin logs
+			state.Data.StaticDB.adminLog(state.Toolchain, state.Request.remoteAddress, state.getPermissions().Login, state.Intention.Intention.toString(), state.Intention.Data.getJsonString());
+		}
+		if (state.Intention.Intention == Intention.GET_RESOURCE || state.Intention.Intention == Intention.GET_INVALID_RESOURCE) {
+			if (state.Intention.Data.isObject()) {
+				JsonObject obj = state.Intention.Data.asObject();
+				if (obj.containsString("requested") && obj.containsString("host")) {
+					boolean found = obj.containsString("responded");
+					String requested = obj.getString("requested").Value;
+					String host = obj.getString("host").Value;
+					state.Data.RuntimeDB.logPageLoad(state.getPermissions().SessionID, state.Toolchain, state.Request.remoteAddress, host, requested, found ? 0 : 1);
+				}
+			}
+		}
 	}
 
 	protected HTTPResponse handle(ProcessState state) {
