@@ -695,6 +695,7 @@ window.Tester.FeedbackPanel = function(data, showLoginColumn) {
 			self.detailRoot.style.display = "none";
 			self.node.style.borderLeft = "0px";
 			self.node.style.borderRight = "0px";
+			self.btnCommentCellForBorder.style.borderRight = "1px solid black";
 			self.node.style.borderTop = "1px solid black";
 			return;
 		}
@@ -756,7 +757,7 @@ window.Tester.FeedbackPanel = function(data, showLoginColumn) {
 		self.detailRoot.style.borderLeft = "5px solid black";
 		self.detailRoot.style.borderRight = "5px solid black";
 		self.detailRoot.style.borderBottom = "5px solid black";
-		
+		self.btnCommentCellForBorder.style.borderRight = "5px solid black";
 	}
 
 	self.materialize = function(item) {
@@ -779,6 +780,7 @@ window.Tester.FeedbackPanel = function(data, showLoginColumn) {
 		self.lastcomment = ids.lastcomment;
 		self.lastcommentlogin = ids.lastcommentlogin;
 		self.totalComments = ids.comments;
+		self.btnCommentCellForBorder = ids.btnCommentCellForBorder;
 
 		ids.turndate.innerHTML = self.common.convertDateTime(item.CreationTime);
 		ids.comments.innerHTML = item.TotalComments;

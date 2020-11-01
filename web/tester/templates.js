@@ -210,6 +210,7 @@ window.Tester.Templates = function() {
 			 },
 		 	 {
 				"type": "td",
+				"id": "btnCommentCellForBorder",
 				"style": "padding-right: 5px; padding-top: 5px; padding-bottom: 5px;border-right: 1px solid black; text-align: right; width: 180px;",
 				"contents": [
 					{
