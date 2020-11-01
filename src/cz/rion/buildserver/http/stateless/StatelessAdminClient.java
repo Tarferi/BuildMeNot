@@ -43,7 +43,7 @@ public class StatelessAdminClient extends StatelessPermissionClient {
 				String name;
 				if (toolchain.IsRoot) {
 					if (!f.Toolchain.equals(toolchain) && !f.Toolchain.IsShared) {
-						name = "data/" + f.Toolchain + "/" + f.Name;
+						name = "data/" + f.Toolchain.getName() + "/" + f.Name;
 					} else {
 						name = f.Name;
 					}
@@ -191,7 +191,13 @@ public class StatelessAdminClient extends StatelessPermissionClient {
 					return false;
 				}
 				try {
-					return f.write(state.getContext(), f.Name, jsn);
+					if (f.write(state.getContext(), f.Name, jsn)) {
+						JsonObject iobj = new JsonObject();
+						iobj.add("ID", f.ID);
+						iobj.add("newContents", jsn);
+						state.Data.StaticDB.adminLog(state.Toolchain, state.Request.remoteAddress, state.getPermissions().Login, "edit_row: " + f.Name, iobj.getJsonString());
+						return true;
+					}
 				} catch (VirtualFileException e) {
 					e.printStackTrace();
 				}
@@ -207,7 +213,17 @@ public class StatelessAdminClient extends StatelessPermissionClient {
 			return false;
 		}
 		try {
-			return f.write(state.getContext(), f.Name, newContents);
+			String contents = f.read(state.getContext());
+			if (contents != null) {
+				if (f.write(state.getContext(), f.Name, newContents)) {
+					JsonObject obj = new JsonObject();
+					obj.add("ID", f.ID);
+					obj.add("newContents", newContents);
+					obj.add("originalContents", contents);
+					state.Data.StaticDB.adminLog(state.Toolchain, state.Request.remoteAddress, state.getPermissions().Login, "edit_file: " + f.Name, obj.getJsonString());
+					return true;
+				}
+			}
 		} catch (VirtualFileException e) {
 			e.printStackTrace();
 			log.append(e.getMessage());

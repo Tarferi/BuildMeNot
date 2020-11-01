@@ -40,17 +40,17 @@ public class VirtualFileManager {
 					}
 				}
 			} else {
-				List<VirtualFile> shared = allFiles.get("shared");
-				if (shared != null) {
-					for (VirtualFile vf : shared) {
+				List<VirtualFile> toolchainFiles = allFiles.get(toolchain.getName());
+				if (toolchainFiles != null) {
+					for (VirtualFile vf : toolchainFiles) {
 						if (vf.Name.equals(name)) {
 							result.add(vf);
 						}
 					}
 				}
-				List<VirtualFile> toolchainFiles = allFiles.get(toolchain.getName());
-				if (toolchainFiles != null) {
-					for (VirtualFile vf : toolchainFiles) {
+				List<VirtualFile> shared = allFiles.get("shared");
+				if (shared != null) {
+					for (VirtualFile vf : shared) {
 						if (vf.Name.equals(name)) {
 							result.add(vf);
 						}
@@ -73,17 +73,17 @@ public class VirtualFileManager {
 					}
 				}
 			} else {
-				List<VirtualFile> shared = allFiles.get("shared");
-				if (shared != null) {
-					for (VirtualFile vf : shared) {
+				List<VirtualFile> toolchainFiles = allFiles.get(toolchain.getName());
+				if (toolchainFiles != null) {
+					for (VirtualFile vf : toolchainFiles) {
 						if (vf.ID == ID) {
 							return vf;
 						}
 					}
 				}
-				List<VirtualFile> toolchainFiles = allFiles.get(toolchain.getName());
-				if (toolchainFiles != null) {
-					for (VirtualFile vf : toolchainFiles) {
+				List<VirtualFile> shared = allFiles.get("shared");
+				if (shared != null) {
+					for (VirtualFile vf : shared) {
 						if (vf.ID == ID) {
 							return vf;
 						}
@@ -127,13 +127,13 @@ public class VirtualFileManager {
 					files.addAll(entry.getValue());
 				}
 			} else {
-				List<VirtualFile> shared = allFiles.get("shared");
 				List<VirtualFile> tcF = allFiles.get(toolchain.getName());
-				if (shared != null) {
-					files.addAll(shared);
-				}
+				List<VirtualFile> shared = allFiles.get("shared");
 				if (tcF != null) {
 					files.addAll(tcF);
+				}
+				if (shared != null) {
+					files.addAll(shared);
 				}
 			}
 		}
