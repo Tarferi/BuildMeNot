@@ -78,8 +78,7 @@ public class StatelessTestClient extends StatelessPresenceClient {
 			return new CachedDataWrapper2<String>(refreshIntervalInSeconds, new CachedDataGetter<String>() {
 
 				private VirtualFile loadFile(VirtualFileManager files, String name, UserContext context) {
-					List<VirtualFile> lst = new ArrayList<>();
-					files.getFiles(lst, context);
+					List<VirtualFile> lst = files.getFile(name, context);
 					if (lst.isEmpty()) {
 						return null;
 					}
