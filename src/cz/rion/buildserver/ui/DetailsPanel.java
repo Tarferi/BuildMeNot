@@ -72,12 +72,14 @@ public class DetailsPanel extends JPanel {
 				String dataEditPos = "cell 1 " + (i + totalDoubleTextsPlaced) + " 2 2,growx,growy";
 				String textData = data[i].EditValue;
 
+				/*
 				try {
 					textData = Decompressor.decompress(textData);
 				} catch (CompressionException e) {
 					e.printStackTrace();
 					textData = "<failed to decompress>";
 				}
+				*/
 
 				final MyTextArea area = new MyTextArea(textData);
 				retrievers[i] = new ComponentManipulator() {

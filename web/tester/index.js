@@ -198,6 +198,7 @@ window.Tester.Main = function() {
 	self.faqRoot = document.createElement("div");
 	self.graphRoot = document.createElement("div");
 	self.faqRootContent = setBigPanel(self.faqRoot, self.hideFaq);
+	self.faqRootContent.classList.add("faq_contents");
 	self.graphRootContent = setBigPanel(self.graphRoot, self.hideStats);
 	
 
