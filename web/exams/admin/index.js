@@ -1,11 +1,10 @@
-$INJECT(common.js)$
+window.inject("common.js");
 
-function ExamAdminNoAccess() {
+function ExamNoAccess() {
 	self.common.showError("Chyba", "Nemáte dostatečná práva k přístupu k tomuto dokumentu", false);
 }
 
-$INJECT_CODE_NOPERMS(WEB.EXAMS.ADMIN, window.adm_load = ExamAdminNoAccess;)$
-
+window.inject_code_noperms("WEB.EXAMS.ADMIN", "window.exam_load = ExamNoAccess;");
 
 
 var ExamAdminEditableField = function(data, id, viewNode, editableNode, fmt) {
@@ -880,8 +879,8 @@ function adm_load() {
 	}
 }
 
-$INJECT(formats.js)$
-$INJECT(exams/admin/templates.js)$
-$INJECT(exams/admin/formats.js)$
-$INJECT(WEB.ADMIN, admin.js)$
-$INJECT(exams/index.js)$
+window.inject("formats.js");
+window.inject("exams/admin/templates.js");
+window.inject("exams/admin/formats.js");
+window.inject("exams/index.js");
+window.inject("WEB.ADMIN", "admin.js");

@@ -52,6 +52,11 @@ public abstract class LayeredImportDB extends LayeredFilesDB {
 			return "0.0.0.0";
 		}
 
+		@Override
+		public boolean wantCompressedData() {
+			return false;
+		}
+
 	};
 
 	private class ImportMetaFile extends VirtualFile {
@@ -71,6 +76,11 @@ public abstract class LayeredImportDB extends LayeredFilesDB {
 			@Override
 			public String getAddress() {
 				return "0.0.0.0";
+			}
+
+			@Override
+			public boolean wantCompressedData() {
+				return false;
 			}
 
 		};
@@ -561,7 +571,7 @@ public abstract class LayeredImportDB extends LayeredFilesDB {
 					Toolchain Toolchain = null;
 					StaticDB sdb = (StaticDB) LayeredImportDB.this;
 					try {
-						Toolchain = sdb.getToolchain(toolchainC);
+						Toolchain = sdb.getToolchain(toolchainC, false);
 					} catch (NoSuchToolchainException e) {
 					}
 					if (Toolchain != null) {

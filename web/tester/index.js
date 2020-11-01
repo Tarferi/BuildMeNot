@@ -1112,6 +1112,7 @@ window.Tester.TestPanel = function(data, forEveryOtherPanelCB) {
 	return this;
 };
 
-$INJECT(tester/templates.js)$
-$INJECT(common.js)$
-$INJECT(WEB.ADMIN, admin.js)$
+
+window.inject("tester/templates.js");
+window.inject("common.js");
+window.inject("WEB.ADMIN", "admin.js");

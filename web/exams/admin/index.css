@@ -138,6 +138,5 @@ body {
 	padding:7px;
 }
 
-
-$INJECT(exams/index.css)$
-$INJECT(WEB.ADMIN, admin.css)$
+window.inject("exams/index.css");
+window.inject("WEB.ADMIN", "admin.css");

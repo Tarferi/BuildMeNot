@@ -187,6 +187,11 @@ public class RemoteUIProviderServer {
 			return "0.0.0.0";
 		}
 
+		@Override
+		public boolean wantCompressedData() {
+			return false;
+		}
+
 	};
 
 	private void handleEditDatabaseTableRow(InputPacketRequest inBuffer, MemoryBuffer outBuffer) throws IOException {

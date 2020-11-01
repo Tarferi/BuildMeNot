@@ -4,7 +4,6 @@ function aload() {
     var contents = document.getElementById("contents");
     const domain = 'tauri.meet.rion.cz';
     const options = {
-	    roomName: 'JitsiMeetAPIExample',
 	    width: "100%",
 	    height: "100%",
  	    parentNode: contents,

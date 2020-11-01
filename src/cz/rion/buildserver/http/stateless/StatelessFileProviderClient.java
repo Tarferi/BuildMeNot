@@ -34,11 +34,6 @@ import cz.rion.buildserver.utils.ToolchainedPermissionCache;
 import cz.rion.buildserver.wrappers.FileReadException;
 import cz.rion.buildserver.wrappers.MyFS;
 
-import com.google.javascript.jscomp.CompilationLevel;
-import com.google.javascript.jscomp.Compiler;
-import com.google.javascript.jscomp.CompilerOptions;
-import com.google.javascript.jscomp.SourceFile;
-
 public class StatelessFileProviderClient extends StatelessAdminClient {
 
 	private static final class JWTCrypto {
@@ -114,8 +109,8 @@ public class StatelessFileProviderClient extends StatelessAdminClient {
 		this.data = data;
 	}
 
-	private static final Pattern pattern_inject = Pattern.compile("\\$INJECT\\(([a-zA-Z0-9\\.]+,){0,1} *([a-zA-Z0-9_\\.\\/]+)\\)\\$", Pattern.MULTILINE);
-	private static final Pattern pattern_code = Pattern.compile("\\$INJECT_CODE_NOPERMS\\(([a-zA-Z0-9\\.]+), *([a-zA-Z0-9; =_\\.\\/]+)\\)\\$", Pattern.MULTILINE);
+	private static final Pattern pattern_inject = Pattern.compile("window\\.inject\\((\"[^\"]+\", *){0,1}\"([^\"]+)\"\\);", Pattern.MULTILINE);
+	private static final Pattern pattern_code = Pattern.compile("window\\.inject_code_noperms\\(\"([^\"]+)\", *\"([^\"]+)\"\\);", Pattern.MULTILINE);
 
 	private String handleReplacements(ProcessState state, String content, UsersPermission perms, Toolchain toolchain, Set<String> included) {
 		if (included == null) {
@@ -198,18 +193,6 @@ public class StatelessFileProviderClient extends StatelessAdminClient {
 			}
 		}
 		return content;
-	}
-
-	private String compressJS(String content) {
-		if (Settings.DoJSCompression()) {
-			Compiler compiler = new Compiler();
-			CompilerOptions options = new CompilerOptions();
-			CompilationLevel.SIMPLE_OPTIMIZATIONS.setOptionsForCompilationLevel(options);
-			compiler.compile(SourceFile.fromCode("a.js", ""), SourceFile.fromCode("index.js", content), options);
-			return compiler.toSource();
-		} else {
-			return content;
-		}
 	}
 
 	protected String handleHTMLManipulation(ProcessState state, String path, String content) {
@@ -323,7 +306,30 @@ public class StatelessFileProviderClient extends StatelessAdminClient {
 			String fileContents = MyFS.readFile("./web/" + endPoint);
 			return fileContents;
 		} catch (FileReadException e) {
-			ReadVirtualFile dbf = data.StaticDB.loadRootFile("web/" + endPoint);
+			UserContext context = new UserContext() {
+
+				@Override
+				public Toolchain getToolchain() {
+					return state.Toolchain;
+				}
+
+				@Override
+				public String getLogin() {
+					return state.getPermissions().Login;
+				}
+
+				@Override
+				public String getAddress() {
+					return state.Request.remoteAddress;
+				}
+
+				@Override
+				public boolean wantCompressedData() {
+					return Settings.DoJSCompression();
+				}
+
+			};
+			ReadVirtualFile dbf = data.StaticDB.loadRootFile("web/" + endPoint, null, context); // Find with root, read with current user
 			if (dbf != null) {
 				return dbf.Contents;
 			}
@@ -366,7 +372,7 @@ public class StatelessFileProviderClient extends StatelessAdminClient {
 						}
 						if (allowed.endsWith(".js")) {
 							contents = this.handleJSManipulation(state, endPoint, contents);
-							data = compressJS(contents).getBytes(Settings.getDefaultCharset());
+							data = contents.getBytes(Settings.getDefaultCharset());
 						} else if (allowed.endsWith(".css")) {
 							contents = this.handleCSSManipulation(state, endPoint, contents);
 							data = contents.getBytes(Settings.getDefaultCharset());

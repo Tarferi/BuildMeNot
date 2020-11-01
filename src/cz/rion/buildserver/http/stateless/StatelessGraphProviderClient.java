@@ -91,6 +91,11 @@ public class StatelessGraphProviderClient extends StatelessFileProviderClient {
 						return "0.0.0.0";
 					}
 
+					@Override
+					public boolean wantCompressedData() {
+						return false;
+					}
+
 				};
 
 				private UserContext toolchainContext = new UserContext() {
@@ -108,6 +113,11 @@ public class StatelessGraphProviderClient extends StatelessFileProviderClient {
 					@Override
 					public String getAddress() {
 						return "0.0.0.0";
+					}
+
+					@Override
+					public boolean wantCompressedData() {
+						return false;
 					}
 
 				};

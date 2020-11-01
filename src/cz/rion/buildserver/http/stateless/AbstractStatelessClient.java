@@ -99,6 +99,11 @@ public class AbstractStatelessClient {
 						return Request.remoteAddress;
 					}
 
+					@Override
+					public boolean wantCompressedData() {
+						return false;
+					}
+
 				};
 			}
 			return context;

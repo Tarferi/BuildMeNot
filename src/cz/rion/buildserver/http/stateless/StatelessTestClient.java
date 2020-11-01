@@ -103,6 +103,11 @@ public class StatelessTestClient extends StatelessPresenceClient {
 						return "0.0.0.0";
 					}
 
+					@Override
+					public boolean wantCompressedData() {
+						return false;
+					}
+
 				};
 
 				@Override

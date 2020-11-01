@@ -23,6 +23,8 @@ public class VirtualFileManager {
 		public String getLogin();
 
 		public String getAddress();
+
+		public boolean wantCompressedData();
 	}
 
 	public List<VirtualFile> getFile(String name, UserContext context) {
@@ -222,7 +224,7 @@ public class VirtualFileManager {
 		@Override
 		public String read(UserContext context) throws VirtualFileException {
 			try {
-				return Source.read(this.ID);
+				return Source.read(this.ID, context);
 			} catch (DatabaseException e) {
 				throw new VirtualFileException(e);
 			}
@@ -238,7 +240,7 @@ public class VirtualFileManager {
 		}
 
 		public static interface DatabaseFileManipulator {
-			public String read(int ID) throws DatabaseException;
+			public String read(int ID, UserContext context) throws DatabaseException;
 
 			public boolean write(VirtualDatabaseFile file, String newName, String data, UserContext context) throws DatabaseException;
 		}

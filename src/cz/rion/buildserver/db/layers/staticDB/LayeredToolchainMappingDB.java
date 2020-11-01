@@ -36,12 +36,11 @@ public abstract class LayeredToolchainMappingDB extends LayeredPHPAuthDB {
 					if (obj.containsString("host") && obj.containsString("toolchain")) {
 						String host = obj.getString("host").Value;
 						String toolchain = obj.getString("toolchain").Value;
-
 						Toolchain tc = cache.get(toolchain);
 						if (tc == null) {
 							StaticDB sdb = (StaticDB) this;
 							try {
-								tc = sdb.getToolchain(toolchain);
+								tc = sdb.getToolchain(toolchain, true);
 							} catch (NoSuchToolchainException e) {
 								continue;
 							}

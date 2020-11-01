@@ -154,5 +154,5 @@
 	font-size: 13pt;
 }
 
-$INJECT(common.css)$
-$INJECT(WEB.ADMIN, admin.css)$
+window.inject("commons.css");
+window.inject("WEB.ADMIN", "admin.css");

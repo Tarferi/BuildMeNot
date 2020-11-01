@@ -455,7 +455,7 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 		}
 	}
 
-	public Toolchain getToolchain(String name) throws NoSuchToolchainException {
+	public Toolchain getToolchain(String name, boolean create) throws NoSuchToolchainException {
 		synchronized (toolchains) {
 			if (toolchains.containsKey(name)) {
 				return toolchains.get(name);
@@ -468,6 +468,21 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 				if (toolchains.containsKey(name)) {
 					return toolchains.get(name);
 				}
+			}
+		}
+		if (create) {
+			try {
+				this.createToolchainIfItDoesntExist(name, "TOOLCHAIN_" + name, new String[0], new String[0]);
+				try {
+					loadToolchains();
+				} catch (NoSuchToolException | DatabaseException e) {
+					throw new NoSuchToolchainException("No such toolchain: " + name, e);
+				}
+				if (toolchains.containsKey(name)) {
+					return toolchains.get(name);
+				}
+			} catch (DatabaseException e) {
+				e.printStackTrace();
 			}
 		}
 		throw new NoSuchToolchainException(name);
@@ -985,26 +1000,16 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 	private void initDefaultToolchains() throws DatabaseException {
 		addNasmToolchain();
 		addGCCToolchain();
-		ReadVirtualFile tcf = this.loadRootFile("toolchains.ini");
-		if (tcf != null) {
-			Set<String> loaded = new HashSet<>();
-			loaded.add("IZP");
-			loaded.add("ISU");
-			for (String line : tcf.Contents.split("\n")) {
-				line = line.trim();
-				if (line.startsWith("#") || line.isEmpty()) {
-					continue;
-				}
-				String[] tcp = line.split("=", 2);
-				if (tcp.length == 2) {
-					String tc = tcp[1].trim();
-					if (!loaded.contains(tc)) {
-						loaded.add(tc);
-						this.createToolchainIfItDoesntExist(tc, "TOOLCHAIN_" + tc, new String[0], new String[0]);
-					}
-				}
-			}
-		}
+		/*
+		 * ReadVirtualFile tcf = this.loadRootFile("toolchains.ini"); if (tcf != null) {
+		 * Set<String> loaded = new HashSet<>(); loaded.add("IZP"); loaded.add("ISU");
+		 * for (String line : tcf.Contents.split("\n")) { line = line.trim(); if
+		 * (line.startsWith("#") || line.isEmpty()) { continue; } String[] tcp =
+		 * line.split("=", 2); if (tcp.length == 2) { String tc = tcp[1].trim(); if
+		 * (!loaded.contains(tc)) { loaded.add(tc);
+		 * this.createToolchainIfItDoesntExist(tc, "TOOLCHAIN_" + tc, new String[0], new
+		 * String[0]); } } } }
+		 */
 	}
 
 	private void loadToolchains() throws NoSuchToolException, DatabaseException {

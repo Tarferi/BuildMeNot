@@ -1,11 +1,10 @@
-$INJECT(common.js)$
+window.inject("common.js");
 
 function ExamNoAccess() {
 	self.common.showError("Chyba", "Nemáte dostatečná práva k přístupu k tomuto dokumentu", false);
 }
 
-$INJECT_CODE_NOPERMS(WEB.EXAMS.SEE, window.exam_load = ExamNoAccess;)$
-
+window.inject_code_noperms("WEB.EXAMS.SEE", "window.exam_load = ExamNoAccess;");
 
 
 var RadioRespose = function(data, permutation, readOnly) {
@@ -571,6 +570,6 @@ function exam_load() {
 	}
 }
 
-$INJECT(exams/templates.js)$
-$INJECT(formats.js)$
-$INJECT(WEB.ADMIN, admin.js)$
+window.inject("exams/templates.js");
+window.inject("formats.js");
+window.inject("WEB.ADMIN", "admin.js");

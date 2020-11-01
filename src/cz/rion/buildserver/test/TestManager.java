@@ -148,7 +148,7 @@ public class TestManager {
 		public CachedData<TestCollection> createData(int refreshIntervalInSeconds, final Toolchain toolchain) {
 
 			return new CachedDataWrapper2<>(refreshIntervalInSeconds, new CachedDataGetter<TestCollection>() {
-				
+
 				private final UserContext toolchainContext = new UserContext() {
 
 					@Override
@@ -164,6 +164,11 @@ public class TestManager {
 					@Override
 					public String getAddress() {
 						return "0.0.0.0";
+					}
+
+					@Override
+					public boolean wantCompressedData() {
+						return false;
 					}
 
 				};
@@ -278,7 +283,7 @@ public class TestManager {
 		} else {
 			Toolchain runner = null;
 			try {
-				runner = sdb.getToolchain(test.getToolchain());
+				runner = sdb.getToolchain(test.getToolchain(), false);
 			} catch (NoSuchToolchainException err) {
 				rawMessage.add(new JsonString("Neznámý toolchain: " + toolchain));
 				message.set("<span class='log_err'>Neznámý toolchain: " + toolchain + "</span>");

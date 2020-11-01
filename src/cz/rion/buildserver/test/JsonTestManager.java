@@ -494,7 +494,7 @@ public class JsonTestManager {
 
 			Toolchain tc = null;
 			try {
-				tc = sdb.getToolchain(toolchain);
+				tc = sdb.getToolchain(toolchain, false);
 			} catch (NoSuchToolchainException e) {
 			}
 			if (tc != null) {

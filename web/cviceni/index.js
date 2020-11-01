@@ -376,6 +376,6 @@ function cviceni_load() {
 	}
 }
 
-$INJECT(cviceni/templates.js)$
-$INJECT(common.js)$
-$INJECT(WEB.ADMIN, admin.js)$
+window.inject("cviceni/templates.js");
+window.inject("common.js");
+window.inject("WEB.ADMIN", "admin.js");

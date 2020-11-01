@@ -5,6 +5,11 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import com.google.javascript.jscomp.CompilationLevel;
+import com.google.javascript.jscomp.Compiler;
+import com.google.javascript.jscomp.CompilerOptions;
+import com.google.javascript.jscomp.SourceFile;
+
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.DatabaseInitData;
 import cz.rion.buildserver.db.VirtualFileManager;
@@ -25,10 +30,23 @@ public abstract class LayeredFilesDB extends LayeredStaticDB {
 
 	private final Object fileTable = new Object();
 
+	private String[] getCompressedDataStreams(String newName, String contents) {
+		if (newName.endsWith(".js")) {
+			Compiler compiler = new Compiler();
+			CompilerOptions options = new CompilerOptions();
+			CompilationLevel.SIMPLE_OPTIMIZATIONS.setOptionsForCompilationLevel(options);
+			compiler.compile(SourceFile.fromCode("a.js", ""), SourceFile.fromCode("index.js", contents), options);
+			String compressed = compiler.toSource();
+			return new String[] { contents, compressed };
+		} else {
+			return new String[] { contents };
+		}
+	}
+
 	private final DatabaseFileManipulator manipulator = new DatabaseFileManipulator() {
 
 		@Override
-		public String read(int fileID) throws DatabaseException {
+		public String read(int fileID, UserContext context) throws DatabaseException {
 			synchronized (fileTable) {
 				final String tableName = "files";
 				JsonArray res = select(tableName, new TableField[] { getField(tableName, "contents") }, true, new ComparisionField(getField(tableName, "ID"), fileID));
@@ -37,7 +55,13 @@ public abstract class LayeredFilesDB extends LayeredStaticDB {
 						if (val.isObject()) {
 							JsonObject obj = val.asObject();
 							if (obj.containsString("contents")) {
-								return decodeFileContents(obj.getString("contents").Value);
+								String[] streams = decodeFileContents(obj.getString("contents").Value, true);
+								if (streams.length > 0) {
+									if (context.wantCompressedData() && streams.length > 1) {
+										return streams[1];
+									}
+									return streams[0];
+								}
 							}
 						}
 					}
@@ -52,12 +76,12 @@ public abstract class LayeredFilesDB extends LayeredStaticDB {
 				return false;
 			} else if (newName.endsWith(".table")) {
 				return false;
-			} else if(newName.endsWith(".view") && !context.getToolchain().IsRoot) {
+			} else if (newName.endsWith(".view") && !context.getToolchain().IsRoot) {
 				return false;
 			}
 			synchronized (fileTable) {
 				final String tableName = "files";
-				return update(tableName, file.ID, new ValuedField(getField(tableName, "name"), newName), new ValuedField(getField(tableName, "contents"), encodeFileContents(newContents)));
+				return update(tableName, file.ID, new ValuedField(getField(tableName, "name"), newName), new ValuedField(getField(tableName, "contents"), encodeFileContents(getCompressedDataStreams(newName, newContents), true)));
 			}
 		}
 
@@ -94,10 +118,41 @@ public abstract class LayeredFilesDB extends LayeredStaticDB {
 		});
 	}
 
+	private void convertFiles() throws DatabaseException {
+
+		final String tableName = "files";
+		JsonArray res = select(tableName, new TableField[] { getField(tableName, "contents"), getField(tableName, "name"), getField(tableName, "ID") }, true);
+		if (res != null) {
+			for (JsonValue val : res.Value) {
+				if (val.isObject()) {
+					JsonObject obj = val.asObject();
+					if (obj.containsString("contents") && obj.containsNumber("ID") && obj.containsString("name")) {
+						int id = obj.getNumber("ID").Value;
+						String name = obj.getString("name").Value;
+						String[] streams = decodeFileContents(obj.getString("contents").Value, false);
+						if (streams.length != 1) {
+							throw new DatabaseException("Invalid streams?");
+						}
+
+						if (update(tableName, id, new ValuedField(getField(tableName, "contents"), encodeFileContents(getCompressedDataStreams(name, streams[0]), true)))) {
+							continue;
+						}
+					}
+				}
+				throw new DatabaseException("Unknown");
+			}
+		}
+
+	}
+
 	public LayeredFilesDB(DatabaseInitData fileData) throws DatabaseException {
 		super(fileData);
 		this.makeTable("files", false, KEY("ID"), TEXT("name"), BIGTEXT("contents"), NUMBER("deleted"), TEXT("toolchain"));
 		this.files = fileData.Files;
+
+		// Convert files
+		//convertFiles();
+		//throw new DatabaseException("End");
 	}
 
 	private final UserContext rootContext = new UserContext() {
@@ -115,6 +170,11 @@ public abstract class LayeredFilesDB extends LayeredStaticDB {
 		@Override
 		public String getAddress() {
 			return "0.0.0.0";
+		}
+
+		@Override
+		public boolean wantCompressedData() {
+			return false;
 		}
 
 	};
@@ -166,20 +226,60 @@ public abstract class LayeredFilesDB extends LayeredStaticDB {
 
 	private static final char[] hexData = new char[] { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
 
-	private static String encodeFileContents(String data) {
-		return encodeFileContents(data.getBytes(Settings.getDefaultCharset()));
-	}
+	private static String encodeFileContents(String[] data, boolean containStreams) throws DatabaseException {
+		byte[] result;
+		if (containStreams) {
+			int totalSize = 8 + (data.length * 8);
+			byte[][] bs = new byte[data.length][];
+			for (int i = 0; i < data.length; i++) {
+				byte[] b = data[i].getBytes(Settings.getDefaultCharset());
+				int chunkSize = b.length * 2;
+				totalSize += chunkSize;
+				bs[i] = b;
+			}
 
-	private static String encodeFileContents(byte[] b) {
-		byte[] n = new byte[b.length * 2];
-		for (int i = 0; i < b.length; i++) {
-			int c = b[i] & 0xff;
-			int c1 = (c >> 4) & 0b1111;
-			int c2 = c & 0b1111;
-			n[(i * 2)] = (byte) hexData[c1];
-			n[(i * 2) + 1] = (byte) hexData[c2];
+			result = new byte[totalSize];
+			int lastPosition = 0;
+			setInt(result, lastPosition, data.length);
+			lastPosition += 8;
+			for (int chunkIndex = 0; chunkIndex < data.length; chunkIndex++) {
+				byte[] b = bs[chunkIndex];
+				setInt(result, lastPosition, b.length * 2);
+				lastPosition += 8;
+				for (int i = 0; i < b.length; i++) {
+					int c = b[i] & 0xff;
+					int c1 = (c >> 4) & 0b1111;
+					int c2 = c & 0b1111;
+					result[lastPosition + (i * 2)] = (byte) hexData[c1];
+					result[lastPosition + (i * 2) + 1] = (byte) hexData[c2];
+				}
+				lastPosition += b.length * 2;
+			}
+		} else {
+			byte[] b = data[0].getBytes(Settings.getDefaultCharset());
+			result = new byte[b.length * 2];
+			for (int i = 0; i < b.length; i++) {
+				int c = b[i] & 0xff;
+				int c1 = (c >> 4) & 0b1111;
+				int c2 = c & 0b1111;
+				result[(i * 2)] = (byte) hexData[c1];
+				result[(i * 2) + 1] = (byte) hexData[c2];
+			}
 		}
-		return new String(n, Settings.getDefaultCharset());
+		String res = new String(result, Settings.getDefaultCharset());
+		{
+			String[] resDecoded = decodeFileContents(res, true);
+			if (resDecoded.length != data.length) {
+				throw new DatabaseException("Invalid coding");
+			}
+			for (int i = 0; i < resDecoded.length; i++) {
+				if (!resDecoded[i].equals(data[i])) {
+					throw new DatabaseException("Invalid coding");
+				}
+			}
+		}
+
+		return res;
 	}
 
 	private static int fromHex(int i) {
@@ -190,18 +290,66 @@ public abstract class LayeredFilesDB extends LayeredStaticDB {
 		}
 	}
 
-	private static String decodeFileContents(String data) {
+	private static int getInt(byte[] data, int position) {
+		int x1 = (fromHex(data[position + 0]) << 4) | (fromHex(data[position + 1]));
+		int x2 = (fromHex(data[position + 2]) << 4) | (fromHex(data[position + 3]));
+		int x3 = (fromHex(data[position + 4]) << 4) | (fromHex(data[position + 5]));
+		int x4 = (fromHex(data[position + 6]) << 4) | (fromHex(data[position + 7]));
+		return (x1 << 24) | (x2 << 16) | (x3 << 8) | x4;
+	}
+
+	private static void setInt(byte[] data, int position, int value) {
+		int x1 = ((value >> 24) & 0xff);
+		int x2 = ((value >> 16) & 0xff);
+		int x3 = ((value >> 8) & 0xff);
+		int x4 = (value & 0xff);
+		data[position + 0] = (byte) hexData[(x1 >> 4) & 0xf];
+		data[position + 1] = (byte) hexData[(x1) & 0xf];
+		data[position + 2] = (byte) hexData[(x2 >> 4) & 0xf];
+		data[position + 3] = (byte) hexData[(x2) & 0xf];
+		data[position + 4] = (byte) hexData[(x3 >> 4) & 0xf];
+		data[position + 5] = (byte) hexData[(x3) & 0xf];
+		data[position + 6] = (byte) hexData[(x4 >> 4) & 0xf];
+		data[position + 7] = (byte) hexData[(x4) & 0xf];
+	}
+
+	private static String[] decodeFileContents(String data, boolean containsStreams) {
 		byte[] b = data.getBytes(Settings.getDefaultCharset());
-		byte[] n = new byte[b.length / 2];
-		for (int i = 0; i < n.length; i++) {
-			int c1 = b[(i * 2)] & 0xff;
-			int c2 = b[(i * 2) + 1] & 0xff;
-			c1 = fromHex(c1);
-			c2 = fromHex(c2);
-			int c = (c1 << 4) | c2;
-			n[i] = (byte) c;
+		if (containsStreams) {
+			int lastPosition = 0;
+			int totalChunks = getInt(b, 0);
+			lastPosition += 8;
+			String[] result = new String[totalChunks];
+			for (int chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+				int chunkSize = getInt(b, lastPosition);
+				lastPosition += 8;
+				byte[] n = new byte[chunkSize / 2];
+				for (int i = 0; i < n.length; i++) {
+					int c1 = b[lastPosition + (i * 2)] & 0xff;
+					int c2 = b[lastPosition + (i * 2) + 1] & 0xff;
+					c1 = fromHex(c1);
+					c2 = fromHex(c2);
+					int c = (c1 << 4) | c2;
+					n[i] = (byte) c;
+				}
+				lastPosition += chunkSize;
+				String chunk = new String(n, Settings.getDefaultCharset());
+				result[chunkIndex] = chunk;
+			}
+			return result;
+		} else {
+			byte[] n = new byte[b.length / 2];
+			for (int i = 0; i < n.length; i++) {
+				int c1 = b[(i * 2)] & 0xff;
+				int c2 = b[(i * 2) + 1] & 0xff;
+				c1 = fromHex(c1);
+				c2 = fromHex(c2);
+				int c = (c1 << 4) | c2;
+				n[i] = (byte) c;
+			}
+			String chunk = new String(n, Settings.getDefaultCharset());
+			return new String[] { chunk };
 		}
-		return new String(n, Settings.getDefaultCharset());
 	}
 
 	@SuppressWarnings("deprecation")
@@ -225,7 +373,7 @@ public abstract class LayeredFilesDB extends LayeredStaticDB {
 				}
 			}
 
-			if (insert(tableName, new ValuedField(getField(tableName, "name"), name), new ValuedField(getField(tableName, "contents"), encodeFileContents(contents)))) {
+			if (insert(tableName, new ValuedField(getField(tableName, "name"), name), new ValuedField(getField(tableName, "contents"), encodeFileContents(getCompressedDataStreams(name, contents), true)))) {
 				JsonArray res;
 				try {
 					res = select_raw("SELECT ID FROM files WHERE name=? ORDER BY ID DESC LIMIT 1", name).getJSON(false, new TableField[] { getField(tableName, "ID") }, toolchain);
@@ -260,10 +408,14 @@ public abstract class LayeredFilesDB extends LayeredStaticDB {
 	}
 
 	public ReadVirtualFile loadRootFile(String name) {
-		List<VirtualFile> file = this.files.getFile(name, rootContext);
+		return loadRootFile(name, null, null);
+	}
+
+	public ReadVirtualFile loadRootFile(String name, UserContext contextForFindingFile, UserContext contextForReadingFile) {
+		List<VirtualFile> file = this.files.getFile(name, contextForFindingFile == null ? rootContext : contextForFindingFile);
 		if (file.isEmpty()) {
 			return null;
 		}
-		return file.get(0).getRead(rootContext);
+		return file.get(0).getRead(contextForReadingFile == null ? rootContext : contextForReadingFile);
 	}
 }
