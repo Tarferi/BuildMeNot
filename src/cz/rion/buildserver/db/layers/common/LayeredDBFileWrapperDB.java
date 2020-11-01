@@ -197,7 +197,12 @@ public abstract class LayeredDBFileWrapperDB extends LayeredImportDB {
 			if (val != null) {
 				if (val.isObject()) {
 					JsonObject obj = val.asObject();
-					return editRow(obj, context);
+					if (editRow(obj, context)) {
+						if (tableName.equals("files")) {
+							sdb.reloadFiles();
+						}
+						return true;
+					}
 				}
 			}
 			return false;

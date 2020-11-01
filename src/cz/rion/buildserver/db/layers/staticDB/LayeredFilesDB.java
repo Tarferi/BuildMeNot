@@ -1,8 +1,11 @@
 package cz.rion.buildserver.db.layers.staticDB;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 
 import com.google.javascript.jscomp.CompilationLevel;
@@ -40,6 +43,18 @@ public abstract class LayeredFilesDB extends LayeredStaticDB {
 			return new String[] { contents, compressed };
 		} else {
 			return new String[] { contents };
+		}
+	}
+
+	final Map<String, Toolchain> loadedToolchains = new HashMap<>();
+
+	public void reloadFiles() {
+		synchronized (loadedToolchains) {
+			for (Entry<String, Toolchain> entry : loadedToolchains.entrySet()) {
+				Toolchain tc = entry.getValue();
+				uninitFiles(tc);
+				initFiles(tc);
+			}
 		}
 	}
 
@@ -91,31 +106,32 @@ public abstract class LayeredFilesDB extends LayeredStaticDB {
 
 	@Override
 	public void afterInit() {
-		final Set<String> loadedToolchains = new HashSet<>();
-		initFiles(this.getRootToolchain());
-		initFiles(this.getSharedToolchain());
-		loadedToolchains.add(this.getRootToolchain().getName());
-		loadedToolchains.add(this.getSharedToolchain().getName());
+		synchronized (loadedToolchains) {
+			initFiles(this.getRootToolchain());
+			initFiles(this.getSharedToolchain());
+			loadedToolchains.put(this.getRootToolchain().getName(), this.getRootToolchain());
+			loadedToolchains.put(this.getSharedToolchain().getName(), this.getSharedToolchain());
 
-		this.registerToolchainListener(new ToolchainCallback() {
+			this.registerToolchainListener(new ToolchainCallback() {
 
-			@Override
-			public void toolchainAdded(Toolchain t) {
-				if (!loadedToolchains.contains(t.getName())) {
-					loadedToolchains.add(t.getName());
-					initFiles(t);
+				@Override
+				public void toolchainAdded(Toolchain t) {
+					if (!loadedToolchains.containsKey(t.getName())) {
+						loadedToolchains.put(t.getName(), t);
+						initFiles(t);
+					}
 				}
-			}
 
-			@Override
-			public void toolchainRemoved(Toolchain t) {
-				if (loadedToolchains.contains(t.getName())) {
-					loadedToolchains.remove(t.getName());
-					uninitFiles(t);
+				@Override
+				public void toolchainRemoved(Toolchain t) {
+					if (loadedToolchains.containsKey(t.getName())) {
+						loadedToolchains.remove(t.getName());
+						uninitFiles(t);
+					}
 				}
-			}
 
-		});
+			});
+		}
 	}
 
 	private void convertFiles() throws DatabaseException {
@@ -151,8 +167,8 @@ public abstract class LayeredFilesDB extends LayeredStaticDB {
 		this.files = fileData.Files;
 
 		// Convert files
-		//convertFiles();
-		//throw new DatabaseException("End");
+		// convertFiles();
+		// throw new DatabaseException("End");
 	}
 
 	private final UserContext rootContext = new UserContext() {
