@@ -21,6 +21,7 @@ import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.json.JsonValue.JsonString;
+import cz.rion.buildserver.test.TestManager;
 import cz.rion.buildserver.json.JsonValue.JsonNumber;
 
 public abstract class LayeredDBFileWrapperDB extends LayeredImportDB {
@@ -31,6 +32,15 @@ public abstract class LayeredDBFileWrapperDB extends LayeredImportDB {
 	private static final String dbFileSuffix = ".table";
 	public static final String viewFileSuffix = ".view";
 	public final String dbFilePrefix;
+	private TestManager testManager = null;
+
+	public void setTestManager(TestManager m) {
+		this.testManager = m;
+	}
+
+	public TestManager getTestManager() {
+		return testManager;
+	}
 
 	private final DatabaseInitData dbData;
 
@@ -200,6 +210,12 @@ public abstract class LayeredDBFileWrapperDB extends LayeredImportDB {
 					if (editRow(obj, context)) {
 						if (tableName.equals("files")) {
 							sdb.reloadFiles();
+							TestManager testManager = ((LayeredDBFileWrapperDB) sdb).getTestManager();
+							if (testManager != null) {
+								testManager.reloadTests();
+							}
+						} else if (tableName.equals("toolchain") || tableName.equals("tools") || tableName.equals("builders")) {
+							sdb.reloadToolchains();
 						}
 						return true;
 					}

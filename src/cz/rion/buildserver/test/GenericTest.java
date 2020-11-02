@@ -1,12 +1,13 @@
 package cz.rion.buildserver.test;
 
 import cz.rion.buildserver.db.RuntimeDB.BadResults;
+import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.test.TestManager.TestInput;
 import cz.rion.buildserver.test.TestManager.TestResult;
 
 public interface GenericTest {
 
-	public String getToolchain();
+	public Toolchain getToolchain();
 	
 	public String getID();
 
@@ -18,17 +19,8 @@ public interface GenericTest {
 
 	public boolean isSecret();
 	
-	public String getSubmittedCode();
+	public String getInitialCode();
 	
 	public TestResult perform(BadResults badResults, TestInput input);
 	
-	/*
-	
-	public String VerifyCode(BadResults badResults, String asm);
-	
-	public String GetFinalCode(String login, String asm);
-
-	public String[] getAllowedInstructions();
-	*/
-
 }

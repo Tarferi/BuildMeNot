@@ -133,6 +133,12 @@ window.Tester.Templates = function() {
 																		"style": btnStyle + "; width: 80px;position: relative;margin-left: 5px;margin-bottom: 6px; width: 150px; height: 28px;"
 																	},
 																	{
+																		"type": "button",
+																		"id": "btnHistFiltr",
+																		"style": btnStyle + "; width: 80px;position: relative;margin-left: 5px;margin-bottom: 6px; width: 150px; height: 28px;",
+																		"innerHTML": "Filtr historie"
+																	},
+																	{
 																		"type": "span",
 																		"id": "timeoutLbl"
 																	}
@@ -165,6 +171,296 @@ window.Tester.Templates = function() {
 		]
 	}
 	
+	self.filterRowUI = {
+		"type": "div",
+		"style": "border-bottom: 1px solid black;margin: 0px; padding: 0px;",
+		"contents": [
+			{
+				"type": "div",
+				"style": "display: inline-block; width: 80px; text-align: center; border-right: 1px solid black;padding-top: 5px;padding-bottom: 5px;",
+				"contents": [
+					{
+						"base": "input",
+						"type": "checkbox",
+						"id": "check",
+					}
+				]
+			},
+			{
+				"type": "div",
+				"style": "display: inline; padding-top: 5px;padding-bottom: 5px;padding-left: 10px;",
+				"id": "text"
+			}
+		]
+	}
+		
+	self.filterUI = {
+		"type": "div",
+		"style": "position: fixed; left: 0px; right: 0px; top: 0px; bottom: 0px; background-color: #000000aa; font-family: Verdana",
+		"contents": [
+			{
+				"type": "div",
+				"style": "display: block; width: 80%; min-height: 400px; height: 50%; min-width: 600px;border:2px solid black; background: white;position: relative;left:10%;top:25%;",
+				"contents": [
+					{
+						"type": "div",
+						"style": "width: 100%; height: 40px; background: #aaaadd; border-bottom: 2px solid black;text-align: center;line-height: 40px; font-size: 20pt;",
+						"contents": [
+							{
+								"type": "span",
+								"innerHTML": "Výběr dat k zobrazení"
+							},
+							{
+								"type": "button",
+								"id": "btnClose",
+								"style": "float: right; margin-right: 6px; padding-left: 20px; padding-right: 20px; padding-top: 4px; padding-bottom:4px; margin-top:6px;",
+								"innerHTML": "Zavřít"
+							},
+							{
+								"type": "button",
+								"id": "btnSet",
+								"style": "float: right; margin-right: 6px; padding-left: 20px; padding-right: 20px; padding-top: 4px; padding-bottom:4px; margin-top:6px;",
+								"innerHTML": "Nastavit výběr"
+							}
+						]		
+					},
+					{
+						"type": "div",
+						"style": "display: block; height: calc(100% - 40px); overflow-y: auto",
+						"contents": [
+							{
+								"type": "table",
+								"style": "border-collapse:collapse;width: 100%; height: 100%;overflow-y: auto",
+								"contents": [
+									{
+										"type": "thead",
+										"contents": [
+											{
+												"type": "tr",
+												"style": "border-bottom: 1px solid black;background-color:#dedede;",
+												"contents": [
+													{
+														"type": "th",
+														"colSpan": 2,
+														"style": "font-size: 12pt; text-align: center; padding-top: 5px; padding-bottom: 5px; border-right: 1px solid black; width: 50%;border-right: 3px solid black;",
+														"innerHTML": "Po skupinách"
+													},
+													{
+														"type": "th",
+														"colSpan": 2,
+														"style": "font-size: 12pt; text-align: center; padding-top: 5px; padding-bottom: 5px; width: 50%",
+														"innerHTML": "Konkrétní loginy"
+													}
+												]
+											},
+											{
+												"type": "tr",
+												"style": "border-bottom: 1px solid black;background-color:#dedede;",
+												"contents": [
+													{
+														"type": "th",
+														"style": "font-size: 12pt; padding-top: 5px; padding-bottom: 5px; text-align: right; padding-right: 10px; border-right: 1px solid black;",
+														"innerHTML": "Výběr"
+													},
+													{
+														"type": "th",
+														"id": "selection_groups",
+														"style": "font-size: 12pt; text-align: left; padding-top: 5px; padding-bottom: 5px; border-right: 3px solid black;width: calc(100% - 50px);background: #ffffff; padding-left: 10px",
+														"innerHTML": "selected groups"
+													},
+													{
+														"type": "th",
+														"style": "font-size: 12pt; padding-top: 5px; padding-bottom: 5px; text-align: right; padding-right: 10px; border-right: 1px solid black;",
+														"innerHTML": "Výběr"
+													},
+													{
+														"type": "th",
+														"id": "selection_logins",
+														"style": "font-size: 12pt; text-align: left; padding-top: 5px; padding-bottom: 5px; width: calc(100% - 50px);background: #ffffff; padding-left: 10px",
+														"innerHTML": "selected logins"
+													}
+												]
+											},
+											{
+												"type": "tr",
+												"style": "border-bottom: 1px solid black;background-color:#dedede;border-bottom: 2px solid black;",
+												"contents": [
+													{
+														"type": "th",
+														"style": "font-size: 12pt; padding-top: 5px; padding-bottom: 5px; text-align: right; padding-right: 10px; border-right: 1px solid black;",
+														"innerHTML": "Filtr"
+													},
+													{
+														"type": "th",
+														"style": "font-size: 12pt; text-align: left; padding-top: 5px; padding-bottom: 5px; border-right: 3px solid black;width: calc(100% - 50px);background: #ffffff; padding-left: 10px",
+														"contents": [
+															{
+																"type": "input",
+																"id": "filter_groups",
+																"style": "outline: none; width: calc(100% - 20px);padding-top: 2px; padding-bottom: 2px; border: 0px"
+															}
+														]	
+													},
+													{
+														"type": "th",
+														"style": "font-size: 12pt; padding-top: 5px; padding-bottom: 5px; text-align: right; padding-right: 10px; border-right: 1px solid black;",
+														"innerHTML": "Filtr"
+													},
+													{
+														"type": "th",
+														"style": "font-size: 12pt; text-align: left; padding-top: 5px; padding-bottom: 5px; width: calc(100% - 50px);background: #ffffff; padding-left: 10px",
+														"contents": [
+															{
+																"type": "input",
+																"id": "filter_logins",
+																"style": "outline: none; width: calc(100% - 20px);padding-top: 2px; padding-bottom: 2px; border: 0px"
+															}
+														]	
+													}
+												]
+											}
+										]
+									},
+									{
+										"type": "tbody",
+										"contents": [
+											{
+												"type": "tr",
+												"style": "height: 100%;margin: 0px; padding: 0px;",
+												"contents": [
+													{
+														"type": "td",
+														"colSpan": 2,
+														"style": "height: 100%;margin: 0px; padding: 0px;vertical-align:top;border-bottom: 3px solid black;",
+														"contents": [
+															{
+																"type":"div",
+																"id": "contents_groups"																		
+															}
+														]
+													},
+													{
+														"type": "td",
+														"colSpan": 2,
+														"style": "height: 100%;margin: 0px; padding: 0px;vertical-align:top;border-bottom: 3px solid black;",
+														"contents": [
+															{
+																"type":"div",
+																"id": "contents_users"																		
+															}
+														]
+													}
+												]
+											}
+										]								
+									}
+								]
+							}
+						]
+					}
+				]
+			}
+		]
+	};
+	
+	self.protocolRowUI = {
+		"type": "tr",
+		"style": "border-bottom: 1px solid black",
+		"contents": [
+			{
+				"type": "td",
+				"id": "cnt",
+				"style": "border-right: 1px solid black; text-align: right;padding-right: 10px;padding-top: 5px; padding-bottom: 5px;"
+			},
+			{
+				"type": "td",
+				"id": "type",
+				"style": "border-right: 1px solid black; text-align: center;padding-top: 5px; padding-bottom: 5px;"
+			},
+			{
+				"type": "td",
+				"id": "contents",
+				"style": "border-right: 1px solid black; text-align: right; font-family: courier;padding-right: 10px;padding-left:10px;padding-top: 5px; padding-bottom: 5px;"
+			}
+		]
+	};
+	
+	self.protocolUI = {
+		"type": "div",
+		"style": "position: fixed; left: 0px; right: 0px; top: 0px; bottom: 0px; background-color: #000000aa; font-family: Verdana",
+		"contents": [
+			{
+				"type": "div",
+				"style": "display: block; width: 50%; min-height: 400px; height: 50%; min-width: 600px;border:2px solid black; background: white;position: relative;left:25%;top:25%;",
+				"contents": [
+					{
+						"type": "div",
+						"style": "width: 100%; height: 40px; background: #aaaadd; border-bottom: 2px solid black;text-align: center;line-height: 40px; font-size: 20pt;",
+						"contents": [
+							{
+								"type": "span",
+								"innerHTML": "Protokol"
+							},
+							{
+								"type": "button",
+								"id": "btnClose",
+								"style": "float: right; margin-right: 6px; padding-left: 20px; padding-right: 20px; padding-top: 4px; padding-bottom:4px; margin-top:6px;",
+								"innerHTML": "Zavřít"
+							}
+						]		
+					},
+					{
+						"type": "div",
+						"style": "display: block; height: calc(100% - 40px); overflow-y: auto",
+						"contents": [
+							{
+								"type": "table",
+								"style": "border-collapse:collapse;width: 100%; height: 100%;overflow: auto",
+								"contents": [
+									{
+										"type": "thead",
+										"contents": [
+											{
+												"type": "tr",
+												"style": "border-bottom: 1px solid black;background-color:#dedede;",
+												"contents": [
+													{
+														"type": "th",
+														"style": "font-size: 12pt; text-align: center; padding-top: 5px; padding-bottom: 5px; border-right: 1px solid black; width: 80px;",
+														"innerHTML": "#"
+													},
+													{
+														"type": "th",
+														"style": "font-size: 12pt; text-align: center; padding-top: 5px; padding-bottom: 5px; border-right: 1px solid black; width: 150px;",
+														"innerHTML": "Typ"
+													},
+													{
+														"type": "th",
+														"style": "font-size: 12pt; text-align: center; padding-top: 5px; padding-bottom: 5px",
+														"innerHTML": "Obsah"
+													}
+												]
+											}
+										]
+									},
+									{
+										"type": "tbody",
+										"id": "contents"
+									}
+								]
+							}
+						]
+					}
+					
+			
+			
+				]
+				
+			}
+			
+		]
+	}
+	
 	self.feedbackListRowUI = {
 		"type": "tr",
 		"style": "border-top: 1px solid black",
@@ -184,7 +480,18 @@ window.Tester.Templates = function() {
 				"type": "td",
 				"id": "results",
 				"style": "padding-right: 10px; padding-top: 3px; padding-bottom: 3px;border-right: 1px solid black; text-align: right",
-				"innerHTML": "Chyba: abc"
+				"contents": [
+					{
+						"type": "span",
+						"id": "results"
+					},
+					{
+						"type": "button",
+						"id": "btnProtocol",
+						"style": "float: right; margin-right: 1px;margin-left: 10px; height: 30px; padding-left:20px; padding-right: 20px;",
+						"innerHTML": "Zobrazit protokol"
+					}
+				]
 			 },
 		 	 {
 				"type": "td",

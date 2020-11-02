@@ -136,6 +136,26 @@ public abstract class SQLiteDB {
 		}
 	}
 
+	public static final class ComparisionFieldGroup {
+		public final String Operator;
+		public final ComparisionField[] Fields;
+
+		public ComparisionFieldGroup(ComparisionField[] fields, String operator) {
+			this.Fields = fields;
+			this.Operator = operator;
+		}
+	}
+
+	public static final class OrderField {
+		public final TableField Field;
+		public final String OrderType;
+
+		public OrderField(TableField field, String type) {
+			this.Field = field;
+			this.OrderType = type;
+		}
+	}
+
 	public static final class ComparisionField extends ValuedField {
 		public final FieldComparator comparator;
 
@@ -309,10 +329,34 @@ public abstract class SQLiteDB {
 	}
 
 	public JsonArray select(String tableName, TableField[] fields, boolean decodeBigString, ComparisionField... conjunctions) throws DatabaseException {
-		return select(tableName, fields, conjunctions, new TableJoin[0], decodeBigString);
+		return select(tableName, fields, decodeBigString, -1, conjunctions);
+	}
+
+	public JsonArray select(String tableName, TableField[] fields, boolean decodeBigString, int limit, ComparisionField... conjunctions) throws DatabaseException {
+		return select(tableName, fields, decodeBigString, limit, -1, conjunctions);
+	}
+
+	public JsonArray select(String tableName, TableField[] fields, boolean decodeBigString, int limit, int offset, ComparisionField... conjunctions) throws DatabaseException {
+		return select(tableName, fields, conjunctions, new TableJoin[0], decodeBigString, limit, offset, null);
 	}
 
 	public JsonArray select(String tableName, TableField[] fields, ComparisionField[] conjunctions, TableJoin[] joins, boolean decodeBigString) throws DatabaseException {
+		return select(tableName, fields, conjunctions, joins, decodeBigString, -1);
+	}
+
+	public JsonArray select(String tableName, TableField[] fields, ComparisionField[] conjunctions, TableJoin[] joins, boolean decodeBigString, ComparisionFieldGroup... grp) throws DatabaseException {
+		return select(tableName, fields, conjunctions, joins, decodeBigString, -1, grp);
+	}
+
+	public JsonArray select(String tableName, TableField[] fields, ComparisionField[] conjunctions, TableJoin[] joins, boolean decodeBigString, int limit, ComparisionFieldGroup... grp) throws DatabaseException {
+		return select(tableName, fields, conjunctions, joins, decodeBigString, limit, -1, null, grp);
+	}
+
+	public JsonArray select(String tableName, TableField[] fields, ComparisionField[] conjunctions, TableJoin[] joins, boolean decodeBigString, int limit) throws DatabaseException {
+		return select(tableName, fields, conjunctions, joins, decodeBigString, limit, -1, null);
+	}
+
+	public JsonArray select(String tableName, TableField[] fields, ComparisionField[] conjunctions, TableJoin[] joins, boolean decodeBigString, int limit, int offset, OrderField orderField, ComparisionFieldGroup... groups) throws DatabaseException {
 		StringBuilder sb = new StringBuilder();
 		sb.append("SELECT ");
 		for (int i = 0; i < fields.length; i++) {
@@ -346,9 +390,13 @@ public abstract class SQLiteDB {
 		} else {
 			sb.append(" FROM " + tableName);
 		}
-		Object params[] = new Object[conjunctions.length];
+		int totalGroupFields = 0;
+		for (ComparisionFieldGroup group : groups) {
+			totalGroupFields += group.Fields.length;
+		}
+		Object params[] = new Object[conjunctions.length + totalGroupFields];
 
-		if (conjunctions.length > 0 || joins.length > 0) {
+		if (conjunctions.length > 0 || joins.length > 0 || groups.length > 0) {
 			sb.append(" WHERE ");
 		}
 		if (joins.length > 0) {
@@ -361,13 +409,48 @@ public abstract class SQLiteDB {
 			}
 		}
 		if (conjunctions.length > 0) {
+			if (joins.length > 0) {
+				sb.append(" AND ");
+			}
 			for (int i = 0; i < conjunctions.length; i++) {
-				if (i > 0 || joins.length > 0) {
+				if (i > 0) {
 					sb.append(" AND ");
 				}
 				sb.append(conjunctions[i].field.table + "." + conjunctions[i].field.field.name + " " + conjunctions[i].comparator.code + " ");
 				sb.append(conjunctions[i].field.field.isStoredAsString ? "'?'" : '?');
 				params[i] = conjunctions[i].value;
+			}
+		}
+		if (groups.length > 0 && totalGroupFields > 0) {
+			if (joins.length > 0 || conjunctions.length > 0) {
+				sb.append(" AND ");
+			}
+			int firstIndex = conjunctions.length;
+			sb.append(" ( ");
+			for (int i = 0; i < groups.length; i++) {
+				if (i > 0) {
+					sb.append(" " + groups[i].Operator + " ");
+				}
+				for (int fi = 0; fi < groups[i].Fields.length; fi++) {
+					if (fi > 0) {
+						sb.append(" " + groups[i].Operator + " ");
+					}
+					ComparisionField field = groups[i].Fields[fi];
+					sb.append(field.field.table + "." + field.field.field.name + " " + field.comparator.code + " ");
+					sb.append(field.field.field.isStoredAsString ? "'?'" : '?');
+					params[firstIndex] = field.value;
+					firstIndex++;
+				}
+			}
+			sb.append(" ) ");
+		}
+		if (orderField != null) {
+			sb.append(" ORDER BY " + orderField.Field.table + "." + orderField.Field.field.name + " " + orderField.OrderType);
+		}
+		if (limit > 0) {
+			sb.append(" LIMIT " + limit);
+			if (offset >= 0) {
+				sb.append(" OFFSET " + offset);
 			}
 		}
 		DatabaseResult res = this.select_raw(sb.toString(), params);

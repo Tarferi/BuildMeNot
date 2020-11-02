@@ -24,6 +24,7 @@ import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.json.JsonValue.JsonString;
 import cz.rion.buildserver.test.GenericTest;
+import cz.rion.buildserver.test.TestManager.RunnerLogger;
 import cz.rion.buildserver.wrappers.FileReadException;
 import cz.rion.buildserver.wrappers.MyExec;
 import cz.rion.buildserver.wrappers.MyExec.MyExecResult;
@@ -92,8 +93,20 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 		public String getName();
 	}
 
+	public void reloadToolchains() {
+		synchronized (toolchains) {
+			toolchains.clear();
+			try {
+				toolchains = getToolchains();
+			} catch (NoSuchToolException | DatabaseException e) {
+				e.printStackTrace();
+			}
+			toolchainsKnownUpdate(toolchains);
+		}
+	}
 	public final class Tool {
 
+		private final int ID;
 		private final String toolPath;
 		private final String toolExecutable;
 		private final String toolName;
@@ -111,6 +124,7 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 
 		public ToolExecutionResult run(ToolchainLogger errors, GenericTest test, String workingDirectory, String lastKnownCode, String stdin, String login) {
 			if (this.toolExecutable.isEmpty()) {
+				errors.logInfo("Returning expected results because there is nothing to be done");
 				return new ToolExecutionResult("", "", expectedResult, expectedResult, false);
 			}
 			lastKnownCode = handleCodeManipulation(errors, test, lastKnownCode, login);
@@ -118,22 +132,37 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 			// Execute
 			// First create the directory if it doesn't exist yet
 			if (this.requiresCode()) {
+				errors.logInfo("Code is required, putting previous code to " + workingDirectory + "/" + this.expectedInputFile);
 				try {
 					MyFS.writeFile(workingDirectory + "/" + this.expectedInputFile, lastKnownCode);
 				} catch (FileWriteException e) {
+					errors.logInfo("Failed to store code to " + workingDirectory + "/" + this.expectedInputFile);
 					errors.getBadResults().setNext(BadResultType.Good);
 					errors.logError("Could not store file " + this.expectedInputFile);
 					return new ToolExecutionResult("", "", -1, this.expectedResult, false);
 				}
 			}
 
+			StringBuilder paramsStr = new StringBuilder();
+			String[] hparams = handleParams(this.toolParams, workingDirectory);
+			if (hparams.length >= 1) {
+				paramsStr.append("\"" + hparams[0] + "\"");
+				for (int i = 1; i < hparams.length; i++) {
+					paramsStr.append(", \"" + hparams[i] + "\"");
+				}
+			}
+
 			try {
+				errors.logInfo("Executing \"" + this.toolPath + "/" + this.toolExecutable + "\" with params [" + paramsStr.toString() + "]");
 				MyExecResult exec = MyExec.execute(workingDirectory, this.provideStdin ? stdin : "", this.toolPath + "/" + this.toolExecutable, handleParams(this.toolParams, workingDirectory), this.timeout);
+				errors.logInfo("Tool runner of tool " + ID + " ending with success");
 				return new ToolExecutionResult(exec.stdout, exec.stderr, exec.returnCode, this.expectedResult, exec.Timeout);
 			} catch (CommandLineExecutionException e) {
+				errors.logInfo("Execution exception: " + e.description);
 				errors.getBadResults().setNext(BadResultType.Uncompillable);
 				errors.logError(e.description);
 			}
+			errors.logInfo("Tool runner of tool " + ID + " ending with default errors");
 			return new ToolExecutionResult("", "", -1, this.expectedResult, false);
 		}
 
@@ -221,7 +250,8 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 		 * 
 		 * @throws DatabaseException
 		 */
-		private Tool(String builderPath, String builderName, String failIfThisFileExists, String failIfThisFileDoesntExist, int expectedReturnCode, String builderParams, int timeout, String builderExecutableName, String codeModifiers, String expectedOutputFile, String expectedInputFile, int provideStdin, String stdoutOutputHandler, String sderrOutputHandler) throws DatabaseException {
+		private Tool(int ID, String builderPath, String builderName, String failIfThisFileExists, String failIfThisFileDoesntExist, int expectedReturnCode, String builderParams, int timeout, String builderExecutableName, String codeModifiers, String expectedOutputFile, String expectedInputFile, int provideStdin, String stdoutOutputHandler, String sderrOutputHandler) throws DatabaseException {
+			this.ID = ID;
 			this.toolPath = builderPath;
 			this.toolName = builderName;
 			this.failIfExists = failIfThisFileExists;
@@ -276,7 +306,9 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 
 	public interface ToolchainLogger {
 
-		public void logError(String error);
+		public void logError(String error, Object... data);
+
+		public void logInfo(String error, Object... data);
 
 		public BadResults getBadResults();
 
@@ -300,7 +332,9 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 			ToolExecutionResult[] lst = new ToolExecutionResult[tools.length];
 			int lastUpdateOfOutput = -1;
 			for (int i = 0; i < tools.length; i++) {
+				errors.logInfo("Running tool " + i + " (ID=" + tools[i].ID + ")");
 				if (tools[i].requiresCode()) { // Requests output of previous tool
+					errors.logInfo("Tool requires code");
 					if (i > 0 && lastUpdateOfOutput != i - 1) { // Not first tool, read previous code as new
 						inputString = tools[i - 1].getOutputCode(errors, test, workingDirectory, inputString, login);
 						lastUpdateOfOutput = i - 1;
@@ -318,6 +352,7 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 				}
 
 				if (!lst[i].wasOK() || lstStdout == null || lstStderr == null) { // Was not OK, delete
+					errors.logError("Tool execution was not ok. Expected code [0], got [1], got stdout [2], got stderr [3]", lst[i].expectedReturnCode, lst[i].returnCode, lst[i].stdout, lst[i].stderr);
 					ToolExecutionResult[] ret = new ToolExecutionResult[i + 1];
 					System.arraycopy(lst, 0, ret, 0, i + 1);
 					if (lstStdout != null && lstStderr != null) { // Could only happen in stdout handler which sets error upon failure
@@ -330,8 +365,10 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 					if (inputString == null) {
 						ToolExecutionResult[] ret = new ToolExecutionResult[i + 1];
 						System.arraycopy(lst, 0, ret, 0, i + 1);
+						errors.logError("Tool was supposed to return output, returned null");
 						return new ExecutionResult(ret, true);
 					}
+					errors.logInfo("Tool provides valid output (" + inputString.length() + " bytes)");
 					lastUpdateOfOutput = i;
 				} else {
 					codeKnown = false;
@@ -522,6 +559,7 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 		Map<String, Tool> result = new HashMap<>();
 		final String tableName = "builders";
 
+		final TableField fid = this.getField(tableName, "ID");
 		final TableField fname = this.getField(tableName, "name");
 		final TableField fbuilder_path = this.getField(tableName, "builder_path");
 		final TableField fparams = this.getField(tableName, "params");
@@ -539,12 +577,13 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 
 		final TableField fvalid = this.getField(tableName, "valid");
 
-		JsonArray res = this.select(tableName, new TableField[] { fname, fbuilder_path, fparams, fex, fnex, fres, ftimeout, fexec, fmod, fexpectedOutputFile, fexpectedInputFile, fprovide_stdin, fstdout_output_handler, fstderr_output_handler }, false, new ComparisionField(fvalid, 1));
+		JsonArray res = this.select(tableName, new TableField[] { fid, fname, fbuilder_path, fparams, fex, fnex, fres, ftimeout, fexec, fmod, fexpectedOutputFile, fexpectedInputFile, fprovide_stdin, fstdout_output_handler, fstderr_output_handler }, false, new ComparisionField(fvalid, 1));
 
 		for (JsonValue val : res.Value) {
 			if (val.isObject()) {
 				JsonObject obj = val.asObject();
-				if (obj.containsString("name") && obj.containsString("builder_path") && obj.containsString("params") && obj.containsString("fail_if_file_exists") && obj.containsString("fail_if_file_doesnt_exist") && obj.containsNumber("expected_result") && obj.containsNumber("timeout") && obj.containsString("builder_executable") && obj.containsString("expected_outputFile") && obj.containsString("modifiers") && obj.containsString("expected_inputFile") && obj.containsNumber("provide_stdin")) {
+				if (obj.containsNumber("ID") && obj.containsString("name") && obj.containsString("builder_path") && obj.containsString("params") && obj.containsString("fail_if_file_exists") && obj.containsString("fail_if_file_doesnt_exist") && obj.containsNumber("expected_result") && obj.containsNumber("timeout") && obj.containsString("builder_executable") && obj.containsString("expected_outputFile") && obj.containsString("modifiers") && obj.containsString("expected_inputFile") && obj.containsNumber("provide_stdin")) {
+					int ID = obj.getNumber("ID").Value;
 					String name = obj.getString("name").Value;
 					String builder_path = obj.getString("builder_path").Value;
 					String params = obj.getString("params").Value;
@@ -559,7 +598,7 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 					int provide_stdin = obj.getNumber("provide_stdin").Value;
 					String stdout_output_handler = obj.getString("stdout_output_handler").Value;
 					String stderr_output_handler = obj.getString("stderr_output_handler").Value;
-					result.put(name, new Tool(builder_path, name, fail_if_file_exists, fail_if_file_doesnt_exist, expected_result, params, timeout, builder_executable, modifiers, expected_outputFile, expected_inputFile, provide_stdin, stdout_output_handler, stderr_output_handler));
+					result.put(name, new Tool(ID, builder_path, name, fail_if_file_exists, fail_if_file_doesnt_exist, expected_result, params, timeout, builder_executable, modifiers, expected_outputFile, expected_inputFile, provide_stdin, stdout_output_handler, stderr_output_handler));
 				}
 			}
 		}
@@ -1000,24 +1039,10 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 	private void initDefaultToolchains() throws DatabaseException {
 		addNasmToolchain();
 		addGCCToolchain();
-		/*
-		 * ReadVirtualFile tcf = this.loadRootFile("toolchains.ini"); if (tcf != null) {
-		 * Set<String> loaded = new HashSet<>(); loaded.add("IZP"); loaded.add("ISU");
-		 * for (String line : tcf.Contents.split("\n")) { line = line.trim(); if
-		 * (line.startsWith("#") || line.isEmpty()) { continue; } String[] tcp =
-		 * line.split("=", 2); if (tcp.length == 2) { String tc = tcp[1].trim(); if
-		 * (!loaded.contains(tc)) { loaded.add(tc);
-		 * this.createToolchainIfItDoesntExist(tc, "TOOLCHAIN_" + tc, new String[0], new
-		 * String[0]); } } } }
-		 */
 	}
 
 	private void loadToolchains() throws NoSuchToolException, DatabaseException {
-		synchronized (toolchains) {
-			toolchains.clear();
-			toolchains = getToolchains();
-			toolchainsKnownUpdate(toolchains);
-		}
+		reloadToolchains();
 	}
 
 	public Toolchain getRootToolchain() {

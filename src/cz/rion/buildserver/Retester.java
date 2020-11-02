@@ -267,7 +267,7 @@ public class Retester {
 	}
 
 	private NewTestResult retest(PastTestResult test) throws NoSuchToolchainException {
-		TestResults res = tests.run(db.new BadResults(-1, test.UserID, new Date()), test.RowID, sdb.getToolchain(test.ToolChain, false), test.TestID, test.ASM, test.Login);
+		TestResults res = tests.run(db.new BadResults(-1, test.UserID, new Date()), test.RowID, sdb.getToolchain(test.ToolChain, false), test.TestID, test.ASM, test.Login, null);
 		int code = res.ResultCode;
 		String result = res.ResultDescription;
 		int good = res.GoodTests;

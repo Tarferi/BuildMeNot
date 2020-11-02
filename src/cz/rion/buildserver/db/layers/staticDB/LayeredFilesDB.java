@@ -2,11 +2,9 @@ package cz.rion.buildserver.db.layers.staticDB;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Set;
 
 import com.google.javascript.jscomp.CompilationLevel;
 import com.google.javascript.jscomp.Compiler;
@@ -165,7 +163,6 @@ public abstract class LayeredFilesDB extends LayeredStaticDB {
 		super(fileData);
 		this.makeTable("files", false, KEY("ID"), TEXT("name"), BIGTEXT("contents"), NUMBER("deleted"), TEXT("toolchain"));
 		this.files = fileData.Files;
-
 		// Convert files
 		// convertFiles();
 		// throw new DatabaseException("End");

@@ -10,12 +10,14 @@ import java.util.Set;
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.DatabaseInitData;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
+import cz.rion.buildserver.exceptions.CompressionException;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.permissions.Permission;
 import cz.rion.buildserver.permissions.PermissionBranch;
+import cz.rion.buildserver.utils.Pair;
 
 public abstract class LayeredUserDB extends LayeredSSLDB {
 
@@ -36,6 +38,44 @@ public abstract class LayeredUserDB extends LayeredSSLDB {
 		public void reload() {
 			this.sdb.loadLocalUsers(toolchain, LoadedUsers, LoadedUsersByLogin, LoadedUsersByID);
 		}
+	}
+
+	public static class PermissionedUser {
+		public final String Name;
+		public final String Login;
+		public final String GroupName;
+		public final int GroupID;
+
+		private PermissionedUser(String name, String login, String group, int groupID) {
+			this.Name = name;
+			this.Login = login;
+			this.GroupName = group;
+			this.GroupID = groupID;
+		}
+	}
+
+	@SuppressWarnings("deprecation")
+	public List<PermissionedUser> getPermissionedUsers(Toolchain tc) {
+		ArrayList<PermissionedUser> lst = new ArrayList<>();
+		try {
+			TableField[] fields = new TableField[] { getField("users", "name"), getField("users", "login"), getField("groups", "name").getRenamedInstance("gname"), getField("groups", "ID") };
+			JsonArray res = this.select_raw("SELECT\r\n" + "	users.name as name,\r\n" + "	users.login as login,\r\n" + "	groups.name as gname,\r\n" + "	groups.ID as id\r\n" + "FROM\r\n" + "	users,\r\n" + "	groups,\r\n" + "	users_group\r\n" + "\r\n" + "WHERE\r\n" + "	users.id = users_group.user_id\r\n" + "AND\r\n" + "	groups.id = users_group.group_id\r\n" + "AND\r\n" + "	users_group.primary_group = 1\r\n" + "\r\n" + "AND users.toolchain='?'", tc.getName()).getJSON(false, fields, tc);
+			for (JsonValue row : res.Value) {
+				if (row.isObject()) {
+					JsonObject obj = row.asObject();
+					if (obj.containsString("name") && obj.containsString("login") && obj.containsString("gname") && obj.containsNumber("id")) {
+						String name = obj.getString("name").Value;
+						String gname = obj.getString("gname").Value;
+						String login = obj.getString("login").Value;
+						int id = obj.getNumber("id").Value;
+						lst.add(new PermissionedUser(name, login, gname, id));
+					}
+				}
+			}
+		} catch (CompressionException | DatabaseException e) {
+			e.printStackTrace();
+		}
+		return lst;
 	}
 
 	public Map<String, LocalUser> getLoadedUsersByLogin(Toolchain toolchain) {
@@ -92,22 +132,24 @@ public abstract class LayeredUserDB extends LayeredSSLDB {
 	public class LocalUser extends RemoteUser {
 		public final int ID;
 		public final String PrimaryPermGroup;
+		public final int PrimaryPermGroupID;
 
-		private LocalUser(int id, String login, String group, String fullName, String PrimaryPermGroup) {
+		private LocalUser(int id, String login, String group, String fullName, String PrimaryPermGroup, int PrimaryPermGroupID) {
 			super(login, group, fullName);
 			this.ID = id;
 			this.PrimaryPermGroup = PrimaryPermGroup;
+			this.PrimaryPermGroupID = PrimaryPermGroupID;
 		}
 	}
 
-	private final Map<String, String> getPrimaryGroups(String toolchain) throws DatabaseException {
-		Map<String, String> mp = new HashMap<>();
+	private final Map<String, Pair<String, Integer>> getPrimaryGroups(String toolchain) throws DatabaseException {
+		Map<String, Pair<String, Integer>> mp = new HashMap<>();
 
 		final String usersTableName = "users";
 		final String groupsTableName = "groups";
 		final String userGroupsTableName = "users_group";
 
-		TableField[] fields = new TableField[] { getField(groupsTableName, "name"), getField(usersTableName, "login"), };
+		TableField[] fields = new TableField[] { getField(groupsTableName, "name"), getField(groupsTableName, "ID").getRenamedInstance("GroupID"), getField(usersTableName, "login"), };
 		ComparisionField[] comparators = new ComparisionField[] { new ComparisionField(getField(userGroupsTableName, "primary_group"), 1) };
 
 		TableJoin[] joins = new TableJoin[] { new TableJoin(getField(usersTableName, "ID"), getField(userGroupsTableName, "user_id")), new TableJoin(getField(groupsTableName, "ID"), getField(userGroupsTableName, "group_id")),
@@ -117,7 +159,8 @@ public abstract class LayeredUserDB extends LayeredSSLDB {
 		for (JsonValue item : data.Value) {
 			String name = item.asObject().getString("name").Value;
 			String login = item.asObject().getString("login").Value;
-			mp.put(login.toLowerCase(), name);
+			int gid = item.asObject().getNumber("GroupID").Value;
+			mp.put(login.toLowerCase(), new Pair<>(name, gid));
 		}
 		return mp;
 	}
@@ -127,7 +170,7 @@ public abstract class LayeredUserDB extends LayeredSSLDB {
 		loadedUsersByLogin.clear();
 
 		try {
-			Map<String, String> primaryGroups = getPrimaryGroups(toolchain);
+			Map<String, Pair<String, Integer>> primaryGroups = getPrimaryGroups(toolchain);
 			final String tableName = "users";
 			JsonArray data = select(tableName, new TableField[] { getField(tableName, "ID"), getField(tableName, "name"), getField(tableName, "login"), getField(tableName, "usergroup") }, true, new ComparisionField(getField(tableName, "toolchain"), toolchain));
 			for (JsonValue val : data.Value) {
@@ -136,8 +179,8 @@ public abstract class LayeredUserDB extends LayeredSSLDB {
 				String name = obj.getString("name").Value;
 				String usergroup = obj.getString("usergroup").Value;
 				String login = obj.getString("login").Value;
-				String permGroup = primaryGroups.containsKey(login.toLowerCase()) ? primaryGroups.get(login.toLowerCase()) : "";
-				LocalUser user = new LocalUser(id, login, usergroup, name, permGroup);
+				Pair<String, Integer> permGroup = primaryGroups.containsKey(login.toLowerCase()) ? primaryGroups.get(login.toLowerCase()) : new Pair<>("", 0);
+				LocalUser user = new LocalUser(id, login, usergroup, name, permGroup.Key, permGroup.Value);
 				loadedUsers.add(user);
 				loadedUsersByLogin.put(login, user);
 				loadedUsersByID.put(user.ID, user);

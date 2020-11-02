@@ -16,7 +16,6 @@ import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.ExecutionResult;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.ToolchainLogger;
 import cz.rion.buildserver.exceptions.CommandLineExecutionException;
-import cz.rion.buildserver.exceptions.NoSuchToolchainException;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
@@ -39,10 +38,8 @@ public class TestManager {
 		public final boolean passed;
 		public final String data;
 		private final TestResultsExpectations[] full;
-		private String finalASM;
 
-		public TestResult(String finalASM, boolean passed, String data, TestResultsExpectations[] full) {
-			this.finalASM = finalASM;
+		public TestResult(boolean passed, String data, TestResultsExpectations[] full) {
 			this.passed = passed;
 			this.data = data;
 			this.full = full;
@@ -73,10 +70,10 @@ public class TestManager {
 			return ret;
 		}
 
-		public JsonObject getFailedDescriptionData() {
+		public JsonObject getFailedDescriptionData(String userCode) {
 			JsonObject res = new JsonObject();
 			JsonArray result = new JsonArray(new ArrayList<JsonValue>());
-			res.add("final_code", new JsonString(finalASM));
+			res.add("final_code", new JsonString(userCode));
 			res.add("failed_tests", result);
 			for (int i = 0; i < full.length; i++) {
 				if (full[i] != null) {
@@ -117,7 +114,7 @@ public class TestManager {
 
 	public static final class TestInput {
 		private final String exeName;
-		private String workingDir;
+		private final String workingDir;
 
 		private TestInput(String workingDir, String exeName) {
 			this.workingDir = workingDir;
@@ -180,12 +177,12 @@ public class TestManager {
 					collection.mtest.clear();
 					List<GenericTest> jsonTests = JsonTestManager.load(files, sdb, testDirectory, toolchainContext);
 					for (GenericTest test : jsonTests) {
-						String toolchain = test.getToolchain().toLowerCase();
+						String toolchain = test.getToolchain().getName().toLowerCase();
 						if (!collection.tests.containsKey(toolchain)) {
 							collection.tests.put(toolchain, new ArrayList<GenericTest>());
 						}
 						collection.tests.get(toolchain).add(test);
-						collection.mtest.put(test.getToolchain().toUpperCase() + "/" + test.getID().toLowerCase(), test);
+						collection.mtest.put(test.getToolchain().getName().toUpperCase() + "/" + test.getID().toLowerCase(), test);
 					}
 					for (List<GenericTest> entry : collection.tests.values()) {
 						entry.sort(new Comparator<GenericTest>() {
@@ -208,27 +205,29 @@ public class TestManager {
 
 	private final VirtualFileManager files;
 
+	public void reloadTests() {
+		synchronized (Tests) {
+			Tests.clear();
+		}
+	}
+
 	public TestManager(VirtualFileManager files, StaticDB sdb, String testDirectory) {
 		this.testDirectory = testDirectory;
 		this.sdb = sdb;
 		this.files = files;
 	}
 
-	public void reloadTests() {
-
-	}
-
 	private static final List<GenericTest> emptyListOfTests = new ArrayList<>();
 
 	public List<GenericTest> getAllTests(Toolchain toolchain) {
-		TestCollection cache = Tests.get(toolchain);
-		if (cache.tests.containsKey(toolchain.getName().toLowerCase())) {
-			return cache.tests.get(toolchain.getName().toLowerCase());
+		synchronized (Tests) {
+			TestCollection cache = Tests.get(toolchain);
+			if (cache.tests.containsKey(toolchain.getName().toLowerCase())) {
+				return cache.tests.get(toolchain.getName().toLowerCase());
+			}
 		}
 		return emptyListOfTests;
 	}
-
-	private static final Object globalSyncer = new Object();
 
 	private static class StringWrapper {
 		private String data;
@@ -262,12 +261,64 @@ public class TestManager {
 		}
 	}
 
-	public TestResults run(final BadResults badResults, int builderID, Toolchain toolchain, String test_id, String asm, String login) {
+	public static final class RunnerLogger {
+		private JsonArray logs = new JsonArray();
+
+		public JsonArray getLogs() {
+			return logs;
+		}
+
+		private JsonArray get(Object... objects) {
+			JsonArray ar = new JsonArray();
+			for (Object obj : objects) {
+				if (obj instanceof String[]) {
+					String[] s = (String[]) obj;
+					for (String ss : s) {
+						ar.add(ss);
+					}
+				} else if (obj instanceof String) {
+					String s = (String) obj;
+					ar.add(s);
+				} else if (obj instanceof Integer) {
+					int i = (int) obj;
+					ar.add(i);
+				} else {
+					ar.add(obj.toString());
+				}
+			}
+			return ar;
+		}
+
+		private void add(String type, String message, Object... objects) {
+			JsonObject obj = new JsonObject();
+			obj.add("type", type);
+			if (objects.length > 0) {
+				obj.add("params", get(objects));
+			}
+			obj.add("text", message);
+			logs.add(obj);
+		}
+
+		public void log(String message, Object... objects) {
+			add("Info", message, objects);
+		}
+
+		public void logError(String message, Object... objects) {
+			add("error", message, objects);
+		}
+
+	}
+
+	public TestResults run(final BadResults badResults, int builderID, Toolchain toolchain, String test_id, String userCode, String login, RunnerLogger loggerP) {
+		final RunnerLogger logger = loggerP == null ? new RunnerLogger() : loggerP;
+		logger.log("Begin running test " + test_id + " for " + login + " on " + toolchain.getName() + " for given code", userCode);
 		GenericTest test = null;
-		synchronized (Tests.get(toolchain).tests) {
-			String testKey = toolchain.getName().toUpperCase() + "/" + test_id.toLowerCase();
-			if (Tests.get(toolchain).mtest.containsKey(testKey)) {
-				test = Tests.get(toolchain).mtest.get(testKey);
+		synchronized (Tests) {
+			synchronized (Tests.get(toolchain).tests) {
+				String testKey = toolchain.getName().toUpperCase() + "/" + test_id.toLowerCase();
+				if (Tests.get(toolchain).mtest.containsKey(testKey)) {
+					test = Tests.get(toolchain).mtest.get(testKey);
+				}
 			}
 		}
 		int code = 1;
@@ -280,53 +331,57 @@ public class TestManager {
 			code = 1;
 			rawMessage.add(new JsonString("Uvedený test nebyl nalezen"));
 			message.set("<span class='log_err'>Uvedený test nebyl nalezen</span>");
+			logger.logError("Uvedený test nebyl nalezen");
 		} else {
-			Toolchain runner = null;
+			Toolchain runner = test.getToolchain();
+			ToolchainLogger errorLogger = new ToolchainLogger() {
+
+				@Override
+				public void logInfo(String error, Object... objects) {
+					logger.log(error, objects);
+				}
+
+				@Override
+				public void logError(String error, Object... objects) {
+					rawMessage.add(new JsonString(error));
+					message.set("<span class='log_err'>" + error + "</span>");
+					logger.logError(error, objects);
+				}
+
+				@Override
+				public BadResults getBadResults() {
+					return badResults;
+				}
+
+			};
+
+			String workingDirectory = new File("./tests/" + toolchain.getName() + "/" + builderID).getAbsolutePath();
+			logger.log("Working directory set to " + workingDirectory);
+			logger.log("Toolchain for compiling set to " + runner.getName());
 			try {
-				runner = sdb.getToolchain(test.getToolchain(), false);
-			} catch (NoSuchToolchainException err) {
-				rawMessage.add(new JsonString("Neznámý toolchain: " + toolchain));
-				message.set("<span class='log_err'>Neznámý toolchain: " + toolchain + "</span>");
-			}
-			if (runner != null) {
-				ToolchainLogger errorLogger = new ToolchainLogger() {
+				ExecutionResult result = runner.run(errorLogger, test, workingDirectory, userCode, "", login);
 
-					@Override
-					public void logError(String error) {
-						rawMessage.add(new JsonString(error));
-						message.set("<span class='log_err'>" + error + "</span>");
-					}
-
-					@Override
-					public BadResults getBadResults() {
-						return badResults;
-					}
-
-				};
-
-				String workingDirectory = new File("./tests/" + toolchain.getName() + "/" + builderID).getAbsolutePath();
-				try {
-					ExecutionResult result = runner.run(errorLogger, test, workingDirectory, asm, "", login);
-
-					if (result.wasOK()) {
-						TestInput input = new TestInput(workingDirectory, runner.getLastOutputFileName());
-						testResult = test.perform(badResults, input);
-						MyFS.deleteFileSilent(workingDirectory);
-					}
-					if (testResult != null) {
-						code = testResult.passed ? 0 : 1;
-						message.set(testResult.data);
-						good = testResult.getGoodTests();
-						bad = testResult.getBadTests();
-					}
-				} finally {
+				if (result.wasOK()) {
+					logger.log("Executing result is OK");
+					TestInput input = new TestInput(workingDirectory, runner.getLastOutputFileName());
+					testResult = test.perform(badResults, input);
 					MyFS.deleteFileSilent(workingDirectory);
 				}
+				if (testResult != null) {
+					logger.log("Executing result details available");
+					code = testResult.passed ? 0 : 1;
+					message.set(testResult.data);
+					good = testResult.getGoodTests();
+					bad = testResult.getBadTests();
+				}
+			} finally {
+				logger.log("Execution ended");
+				MyFS.deleteFileSilent(workingDirectory);
 			}
 		}
 		String details = null;
 		if (testResult != null) {
-			details = testResult.getFailedDescriptionData().getJsonString();
+			details = testResult.getFailedDescriptionData(userCode).getJsonString();
 		} else if (!rawMessage.Value.isEmpty()) {
 			details = rawMessage.getJsonString();
 		}

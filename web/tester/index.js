@@ -760,6 +760,52 @@ window.Tester.FeedbackPanel = function(data, showLoginColumn) {
 		self.detailRoot.style.borderBottom = "5px solid black";
 		self.btnCommentCellForBorder.style.borderRight = "5px solid black";
 	}
+	
+	self.showProtocol = function(item) {
+		self.common.showLoader();
+		var cbFail = function(err) {
+			self.common.hideLoader();
+			self.common.showError("Chyba", "Nepodařilo se nahrát protokol", true, err);
+		}
+		var cbOK = function(data) {
+			self.common.hideLoader();
+			if(data.map !== undefined) {
+				var d = self.common.reconstructUI(self.templates.protocolUI);
+				var node = d[0];
+				var ids = d[1];
+
+				var index = 0;				
+				data.map(function(row) {
+					if(row.text && row.type) {
+						var nd = self.common.reconstructUI(self.templates.protocolRowUI);
+						var nnode = nd[0];
+						var nids = nd[1]; 
+						var params = "";
+						if (row.params) {
+							if(row.params.length > 0) {
+								params = "<br />" + row.params.map(function(x) {return "<span class=\"in_code_line\" style=\"text-align: left;\">" + (x+"").split("<").join("&lt;").split(">").join("&gt;").split(" ").join("&nbsp;").split("\t").join("&nbsp;&nbsp;&nbsp;&nbsp;").split("\n").join("<br />") + "</span>"})
+							}
+						}
+						
+						nids.cnt.innerHTML = index+"";
+						nids.type.innerHTML = row.type;
+						nids.contents.innerHTML = row.text + params;
+						ids.contents.appendChild(nnode);
+						index++;
+					}
+				});
+				ids.btnClose.addEventListener("click", function(){
+					document.body.removeChild(node);	
+				})
+				
+				document.body.appendChild(node);
+				return;
+			}			
+			cbFail("Neplatná odpověď serveru");
+		}
+		self.common.async( {"action":"COLLECT_PROTOCOL", "compilationID": item.ID}, cbOK, cbFail, false);		
+		return;
+	};
 
 	self.materialize = function(item) {
 		var d = self.common.reconstructUI(self.templates.feedbackListRowUI);
@@ -776,6 +822,12 @@ window.Tester.FeedbackPanel = function(data, showLoginColumn) {
 				ids.results.innerHTML = jresult.result;
 			}
 		} catch (e) {
+		}
+		
+		if(!item.Protocol) {
+			ids.btnProtocol.style.display = "none";
+		} else {
+			ids.btnProtocol.addEventListener("click", function() {self.showProtocol(item);});
 		}
 		
 		self.lastcomment = ids.lastcomment;
@@ -803,19 +855,311 @@ window.Tester.FeedbackPanel = function(data, showLoginColumn) {
 	return this;
 };
 
+window.Tester.FilterPanel = function(getDataCB, setDataCB) {
+	var self = this;
+	self.common = new Common();
+	self.templates = new window.Tester.Templates();
+	
+	self.materialize = function() {
+		var d = self.common.reconstructUI(self.templates.filterUI);
+		var node = d[0];
+		var ids = d[1]
+		self.node = node;
+		
+		self.selGroups = ids.selection_groups;
+		self.selUsers = ids.selection_logins;
+		self.filterGroups = ids.filter_groups;
+		self.filterUsers = ids.filter_logins;
+		self.contentGroups = ids.contents_groups;
+		self.contentUsers = ids.contents_users;
+		
+		var filterUsers = function(){
+			self.filterChanged(self.filterUsers.value, self.shownUsers);
+		};
+		
+		var filterGroups = function(){
+			self.filterChanged(self.filterGroups.value, self.shownGroups);
+		}
+		
+		self.filterGroups.addEventListener("change", filterGroups);
+		self.filterGroups.addEventListener("keydown", filterGroups);
+		self.filterGroups.addEventListener("keyup", filterGroups);
+		
+		self.filterUsers.addEventListener("change", filterUsers);
+		self.filterUsers.addEventListener("keydown", filterUsers);
+		self.filterUsers.addEventListener("keyup", filterUsers);
+		
+		ids.btnSet.addEventListener("click", function() {
+			self.save();
+		})
+		
+		ids.btnClose.addEventListener("click", function(){
+			self.close();
+		});
+	};
+	
+	self.init = function() {
+		self.materialize();
+	};
+	
+	self.shownGroups = {};
+	self.shownUsers = {};
+	self.selectionStorage = {};
+	
+	self.save = function() {
+		var data = self.UIToData();
+		var selectedGroups = data[0];
+		var selectedUsers = data[1];
+		self.close();
+		setDataCB(selectedGroups, selectedUsers);
+	}
+	
+	self.close = function() {
+		if(self.node.parentNode){
+			self.node.parentNode.removeChild(self.node);
+		}
+	}
+	
+	self.UIToData = function() {
+		var selectedUsers = [];
+		
+		for(var usr in self.shownUsers) {
+			if(self.shownUsers.hasOwnProperty(usr)) {
+				if (self.shownUsers[usr].check.checked) {
+					selectedUsers.push(usr);
+				}
+			}
+		}
+		
+		var selectedGroups = [];
+		
+		for(var grp in self.shownGroups) {
+			if(self.shownGroups.hasOwnProperty(grp)) {
+				if (self.shownGroups[grp].check.checked) {
+					selectedGroups.push(grp*1);
+				}
+			}
+		}
+		
+		return [selectedGroups, selectedUsers];
+	}
+	
+	self.dataToUI = function() {
+		var data = getDataCB();
+		var groups = data[0];
+		
+		for(var grp in self.shownGroups) {
+			if(self.shownGroups.hasOwnProperty(grp)) {
+				self.shownGroups[grp].check.checked = false;
+			}
+		}
+		
+		groups.map(function(grp){
+			if(self.shownGroups.hasOwnProperty(grp)) {
+				self.shownGroups[grp].check.checked = true;
+				self.shownGroups[grp].hook();
+			}
+			
+		});
+		
+		var users = data[1];
+		
+		for(var usr in self.shownUsers) {
+			if(self.shownUsers.hasOwnProperty(usr)) {
+				self.shownUsers[usr].check.checked = false;
+			}
+		}
+		
+		users.map(function(usr){
+			if(self.shownUsers.hasOwnProperty(usr)) {
+				self.shownUsers[usr].check.checked = true;
+				self.shownUsers[usr].hook();
+			}
+		});
+		
+	}
+	
+	
+	self.filterChanged = function(text, sourceData) {
+		text = text.toLowerCase();
+		for(var key in sourceData) {
+			if(sourceData.hasOwnProperty(key)) {
+				var data = sourceData[key];
+				data.node.style.display = data.text.innerHTML.toLowerCase().indexOf(text) >= 0 ? "": "none"
+			}
+		}
+	};
+	
+	self.hasData = function() {
+		return self.allGroups !== undefined && self.allLogins !== undefined;
+	};
+	
+	self.open = function(allGroups, allLogins) {
+		if(allGroups!=null) {
+			self.allGroups = allGroups;
+		} else {
+			allGroups = self.allGroups;
+		}
+		if(allLogins!=null) {
+			self.allLogins = allLogins;
+		} else {
+			allLogins = self.allLogins;
+		}
+		
+		if(!self.node.parentNode) {
+			self.selGroups.innerHTML = "";
+			self.selUsers.innerHTML = "";
+			self.filterGroups.value = "";
+			self.filterUsers.value = "";
+			self.contentGroups.innerHTML = "";
+			self.contentUsers.innerHTML = "";
+			self.shownGroups = {};
+			self.shownUsers = {};
+			
+			
+			self.selectionStorage = {};
+	
+			var createNode = function(name, delCB) {
+				var el = document.createElement("div");
+				el.style.fontFamily = "verdana";
+				el.style.fontSize = "9pt";
+				el.style.display = "inline-block";
+				el.style.border = "1px solid black";
+				el.style.borderRadius = "5px";
+				el.style.padding = "5px";
+				el.style.margin = "5px";
+				
+				var subEl = document.createElement("span");
+				subEl.innerHTML = name;
+				el.appendChild(subEl);
+				
+				var clsBtn = document.createElement("span");
+				clsBtn.style.float = "right";
+				clsBtn.innerHTML = "[X]";
+				clsBtn.style.paddingLeft = "8px";
+				clsBtn.style.cursor = "pointer";
+				clsBtn.addEventListener("click", delCB);
+				el.appendChild(clsBtn);
+				return el;
+			}
+	
+			var hook = function(checkBox, storageID, selectionNode, name) {
+				var valChangeCB = function(){
+					var value = checkBox.checked;
+					var hasNode = false;
+					if(self.selectionStorage.hasOwnProperty(storageID)) {
+						if(self.selectionStorage[storageID]) {
+							hasNode = true;
+						}
+					}
+					if(value && !hasNode) { // Add node
+						var node = createNode(name, function(){
+							checkBox.checked = false;
+							if(self.selectionStorage.hasOwnProperty(storageID)) {
+								if(self.selectionStorage[storageID].parentNode !== undefined) {
+									self.selectionStorage[storageID].parentNode.removeChild(self.selectionStorage[storageID]);
+									self.selectionStorage[storageID] = false;
+								}
+							}
+						});
+						self.selectionStorage[storageID] = node;
+						selectionNode.appendChild(node);
+					} else if(!value && hasNode) { // Remove node
+						self.selectionStorage[storageID].parentNode.removeChild(self.selectionStorage[storageID]);
+						self.selectionStorage[storageID] = false;
+					}
+					
+				};
+				checkBox.addEventListener("change", valChangeCB);
+				return valChangeCB;
+			}
+					
+			
+			var grpHook = function(grp) {
+				return hook(self.shownGroups[grp.ID].check, "grp_" + grp.ID, self.selGroups, grp.Name)
+			}
+			
+			var grpUser = function(usr) {
+				return hook(self.shownUsers[usr].check, "usr_" + usr, self.selUsers, login);
+			}
+			
+						
+			for(var login in allLogins) {
+				if(allLogins.hasOwnProperty(login)) {
+					var d = self.common.reconstructUI(self.templates.filterRowUI);
+					var node = d[0];
+					var ids = d[1]
+					
+					var loginData = allLogins[login];
+					var name  = loginData.Name;
+					
+					ids.text.innerHTML = name +" ("+login+")";
+					self.shownUsers[login] = {"text": ids.text, "check": ids.check, "node": node}
+					self.shownUsers[login].hook = grpUser(login);
+					node.style.borderLeft="3px solid black";
+					self.contentUsers.appendChild(node);
+					
+					//hook(ids.check, "usr_" + login, self.selUsers, login);
+					
+					if(loginData.Groups && loginData.Groups.map) {
+						loginData.Groups.map(function(grp){
+							if(!self.shownGroups.hasOwnProperty(grp)) {
+								self.shownGroups[grp] = 1;
+							} else {
+								self.shownGroups[grp] = self.shownGroups[grp] + 1;
+							}
+						});
+					}
+				}
+			}	
+			
+			allGroups.map(function(grp) {
+				var d = self.common.reconstructUI(self.templates.filterRowUI);
+				var node = d[0];
+				var ids = d[1]
+				
+				var usersInGroup = self.shownGroups.hasOwnProperty(grp.ID) ? self.shownGroups[grp.ID]*1 : 0; 
+				ids.text.innerHTML = "[" + grp.ID + "] " + grp.Name + " ("+usersInGroup+" uživatelů)";
+				
+				self.shownGroups[grp.ID] = {"text": ids.text, "check": ids.check, "node": node};
+				self.shownGroups[grp.ID].hook = grpHook(grp);
+				
+				//hook(ids.check, "grp_" + grp.ID, self.selGroups, grp.Name);
+				
+				node.style.borderRight="3px solid black";
+				self.contentGroups.appendChild(node);
+				
+			});
 
-window.Tester.HistoryPanel = function(data, historyBtn, rowPnl) {
+			
+			self.dataToUI();
+			
+			document.body.appendChild(self.node);
+		}
+	}
+	
+	self.init();
+	return this;
+}
+
+window.Tester.HistoryPanel = function(data, historyBtn, rowPnl, filterBtn) {
 	var self = this;
 	self.data = data;
 	var hideLbl = "Skrýt historii";
 	
 	self.isCollapsed = false;
+	self.limit = 100;
+	self.page = 0;
+	self.logins = [];
+	self.groups = [];
+	self.filterPnl = new window.Tester.FilterPanel(function() {return [self.groups, self.logins]}, function(groups, logins){self.page = 0; self.groups = groups; self.logins = logins;self.setVisible(true);});
 	
 	self.common = new Common();
 	self.templates = new window.Tester.Templates();
 	
 	self.setComponentsEnabled  = function(enabled) {
 		historyBtn.disabled = !enabled;
+		filterBtn.disabled = !enabled;
 		self.setVisible(false);
 	};
 	
@@ -831,7 +1175,28 @@ window.Tester.HistoryPanel = function(data, historyBtn, rowPnl) {
 		self.loginHeader = ids.loginHeader;
 		self.node = node;
 		self.nodeContents = ids.feedback_contents;
-		
+		filterBtn.style.display = "none";
+		filterBtn.addEventListener("click", function(){
+			if(self.filterPnl.hasData()) {
+				self.filterPnl.open();
+			} else {
+				self.common.showLoader();
+				var cbFail = function(err) {
+					self.common.hideLoader();
+					self.common.showError("Chyba", "Nepodařilo se načíst filter", true, err);
+				}
+				var cbOk = function(data) {
+					self.common.hideLoader();
+					if(data.result && data.result.Groups && data.result.Users) {
+						self.filterPnl.open(data.result.Groups, data.result.Users);
+						return;
+					}
+					cbFail("Server vrátil neplatnou strukturu");
+				}
+				var data = {"action":"COLLECT_HISTORY", "testID": self.data.id + ""};
+				self.common.async(data, cbOk, cbFail, false);
+			}
+		});
 	};
 	
 	self.isVisible = function() {
@@ -869,11 +1234,60 @@ window.Tester.HistoryPanel = function(data, historyBtn, rowPnl) {
 			self.common.hideLoader();
 			self.common.showError("Chyba", "Nepodařilo se nahrát historii", true, data);
 		};
+		
+		var getRowForButtons = function() {
+			var el = document.createElement("tr");
+			var el2 = document.createElement("td");
+			el.appendChild(el2);
+			el2.style.paddingTop = "6px";
+			el2.style.paddingBottom = "6px";
+			el2.colSpan = 6;
+			el2.style.textAlign = "center";
+			el.style.borderTop = "1px solid black";
+			return [el, el2];
+		}
+		
+		var addRowButton = function(el2, title, cb) {
+			var el3 = document.createElement("button");
+			el2.appendChild(el3);
+			el3.style.paddingTop = "5px";
+			el3.style.paddingBottom = "5px";
+			el3.style.paddingLeft = "30px";
+			el3.style.paddingRight = "30px";
+			el3.innerHTML =title;
+			el3.style.marginLeft = "5px";
+			el3.style.marginRight = "5px";
+			el3.addEventListener("click", cb);
+		}
+		
+		var addNewer = function(el2) {
+			addRowButton(el2, "Načíst novější", function(){
+				if(self.page > 0) {
+					self.page--;
+					self.loadData();
+				}
+			});
+		}
+		
+		var addOlder = function(el2, hasMore) {
+			addRowButton(el2, "Načíst starší", function(){
+				if(hasMore) {
+					self.page++;
+					self.loadData();
+				}
+			});
+		}
+		
 		var cbOk = function(data) {
 			self.common.hideLoader();
-			if(data.length === undefined) {
+			if(data.result && data.result.Groups && data.result.Users) {
+				filterBtn.style.display = "";
+				self.filterPnl.open(data.result.Groups, data.result.Users);
+			} else if(data.data === undefined || data.data.length === undefined) {
 				cbFail("Neplatná příchozí struktura");
 			} else {
+				var hasMore = data.more; 
+				data = data.data;
 				if(data.sort) {
 					data = data.sort(function(a, b) {
 						if(a.CreationTime < b.CreationTime) {
@@ -890,6 +1304,12 @@ window.Tester.HistoryPanel = function(data, historyBtn, rowPnl) {
 				historyBtn.innerHTML = hideLbl;
 				rowPnl.style.display = "";
 				var allFeedbacks = [];
+				
+				var bottomRow = getRowForButtons();
+				
+				if(self.page > 0) {
+					addNewer(bottomRow[1]);
+				}
 				data.map(function(item){
 					var pnl = new window.Tester.FeedbackPanel(item, showLoginColumn);
 					allFeedbacks.push(pnl)
@@ -897,9 +1317,21 @@ window.Tester.HistoryPanel = function(data, historyBtn, rowPnl) {
 						self.nodeContents.appendChild(node);
 					});
 				});
+				if(hasMore) {
+					addOlder(bottomRow[1], hasMore);
+				}
+				if(hasMore || self.page > 0) {
+					self.nodeContents.appendChild(bottomRow[0]);
+				}
 			}
 		};
 		var data = {"action":"COLLECT_HISTORY", "testID": self.data.id + ""};
+		data.limit = self.limit;
+		data.page = self.page;
+		if(self.logins.length > 0 || self.groups.length > 0) {
+			data.logins = self.logins;
+			data.groups = self.groups;
+		}
 		self.common.async(data, cbOk, cbFail, false);
 	}
 	
@@ -1026,6 +1458,7 @@ window.Tester.TestPanel = function(data, forEveryOtherPanelCB) {
 		self.mainPnl = ids.pnlMain;
 		self.btnHide = ids.btnHide
 		self.btnHist = ids.showhist;
+		self.btnFilter = ids.btnHistFiltr;
 		self.nwBorder = ids.nwBorder;
 		self.timeoutLbl = ids.timeoutLbl;
 		self.node = node;
@@ -1056,7 +1489,7 @@ window.Tester.TestPanel = function(data, forEveryOtherPanelCB) {
 		self.codeArea.addEventListener("keydown", cancF);
 		self.btnRun.addEventListener("click", function() {self.runTest();});
 		
-		self.historyPnl = new window.Tester.HistoryPanel(self.data, self.btnHist, ids.feedbackPnl);
+		self.historyPnl = new window.Tester.HistoryPanel(self.data, self.btnHist, ids.feedbackPnl, ids.btnHistFiltr);
 		
 		if(data.finished_date) {
 			self.setFinished(true);

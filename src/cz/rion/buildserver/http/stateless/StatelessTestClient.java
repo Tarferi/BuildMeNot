@@ -4,21 +4,24 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.VirtualFileManager;
 import cz.rion.buildserver.db.RuntimeDB.BadResults;
 import cz.rion.buildserver.db.RuntimeDB.CodedHistory;
 import cz.rion.buildserver.db.RuntimeDB.CompletedTest;
+import cz.rion.buildserver.db.RuntimeDB.HistoryListPart;
 import cz.rion.buildserver.db.RuntimeDB.TestFeedback;
-import cz.rion.buildserver.db.RuntimeDB.TestHistory;
 import cz.rion.buildserver.db.VirtualFileManager.UserContext;
 import cz.rion.buildserver.db.VirtualFileManager.VirtualFile;
 import cz.rion.buildserver.db.VirtualFileManager.VirtualFile.VirtualFileException;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.db.layers.staticDB.LayeredPermissionDB.UsersPermission;
+import cz.rion.buildserver.db.layers.staticDB.LayeredUserDB.PermissionedUser;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.http.HTTPRequest;
 import cz.rion.buildserver.http.HTTPResponse;
@@ -28,6 +31,7 @@ import cz.rion.buildserver.json.JsonValue.JsonNumber;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.json.JsonValue.JsonString;
 import cz.rion.buildserver.test.GenericTest;
+import cz.rion.buildserver.test.TestManager.RunnerLogger;
 import cz.rion.buildserver.test.TestManager.TestResults;
 import cz.rion.buildserver.utils.CachedData;
 import cz.rion.buildserver.utils.CachedDataGetter;
@@ -35,6 +39,7 @@ import cz.rion.buildserver.utils.CachedDataWrapper2;
 import cz.rion.buildserver.utils.CachedToolchainData2;
 import cz.rion.buildserver.utils.CachedToolchainDataGetter2;
 import cz.rion.buildserver.utils.CachedToolchainDataWrapper2;
+import cz.rion.buildserver.utils.Pair;
 
 public class StatelessTestClient extends StatelessPresenceClient {
 
@@ -184,23 +189,26 @@ public class StatelessTestClient extends StatelessPresenceClient {
 			idata.add("reason", "There is a timeout still (" + (diff / 1000) + " more seconds)");
 			return returnValue;
 		}
-
-		TestResults res = state.Data.Tests.run(badResults, state.BuilderID, state.Toolchain, testID, code, state.getPermissions().Login);
+		RunnerLogger logger = new RunnerLogger();
+		TestResults res = state.Data.Tests.run(badResults, state.BuilderID, state.Toolchain, testID, code, state.getPermissions().Login, logger);
 		idata.add("success", true);
 		returnValue.add("code", new JsonNumber(res.ResultCode));
 		returnValue.add("result", new JsonString(res.ResultDescription));
-
+		JsonObject full = new JsonObject();
+		full.add("Log", logger.getLogs());
+		full.add("Process", res.ResultDescription);
 		if (state.getPermissions().allowDetails(testID)) {
 			returnValue.add("good", new JsonNumber(res.GoodTests));
 			returnValue.add("bad", new JsonNumber(res.BadTests));
 			if (res.Details != null) {
+				full.add("Details", res.Details);
 				returnValue.add("details", new JsonString(res.Details));
 				idata.add("details", true);
 			}
 		}
 
 		try {
-			state.Data.RuntimeDB.storeCompilation(completed, state.Request.remoteAddress, new Date(), code, state.getPermissions().getSessionID(), testID, res.ResultCode, returnValue.getJsonString(), res.ResultDescription, state.getPermissions().getUserID(), state.Toolchain, res.Details == null ? "" : res.Details, res.GoodTests, res.BadTests);
+			state.Data.RuntimeDB.storeCompilation(completed, state.Request.remoteAddress, new Date(), code, state.getPermissions().getSessionID(), testID, res.ResultCode, returnValue.getJsonString(), full.getJsonString(), state.getPermissions().getUserID(), state.Toolchain, res.Details == null ? "" : res.Details, res.GoodTests, res.BadTests);
 		} catch (DatabaseException e1) {
 			e1.printStackTrace();
 		}
@@ -229,18 +237,136 @@ public class StatelessTestClient extends StatelessPresenceClient {
 		return returnValue;
 	}
 
-	private JsonObject execute_getHistory(ProcessState state, String testID) {
+	private JsonObject execute_collect_history_users(ProcessState state) {
 		JsonObject obj = new JsonObject();
 		obj.add("code", 1);
-		try {
-			List<TestHistory> hist = state.Data.RuntimeDB.getHistory(state.Toolchain, state.getPermissions(), testID, !state.getPermissions().allowEditHistoryOfSomeoneElsesTest(state.Toolchain));
-			JsonArray h = JsonArray.get(hist);
-			obj.add("result", h);
+		boolean admin = state.getPermissions().allowEditHistoryOfSomeoneElsesTest(state.Toolchain);
+		if (!admin) {
+			obj.add("result", "Nedostateèná úroveò oprávnìní");
+			return obj;
+		}
+		JsonObject total = new JsonObject();
+		JsonObject ar_users = new JsonObject();
+		JsonArray ar_groups = new JsonArray();
+
+		List<PermissionedUser> data = state.Data.StaticDB.getPermissionedUsers(state.Toolchain);
+		Set<Integer> knownGroups = new HashSet<>();
+		Map<String, Pair<JsonArray, JsonObject>> udatam = new HashMap<>();
+		for (PermissionedUser entry : data) {
+			int gid = entry.GroupID;
+			if (!knownGroups.contains(gid)) {
+				knownGroups.add(gid);
+				JsonObject gdata = new JsonObject();
+				gdata.add("ID", gid);
+				gdata.add("Name", entry.GroupName);
+				ar_groups.add(gdata);
+			}
+			Pair<JsonArray, JsonObject> ar = udatam.get(entry.Login);
+			if (ar == null) {
+				JsonObject o = new JsonObject();
+				JsonArray v = new JsonArray();
+				ar = new Pair<JsonArray, JsonObject>(v, o);
+				o.add("Groups", v);
+				o.add("Name", entry.Name);
+				udatam.put(entry.Login, ar);
+				ar_users.add(entry.Login, o);
+			}
+			ar.Key.add(entry.GroupID);
+		}
+
+		total.add("Groups", ar_groups);
+		total.add("Users", ar_users);
+
+		obj.add("code", 0);
+		obj.add("result", total);
+		return obj;
+	}
+
+	private JsonObject execute_getHistory(ProcessState state, String testID, JsonObject input) {
+		JsonObject obj = new JsonObject();
+		obj.add("code", 1);
+		boolean admin = state.getPermissions().allowEditHistoryOfSomeoneElsesTest(state.Toolchain);
+
+		if ((input.containsNumber("limit") && input.containsNumber("page")) && (!admin || (input.containsArray("groups") && input.containsArray("logins")))) {
+			try {
+				Set<String> loginsS = new HashSet<>();
+				int limit = input.getNumber("limit").Value;
+				int page = input.getNumber("page").Value;
+				if (admin) {
+					JsonArray logins = input.getArray("logins");
+					JsonArray groups = input.getArray("groups");
+
+					if (limit > 300 || limit <= 0 || page < 0) {
+						obj.add("result", "Neplatný poèet výsledkù není povolen");
+						return obj;
+					}
+
+					List<Integer> groupIDs = new ArrayList<>();
+					for (JsonValue val : groups.Value) {
+						if (val.isNumber()) {
+							groupIDs.add(val.asNumber().Value);
+						}
+					}
+
+					for (JsonValue val : logins.Value) {
+						if (val.isString()) {
+							loginsS.add(val.asString().Value);
+						}
+					}
+					if (groupIDs.size() > 0) {
+						List<String> groupLogins = state.Data.StaticDB.getLoginsByGroupIDs(state.Toolchain, groupIDs);
+						loginsS.addAll(groupLogins);
+					}
+				} else {
+					loginsS.add(state.getPermissions().Login);
+				}
+
+				HistoryListPart hist = state.Data.RuntimeDB.getHistory(state.Toolchain, state.getPermissions(), testID, !admin, admin, limit, limit * page, loginsS);
+				JsonArray h = JsonArray.get(hist);
+				JsonObject m = new JsonObject();
+				m.add("data", h);
+				m.add("more", hist.hasMore());
+				obj.add("result", m);
+				obj.add("code", 0);
+			} catch (DatabaseException e) {
+				e.printStackTrace();
+				obj.add("code", 1);
+				obj.add("result", e.description);
+			}
+		} else { // Missing fields, notify about avilability
 			obj.add("code", 0);
-		} catch (DatabaseException e) {
-			e.printStackTrace();
-			obj.add("code", 1);
-			obj.add("result", e.description);
+			obj.add("result", admin ? execute_collect_history_users(state) : new JsonObject());
+		}
+		return obj;
+	}
+
+	private JsonObject execute_collect_protocol(ProcessState state, int compilationID) {
+		JsonObject obj = new JsonObject();
+		obj.add("code", 1);
+		boolean admin = state.getPermissions().allowEditHistoryOfSomeoneElsesTest(state.Toolchain);
+		if (admin) {
+			try {
+				CodedHistory res = state.Data.RuntimeDB.getSingleHistory(state.Toolchain, compilationID, true);
+				String p = res.Protocol;
+				JsonArray result = new JsonArray();
+				if (p != null) {
+					JsonValue val = JsonValue.parse(p);
+					if (val != null) {
+						if (val.isObject()) {
+							JsonObject o = val.asObject();
+							if (o.containsArray("Log")) {
+								result = o.getArray("Log");
+							}
+						}
+					}
+				}
+				obj.add("result", result);
+				obj.add("code", 0);
+			} catch (DatabaseException e) {
+				e.printStackTrace();
+				obj.add("code", 1);
+				obj.add("result", e.description);
+			}
 		}
 		return obj;
 	}
@@ -251,7 +377,7 @@ public class StatelessTestClient extends StatelessPresenceClient {
 		try {
 			UsersPermission perms = state.getPermissions();
 			boolean canEditAnything = perms.allowEditHistoryOfSomeoneElsesTest(state.Toolchain);
-			CodedHistory history = state.Data.RuntimeDB.getSingleHistory(state.Toolchain, compilationID);
+			CodedHistory history = state.Data.RuntimeDB.getSingleHistory(state.Toolchain, compilationID, false);
 			if (history.AuthorID != perms.getUserID()) { // Editing something we don't own
 				if (!perms.allowEditHistoryOfSomeoneElsesTest(state.Toolchain)) {
 					obj.add("result", "Nelze editovat historii nìkoho cizího");
@@ -314,10 +440,16 @@ public class StatelessTestClient extends StatelessPresenceClient {
 	}
 
 	private JsonObject execute_addFeedback(ProcessState state, int compilation_id, JsonValue data) {
+		JsonObject idata = new JsonObject();
+		idata.add("action", "add_feedback");
+		idata.add("compilationID", compilation_id);
+		idata.add("data", data);
+		idata.add("result", false);
+
 		JsonObject obj = new JsonObject();
 		obj.add("code", 1);
 		try {
-			CodedHistory existing = state.Data.RuntimeDB.getSingleHistory(state.Toolchain, compilation_id);
+			CodedHistory existing = state.Data.RuntimeDB.getSingleHistory(state.Toolchain, compilation_id, false);
 			if (existing == null) {
 				obj.add("result", "Záznam kompilace s tímto ID neexistuje");
 				return obj;
@@ -331,16 +463,17 @@ public class StatelessTestClient extends StatelessPresenceClient {
 			} else { // Editing our own
 			}
 			state.Data.RuntimeDB.storeFeedback(state.Toolchain, state.getPermissions().getUserID(), compilation_id, data);
-			existing = state.Data.RuntimeDB.getSingleHistory(state.Toolchain, compilation_id);
+			existing = state.Data.RuntimeDB.getSingleHistory(state.Toolchain, compilation_id, false);
 			obj.add("result", existing);
 			obj.add("code", 0);
+			idata.add("result", true);
 		} catch (DatabaseException e) {
 			e.printStackTrace();
 			obj.add("code", 1);
 			obj.add("result", e.description);
 			return obj;
 		}
-
+		state.setIntention(Intention.HISTORY_COMMAND, idata);
 		return obj;
 	}
 
@@ -387,7 +520,7 @@ public class StatelessTestClient extends StatelessPresenceClient {
 			JsonObject tobj = new JsonObject();
 			tobj.add("title", new JsonString(tst.getTitle()));
 			tobj.add("zadani", new JsonString(tst.getDescription()));
-			tobj.add("init", new JsonString(tst.getSubmittedCode()));
+			tobj.add("init", new JsonString(tst.getInitialCode()));
 			tobj.add("id", new JsonString(tst.getID()));
 			if (!state.getPermissions().allowExecute(tst.getID())) {
 				tobj.add("noexec", new JsonNumber(1));
@@ -477,13 +610,17 @@ public class StatelessTestClient extends StatelessPresenceClient {
 			} else if (act.equals("HANDLE_EXAMS")) {
 				return execute_exams(state, input);
 			} else if (act.equals("COLLECT_HISTORY") && input.containsString("testID")) {
-				return execute_getHistory(state, input.getString("testID").Value);
+				return execute_getHistory(state, input.getString("testID").Value, input);
 			} else if (act.equals("COLLECT_FEEDBACK") && input.containsNumber("compilationID")) {
 				return execute_getFeedback(state, input.getNumber("compilationID").Value);
 			} else if (act.equals("STORE_FEEDBACK") && input.containsNumber("compilationID") && input.contains("feedbackData")) {
 				return execute_addFeedback(state, input.getNumber("compilationID").Value, input.get("feedbackData"));
 			} else if (act.equals("EDIT_FEEDBACK") && input.containsNumber("feedbackID") && input.contains("feedbackData") && input.containsBoolean("del")) {
 				return execute_saveFeedback(state, input.getNumber("feedbackID").Value, input.get("feedbackData"), input.getBoolean("del").Value);
+			} else if (act.equals("COLLECT_PROTOCOL") && input.containsNumber("compilationID")) {
+				return execute_collect_protocol(state, input.getNumber("compilationID").Value);
+			} else if (act.equals("COLLECT_HISTORY_USERS")) {
+				return execute_collect_history_users(state);
 			}
 		}
 		JsonObject obj = new JsonObject();

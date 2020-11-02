@@ -8,6 +8,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.VirtualFileManager.ReadVirtualFile;
@@ -111,8 +112,9 @@ public class RuntimeDB extends LayeredMetaDB {
 		public final JsonNumber LastFeedbackDate;
 		public final String LastFeedbackLogin;
 		public final long CreationTime;
+		public final boolean AllowProtocol;
 
-		private TestHistory(int ID, String toolchain, String login, String testID, String result, long creation_time, JsonNumber totalFeedbacks, JsonNumber lastFeedbackDate, String lastFeedbackLogin) {
+		private TestHistory(int ID, String toolchain, String login, String testID, String result, long creation_time, JsonNumber totalFeedbacks, JsonNumber lastFeedbackDate, String lastFeedbackLogin, boolean allowProtocol) {
 			this.ID = ID;
 			this.Login = login;
 			this.Toolchain = toolchain;
@@ -122,6 +124,7 @@ public class RuntimeDB extends LayeredMetaDB {
 			this.LastFeedbackDate = lastFeedbackDate;
 			this.CreationTime = creation_time;
 			this.LastFeedbackLogin = lastFeedbackLogin;
+			this.AllowProtocol = allowProtocol;
 		}
 
 		@Override
@@ -136,19 +139,22 @@ public class RuntimeDB extends LayeredMetaDB {
 			obj.add("LastComment", this.LastFeedbackDate);
 			obj.add("LastCommentLogin", this.LastFeedbackLogin);
 			obj.add("CreationTime", this.CreationTime);
+			obj.add("Protocol", this.AllowProtocol);
 			return obj;
 		}
 	}
 
 	public final static class CodedHistory implements JsonValuable {
 		public final String TestID;
+		public final String Protocol;
 		public final String Code;
 		public final int AuthorID;
 
-		private CodedHistory(String testID, String code, int authorID) {
+		private CodedHistory(String testID, String code, int authorID, String protocol) {
 			this.TestID = testID;
 			this.Code = code;
 			this.AuthorID = authorID;
+			this.Protocol = protocol;
 		}
 
 		@Override
@@ -241,8 +247,57 @@ public class RuntimeDB extends LayeredMetaDB {
 		return new Object[] { cnt, new JsonNumber(0), "" };
 	}
 
-	public List<TestHistory> getHistory(Toolchain toolchain, UsersPermission perms, String testID, boolean onlyMine) throws DatabaseException {
-		List<TestHistory> lst = new ArrayList<>();
+	public static class HistoryListPart extends ArrayList<TestHistory> {
+
+		private static final long serialVersionUID = -501503368331905476L;
+		private final int limit;
+
+		private boolean has_more = false;
+		private int size = 0;
+
+		public HistoryListPart(int limit) {
+			this.limit = limit;
+		}
+
+		@Override
+		public boolean add(TestHistory item) {
+			if (size < limit) {
+				size++;
+				return super.add(item);
+			}
+			has_more = true;
+			return true;
+		}
+
+		public boolean hasMore() {
+			return has_more;
+		}
+	}
+
+	private TestHistory getTestHistoryFromResult(Toolchain toolchain, JsonValue val, boolean allowProtocol) throws DatabaseException {
+		if (val.isObject()) {
+			JsonObject obj = val.asObject();
+			if (obj.containsNumber("ID") && obj.containsString("login") && obj.containsNumber("creation_time") && obj.containsString("toolchain") && obj.containsString("test_id") && obj.containsString("result")) {
+				int id = obj.getNumber("ID").Value;
+				String tc = obj.getString("toolchain").Value;
+				String test_id = obj.getString("test_id").Value;
+				String result = obj.getString("result").Value;
+				String login = obj.getString("login").Value;
+				long creation_time = obj.getNumber("creation_time").asLong();
+				if (toolchain.IsRoot || toolchain.getName().equals(tc)) {
+					Object[] x = getTotalFeedbacksWithLastFeedback(toolchain, id);
+					JsonNumber cnt = (JsonNumber) x[0];
+					JsonNumber last = (JsonNumber) x[1];
+					String lastLogin = (String) x[2];
+					return new TestHistory(id, tc, login, test_id, result, creation_time, cnt, last, lastLogin, allowProtocol);
+				}
+			}
+		}
+		return null;
+	}
+
+	public HistoryListPart getHistory(Toolchain toolchain, UsersPermission perms, String testID, boolean onlyMine, boolean allowProtocol, int limit, int offset, Set<String> logins) throws DatabaseException {
+		HistoryListPart lst = new HistoryListPart(limit);
 		final String tableName = "compilations";
 		final String tableName2 = "users";
 
@@ -251,24 +306,52 @@ public class RuntimeDB extends LayeredMetaDB {
 		ComparisionField tuidc = new ComparisionField(getField(tableName, "user_id"), perms.getUserID());
 
 		ComparisionField[] conjunctions = onlyMine ? new ComparisionField[] { tidc, tuidc } : new ComparisionField[] { tidc };
-		JsonArray res = this.select(tableName, fields, conjunctions, new TableJoin[] { new TableJoin(getField(tableName, "user_id"), getField(tableName2, "ID")) }, true);
-		for (JsonValue val : res.Value) {
-			if (val.isObject()) {
-				JsonObject obj = val.asObject();
-				if (obj.containsNumber("ID") && obj.containsString("login") && obj.containsNumber("creation_time") && obj.containsString("toolchain") && obj.containsString("test_id") && obj.containsString("result")) {
-					int id = obj.getNumber("ID").Value;
-					String tc = obj.getString("toolchain").Value;
-					String test_id = obj.getString("test_id").Value;
-					String result = obj.getString("result").Value;
-					String login = obj.getString("login").Value;
-					long creation_time = obj.getNumber("creation_time").asLong();
-					if (toolchain.IsRoot || toolchain.getName().equals(tc)) {
-						Object[] x = getTotalFeedbacksWithLastFeedback(toolchain, id);
-						JsonNumber cnt = (JsonNumber) x[0];
-						JsonNumber last = (JsonNumber) x[1];
-						String lastLogin = (String) x[2];
-						lst.add(new TestHistory(id, tc, login, test_id, result, creation_time, cnt, last, lastLogin));
+
+		final OrderField order = new OrderField(getField(tableName, "ID"), "DESC");
+
+		final TableField f_login = getField(tableName2, "login");
+		final int max_logins = 5;
+		if (logins.size() > max_logins) {
+			int neededIgnored = offset;
+			int microOffset = 0;
+
+			int need = limit + 1;
+			while (need > 0) {
+				JsonArray res = this.select(tableName, fields, conjunctions, new TableJoin[] { new TableJoin(getField(tableName, "user_id"), getField(tableName2, "ID")) }, true, limit + 1, microOffset, order);
+				if (res.Value.isEmpty()) {
+					break;
+				}
+				for (JsonValue val : res.Value) {
+					microOffset++;
+					TestHistory hist = getTestHistoryFromResult(toolchain, val, allowProtocol);
+					if (hist != null) {
+						if (logins.contains(hist.Login)) {
+							if (neededIgnored > 0) {
+								neededIgnored--;
+							} else {
+								lst.add(hist);
+								need--;
+								if (need == 0) {
+									break;
+								}
+							}
+						}
 					}
+				}
+			}
+
+		} else {
+			ComparisionField[] loginFields = new ComparisionField[logins.size()];
+			Object[] loginsA = logins.toArray();
+			for (int i = 0; i < loginsA.length; i++) {
+				loginFields[i] = new ComparisionField(f_login, loginsA[i].toString());
+			}
+			ComparisionFieldGroup loginsGroups = new ComparisionFieldGroup(loginFields, "OR");
+			JsonArray res = this.select(tableName, fields, conjunctions, new TableJoin[] { new TableJoin(getField(tableName, "user_id"), getField(tableName2, "ID")) }, true, limit + 1, offset, order, loginsGroups);
+			for (JsonValue val : res.Value) {
+				TestHistory hist = getTestHistoryFromResult(toolchain, val, allowProtocol);
+				if (hist != null) {
+					lst.add(hist);
 				}
 			}
 		}
@@ -305,23 +388,24 @@ public class RuntimeDB extends LayeredMetaDB {
 		return null;
 	}
 
-	public CodedHistory getSingleHistory(Toolchain toolchain, int ID) throws DatabaseException {
+	public CodedHistory getSingleHistory(Toolchain toolchain, int compilationID, boolean includeProtocol) throws DatabaseException {
 		final String tableName = "compilations";
-		TableField[] fields = new TableField[] { getField(tableName, "test_id"), getField(tableName, "user_id"), getField(tableName, "asm"), getField(tableName, "toolchain") };
-		ComparisionField tidc = new ComparisionField(getField(tableName, "ID"), ID);
+		TableField[] fields = new TableField[] { getField(tableName, "test_id"), getField(tableName, "user_id"), getField(tableName, "asm"), getField(tableName, "toolchain"), getField(tableName, "full") };
+		ComparisionField tidc = new ComparisionField(getField(tableName, "ID"), compilationID);
 
 		ComparisionField[] conjunctions = new ComparisionField[] { tidc };
 		JsonArray res = this.select(tableName, fields, true, conjunctions);
 		for (JsonValue val : res.Value) {
 			if (val.isObject()) {
 				JsonObject obj = val.asObject();
-				if (obj.containsNumber("user_id") && obj.containsString("test_id") && obj.containsString("asm") && obj.containsString("toolchain")) {
+				if (obj.containsNumber("user_id") && obj.containsString("test_id") && obj.containsString("asm") && obj.containsString("full") && obj.containsString("toolchain")) {
 					int user_id = obj.getNumber("user_id").Value;
 					String test_id = obj.getString("test_id").Value;
 					String asm = obj.getString("asm").Value;
 					String tc = obj.getString("toolchain").Value;
+					String full = obj.getString("full").Value;
 					if (toolchain.IsRoot || toolchain.getName().equals(tc)) {
-						return new CodedHistory(test_id, asm, user_id);
+						return new CodedHistory(test_id, asm, user_id, full);
 					}
 				}
 			}

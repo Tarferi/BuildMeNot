@@ -261,6 +261,36 @@ public abstract class LayeredPermissionDB extends LayeredTestDB {
 		}
 	}
 
+	public List<String> getLoginsByGroupIDs(Toolchain toolchain, List<Integer> ids) throws DatabaseException {
+		final String tableName1 = "users_group";
+		final String tableName2 = "users";
+
+		final TableField f_login = getField(tableName2, "login");
+		final TableField f_link_uid = getField(tableName1, "user_id");
+		final TableField f_link_gid = getField(tableName1, "group_id");
+		final TableField f_users_id = getField(tableName2, "ID");
+
+		final TableJoin join = new TableJoin(f_users_id, f_link_uid);
+
+		final ComparisionField[] cmps = new ComparisionField[ids.size()];
+		for (int i = 0, o = ids.size(); i < o; i++) {
+			cmps[i] = new ComparisionField(f_link_gid, ids.get(i));
+		}
+		ComparisionFieldGroup grp = new ComparisionFieldGroup(cmps, "OR");
+		List<String> result = new ArrayList<>();
+		JsonArray res = this.select(tableName1, new TableField[] { f_login }, cmps, new TableJoin[] { join }, false, grp);
+		for (JsonValue val : res.Value) {
+			if (val.isObject()) {
+				JsonObject obj = val.asObject();
+				if (obj.containsString("login")) {
+					String login = obj.getString("login").Value;
+					result.add(login);
+				}
+			}
+		}
+		return result;
+	}
+
 	private CachedToolchainData2<Map<Integer, InternalUserGroup>> GroupCaches = new CachedToolchainDataWrapper2<>(PERMISSION_REFRESH_SEC, new CachedToolchainDataGetter2<Map<Integer, InternalUserGroup>>() {
 
 		@Override
