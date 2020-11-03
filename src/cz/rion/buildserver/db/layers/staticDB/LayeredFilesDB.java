@@ -393,7 +393,7 @@ public abstract class LayeredFilesDB extends LayeredStaticDB {
 				}
 			}
 
-			if (insert(tableName, new ValuedField(getField(tableName, "name"), name), new ValuedField(getField(tableName, "contents"), encodeFileContents(getCompressedDataStreams(name, contents), true)))) {
+			if (insert(tableName, new ValuedField(getField(tableName, "name"), name), new ValuedField(getField(tableName, "deleted"), 0), new ValuedField(getField(tableName, "toolchain"), toolchain.getName()), new ValuedField(getField(tableName, "contents"), encodeFileContents(getCompressedDataStreams(name, contents), true)))) {
 				JsonArray res;
 				try {
 					res = select_raw("SELECT ID FROM files WHERE name=? ORDER BY ID DESC LIMIT 1", name).getJSON(false, new TableField[] { getField(tableName, "ID") }, toolchain);

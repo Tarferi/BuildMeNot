@@ -90,7 +90,7 @@ public abstract class JsonTest implements GenericTest {
 			badResults.setNext(BadResultType.BadTests);
 			String resultText = "<span class='log_err'>Chyba: Prošlo " + perc + " % testù!</span>";
 			if (lastErrorMessage != null) {
-				resultText += "<br /><span class='log_err'>Pøíklad chyb: " + lastErrorMessage + "</span>";
+				resultText += "<br /><span class='log_err'>Pøíklad zjištìných chyb: " + lastErrorMessage + "</span>";
 			}
 			return new TestResult(false, resultText, results);
 		}
