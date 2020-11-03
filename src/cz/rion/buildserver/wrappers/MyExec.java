@@ -41,10 +41,10 @@ public class MyExec {
 					logger.logError("Expected code [0], got [1]", expectedCode, returnedCode);
 				}
 				if (!expectedSTDOUT.equals(returnedSTDOUT)) {
-					logger.logError("Expected stdout [0], got [1]", expectedSTDOUT, returnedSTDOUT);
+					logger.logError("Expected stdout [0] (" + expectedSTDOUT.length() + " bytes), got [1] (" + returnedSTDOUT.length() + " bytes)", expectedSTDOUT, returnedSTDOUT);
 				}
 				if (!expectedSTDERR.equals(returnedSTDERR)) {
-					logger.logError("Expected stderr [0], got [1]", expectedSTDERR, returnedSTDERR);
+					logger.logError("Expected stderr [0] (" + expectedSTDERR.length() + " bytes), got [1] (" + returnedSTDERR.length() + " bytes)", expectedSTDERR, returnedSTDERR);
 				}
 			}
 		}

@@ -10,6 +10,7 @@ window.Tester.Templates = function() {
 	self.UI = {
 		"type": "table",
 		"class": "tester_tbl",
+		"id": "marginPnl",
 		"style": "border-collapse: collapse; border-spacing: 0px; border: 1px solid black;width:80%;min-width: 840px;margin-bottom: 80px;font-family: Tahoma;left: 10%;position: relative;",
 		"contents": [
 			{
@@ -87,9 +88,9 @@ window.Tester.Templates = function() {
 																	},
 																	{
 																		"type": "div",
-																		"style": "min-height: 230px;height: 100%;padding: 5px;font-family: times;",
+																		"style": "min-height: 230px;height: 100%;padding: 5px;font-family: verdana;font-size:10pt;",
 																		"id": "txtDescr",
-																		"innerHTML": "Zde se objeví detaily testů tvého řešení"
+																		"innerHTML": "Text pro popis zadání"
 																	}
 																]	
 															},

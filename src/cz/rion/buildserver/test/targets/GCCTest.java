@@ -53,7 +53,7 @@ public class GCCTest extends JsonTest {
 
 					StringBuilder sb = new StringBuilder();
 					if (leaks > 0) {
-						sb.append((sb.length() > 0 ? ", " : "") + "uniklá pamì " + leaks + " krát");
+						sb.append((sb.length() > 0 ? ", " : "") + "neuvolnìná pamì " + leaks + " krát");
 					}
 					if (invalid_frees > 0) {
 						sb.append((sb.length() > 0 ? ", " : "") + "neplatné uvolnìní " + invalid_frees + " krát");
@@ -144,7 +144,7 @@ public class GCCTest extends JsonTest {
 		return new GCCTest(id, sdb, files, toolchain, title, description, tests, initialASM, append, prepend, hidden, secret, allowedIncludes, replace, replacement, malloc);
 	}
 
-	final Pattern pattern = Pattern.compile("int\\s+main\\s*\\(\\s*\\)", Pattern.MULTILINE);
+	final Pattern pattern = Pattern.compile("int\\s+main\\s*\\(((\\s*)|(void))\\)", Pattern.MULTILINE);
 	final Pattern pattern2 = Pattern.compile("int\\s+main\\s*\\(", Pattern.MULTILINE);
 
 	private static final String mallocFileBefore = "tests/includes/malloc_before_code.c";

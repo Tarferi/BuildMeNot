@@ -1528,6 +1528,7 @@ window.Tester.TestPanel = function(data, forEveryOtherPanelCB, getFilterDataCB, 
 		self.nwBorder = ids.nwBorder;
 		self.timeoutLbl = ids.timeoutLbl;
 		self.node = node;
+		self.marginPnl = ids.marginPnl;
 
 
 		// Tab handler for text area
