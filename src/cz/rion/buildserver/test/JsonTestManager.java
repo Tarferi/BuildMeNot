@@ -82,7 +82,7 @@ public class JsonTestManager {
 		}
 	}
 
-	private static GenericTest ConvertJsonToTest(String path, JsonObject obj, StaticDB sdb) {
+	private static GenericTest ConvertJsonToTest(String path, JsonObject obj, StaticDB sdb, VirtualFileManager files) {
 		// Get category name. Find last "tests/" from the end
 		String[] tmp = path.split("tests\\/");
 		String category = tmp[tmp.length - 1].split("\\/")[0];
@@ -147,9 +147,9 @@ public class JsonTestManager {
 					String title = obj.getString("title").Value;
 					String type = obj.getString("type").Value;
 					if (type.equals("asm")) {
-						return AsmTest.get(tc, id, descr, title, type, tvd, obj);
+						return AsmTest.get(tc, sdb, files, id, descr, title, type, tvd, obj);
 					} else if (type.equals("gcc")) {
-						return GCCTest.get(tc, id, descr, title, type, tvd, obj);
+						return GCCTest.get(tc, sdb, files, id, descr, title, type, tvd, obj);
 					}
 				}
 			}
@@ -163,7 +163,7 @@ public class JsonTestManager {
 		fillFSTests(tests, testDirectory);
 		fillDBTests(files, tests, context);
 		for (Pair<String, JsonObject> obj : tests) {
-			GenericTest test = ConvertJsonToTest(obj.Key, obj.Value, sdb);
+			GenericTest test = ConvertJsonToTest(obj.Key, obj.Value, sdb, files);
 			if (test != null) {
 				lst.add(test);
 			}

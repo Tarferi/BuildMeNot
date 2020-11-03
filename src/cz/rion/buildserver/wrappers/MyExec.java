@@ -7,10 +7,7 @@ import java.util.concurrent.TimeUnit;
 
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.exceptions.CommandLineExecutionException;
-import cz.rion.buildserver.json.JsonValue.JsonObject;
-import cz.rion.buildserver.json.JsonValue.JsonString;
-import cz.rion.buildserver.json.JsonValue.JsonArray;
-import cz.rion.buildserver.json.JsonValue.JsonNumber;
+import cz.rion.buildserver.test.TestManager.RunnerLogger;
 
 public class MyExec {
 
@@ -35,6 +32,21 @@ public class MyExec {
 			this.STDIN = STDIN;
 
 			this.passed = expectedCode == returnedCode && expectedSTDOUT.equals(returnedSTDOUT) && expectedSTDERR.equals(returnedSTDERR);
+		}
+
+		public void logDetails(RunnerLogger logger) {
+			if (!passed) {
+				logger.log("Test failed");
+				if (expectedCode != returnedCode) {
+					logger.logError("Expected code [0], got [1]", expectedCode, returnedCode);
+				}
+				if (!expectedSTDOUT.equals(returnedSTDOUT)) {
+					logger.logError("Expected stdout [0], got [1]", expectedSTDOUT, returnedSTDOUT);
+				}
+				if (!expectedSTDERR.equals(returnedSTDERR)) {
+					logger.logError("Expected stderr [0], got [1]", expectedSTDERR, returnedSTDERR);
+				}
+			}
 		}
 	}
 
@@ -79,39 +91,46 @@ public class MyExec {
 		String[] cmdArr = new String[1 + arguments.length];
 		cmdArr[0] = command;
 		System.arraycopy(arguments, 0, cmdArr, 1, arguments.length);
-		Process p;
+		Process p = null;
 		try {
-			if (cmdArr.length == 1) {
-				p = Runtime.getRuntime().exec(command, null, new File(workingDir));
-			} else {
-				p = Runtime.getRuntime().exec(cmdArr, null, new File(workingDir));
+			try {
+				if (cmdArr.length == 1) {
+					p = Runtime.getRuntime().exec(command, null, new File(workingDir));
+				} else {
+					p = Runtime.getRuntime().exec(cmdArr, null, new File(workingDir));
+				}
+			} catch (IOException e) {
+				throw new CommandLineExecutionException("Failed to execute " + command, e);
 			}
-		} catch (IOException e) {
-			throw new CommandLineExecutionException("Failed to execute " + command, e);
-		}
-		try {
-			p.getOutputStream().write(stdin.getBytes(Settings.getDefaultCharset()));
-			p.getOutputStream().close();
-		} catch (IOException e) {
-			throw new CommandLineExecutionException("Failed to write to STDIN", e);
-		}
-		boolean timedOut = false;
-		int returnCode = 0;
-		try {
-			if (p.waitFor(timeout, TimeUnit.MILLISECONDS)) {
-				returnCode = p.exitValue();
-			} else {
-				timedOut = true;
-				returnCode = -50;
+			try {
+				p.getOutputStream().write(stdin.getBytes(Settings.getDefaultCharset()));
+				p.getOutputStream().close();
+			} catch (IOException e) {
+				throw new CommandLineExecutionException("Failed to write to STDIN", e);
+			}
+			boolean timedOut = false;
+			int returnCode = 0;
+			try {
+				if (p.waitFor(timeout, TimeUnit.MILLISECONDS)) {
+					returnCode = p.exitValue();
+				} else {
+					timedOut = true;
+					returnCode = -50;
+					p.destroyForcibly();
+					new CommandLineExecutionException("Process took longer than " + timeout + " ms to finish");
+				}
+			} catch (InterruptedException e) {
 				p.destroyForcibly();
-				new CommandLineExecutionException("Process took longer than " + timeout + " ms to finish");
+				throw new CommandLineExecutionException("Failed to wait for process", e);
 			}
-		} catch (InterruptedException e) {
-			p.destroyForcibly();
-			throw new CommandLineExecutionException("Failed to wait for process", e);
+			String stdout = readStream(p.getInputStream());
+			String stderr = readStream(p.getErrorStream());
+			return new MyExecResult(returnCode, stdout, stderr, timedOut);
+		} finally {
+			try {
+				p.destroyForcibly();
+			} catch (Exception e) {
+			}
 		}
-		String stdout = readStream(p.getInputStream());
-		String stderr = readStream(p.getErrorStream());
-		return new MyExecResult(returnCode, stdout, stderr, timedOut);
 	}
 }

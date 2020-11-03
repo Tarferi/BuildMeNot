@@ -1,10 +1,12 @@
 package cz.rion.buildserver.db.layers.staticDB;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Map.Entry;
 
 import java.util.Set;
@@ -40,13 +42,15 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 		public final int returnCode;
 		boolean timeoutReached;
 		private final int expectedReturnCode;
+		public final String newWorkingDirectory;
 
-		private ToolExecutionResult(String stdout, String stderr, int returnCode, int expectedReturnCode, boolean timeoutReached) {
+		private ToolExecutionResult(String stdout, String stderr, int returnCode, int expectedReturnCode, boolean timeoutReached, String newCWD) {
 			this.stdout = stdout;
 			this.stderr = stderr;
 			this.returnCode = returnCode;
 			this.timeoutReached = timeoutReached;
 			this.expectedReturnCode = expectedReturnCode;
+			this.newWorkingDirectory = newCWD;
 		}
 
 		boolean wasOK() {
@@ -66,14 +70,16 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 	public static class ExecutionResult {
 		public final ToolExecutionResult[] SubExecutions;
 		private final boolean hadError;
+		public final String newWorkingDirectory;
 
-		public ExecutionResult(ToolExecutionResult[] se) {
-			this(se, false);
+		public ExecutionResult(ToolExecutionResult[] se, String newCWD) {
+			this(se, false, newCWD);
 		}
 
-		public ExecutionResult(ToolExecutionResult[] se, boolean hadError) {
+		public ExecutionResult(ToolExecutionResult[] se, boolean hadError, String newCWD) {
 			this.SubExecutions = se;
 			this.hadError = hadError;
+			this.newWorkingDirectory = newCWD;
 		}
 
 		public boolean wasOK() {
@@ -104,6 +110,7 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 			toolchainsKnownUpdate(toolchains);
 		}
 	}
+
 	public final class Tool {
 
 		private final int ID;
@@ -122,10 +129,23 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 		private final ToolInputModifier[] stdoutOutputHandler;
 		private final ToolInputModifier[] stdErrOutputputHandler;
 
+		private String getRandomString(int limit) {
+			Random r = new Random(System.currentTimeMillis());
+			StringBuilder sb = new StringBuilder();
+			for (int i = 0; i < limit; i++) {
+				int n = r.nextInt();
+				n = n < 0 ? -n : n;
+				n = n % ('z' - 'a');
+				char c = (char) (n + 'a');
+				sb.append(c);
+			}
+			return sb.toString();
+		}
+
 		public ToolExecutionResult run(ToolchainLogger errors, GenericTest test, String workingDirectory, String lastKnownCode, String stdin, String login) {
 			if (this.toolExecutable.isEmpty()) {
 				errors.logInfo("Returning expected results because there is nothing to be done");
-				return new ToolExecutionResult("", "", expectedResult, expectedResult, false);
+				return new ToolExecutionResult("", "", expectedResult, expectedResult, false, workingDirectory);
 			}
 			lastKnownCode = handleCodeManipulation(errors, test, lastKnownCode, login);
 
@@ -133,13 +153,22 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 			// First create the directory if it doesn't exist yet
 			if (this.requiresCode()) {
 				errors.logInfo("Code is required, putting previous code to " + workingDirectory + "/" + this.expectedInputFile);
-				try {
-					MyFS.writeFile(workingDirectory + "/" + this.expectedInputFile, lastKnownCode);
-				} catch (FileWriteException e) {
-					errors.logInfo("Failed to store code to " + workingDirectory + "/" + this.expectedInputFile);
-					errors.getBadResults().setNext(BadResultType.Good);
-					errors.logError("Could not store file " + this.expectedInputFile);
-					return new ToolExecutionResult("", "", -1, this.expectedResult, false);
+				String baseDirectory = workingDirectory;
+				String subDirectory = "";
+				for (int i = 1000; i >= 0; i--) {
+					try {
+						MyFS.writeFile(baseDirectory + subDirectory + "/" + this.expectedInputFile, lastKnownCode);
+						workingDirectory = baseDirectory + subDirectory;
+						break;
+					} catch (FileWriteException e) {
+						subDirectory = "/" + getRandomString(10);
+						errors.logInfo("Failed to store code to " + workingDirectory + "/" + this.expectedInputFile, "Changing subdirectory", subDirectory);
+						errors.getBadResults().setNext(BadResultType.Good);
+						errors.logError("Could not store file " + this.expectedInputFile);
+						if (i == 1) {
+							return new ToolExecutionResult("", "", -1, this.expectedResult, false, workingDirectory);
+						}
+					}
 				}
 			}
 
@@ -156,14 +185,14 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 				errors.logInfo("Executing \"" + this.toolPath + "/" + this.toolExecutable + "\" with params [" + paramsStr.toString() + "]");
 				MyExecResult exec = MyExec.execute(workingDirectory, this.provideStdin ? stdin : "", this.toolPath + "/" + this.toolExecutable, handleParams(this.toolParams, workingDirectory), this.timeout);
 				errors.logInfo("Tool runner of tool " + ID + " ending with success");
-				return new ToolExecutionResult(exec.stdout, exec.stderr, exec.returnCode, this.expectedResult, exec.Timeout);
+				return new ToolExecutionResult(exec.stdout, exec.stderr, exec.returnCode, this.expectedResult, exec.Timeout, workingDirectory);
 			} catch (CommandLineExecutionException e) {
 				errors.logInfo("Execution exception: " + e.description);
 				errors.getBadResults().setNext(BadResultType.Uncompillable);
 				errors.logError(e.description);
 			}
 			errors.logInfo("Tool runner of tool " + ID + " ending with default errors");
-			return new ToolExecutionResult("", "", -1, this.expectedResult, false);
+			return new ToolExecutionResult("", "", -1, this.expectedResult, false, workingDirectory);
 		}
 
 		public String[] handleParams(String[] toolParams, String workingDirectory) {
@@ -342,6 +371,7 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 				}
 
 				lst[i] = tools[i].run(errors, test, workingDirectory, inputString, stdin, login);
+				workingDirectory = lst[i].newWorkingDirectory;
 				String lstStdout = lst[i].stdout;
 				if (tools[i].hasSTDOUTHandler()) {
 					lstStdout = tools[i].handleStdout(errors, test, inputString, login, lst[i]);
@@ -359,14 +389,14 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 						errors.getBadResults().setNext(BadResultType.Uncompillable);
 						errors.logError("Nepodaøilo se pøeložit kód");
 					}
-					return new ExecutionResult(ret, true);
+					return new ExecutionResult(ret, true, workingDirectory);
 				} else if (tools[i].providesCode() && codeKnown) { // was ok, provides code and it is known
 					inputString = tools[i].getOutputCode(errors, test, workingDirectory, inputString, login);
 					if (inputString == null) {
 						ToolExecutionResult[] ret = new ToolExecutionResult[i + 1];
 						System.arraycopy(lst, 0, ret, 0, i + 1);
 						errors.logError("Tool was supposed to return output, returned null");
-						return new ExecutionResult(ret, true);
+						return new ExecutionResult(ret, true, workingDirectory);
 					}
 					errors.logInfo("Tool provides valid output (" + inputString.length() + " bytes)");
 					lastUpdateOfOutput = i;
@@ -374,7 +404,7 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 					codeKnown = false;
 				}
 			}
-			return new ExecutionResult(lst);
+			return new ExecutionResult(lst, workingDirectory);
 		}
 
 		public Toolchain(String name, String prefix, Tool[] tools, String runnerParams) throws DatabaseException {
@@ -1028,7 +1058,7 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 			String path = Settings.getGCCPath();
 			int timeout = 1000;
 			String finalExecutable = Settings.getGCCFilalExecutable();
-			String[] params = new String[] { "$CWD$/preprocessed.c", "-o", "$CWD$/" + finalExecutable };
+			String[] params = new String[] { "$CWD$/preprocessed.c", "-std=c99", "-o", "$CWD$/" + finalExecutable };
 			String executable = Settings.getGCCExecutable();
 			this.addBuilder(GCCName, path, executable, "", "", params, 0, timeout, new String[0], finalExecutable, "preprocessed.c", 0, new String[0], new String[0]);
 		}

@@ -822,7 +822,8 @@ window.Tester.FeedbackPanel = function(data, showLoginColumn) {
 						var params = "";
 						if (row.params) {
 							if(row.params.length > 0) {
-								params = "<br />" + row.params.map(function(x) {return "<span class=\"in_code_line\" style=\"text-align: left;\">" + (x+"").split("<").join("&lt;").split(">").join("&gt;").split(" ").join("&nbsp;").split("\t").join("&nbsp;&nbsp;&nbsp;&nbsp;").split("\n").join("<br />") + "</span>"})
+								var style = "text-align: left;max-width: calc(50% - 10px); max-height:300px; overflow:auto";
+								params = "<br />" + row.params.map(function(x) {return "<span class=\"in_code_line\" style=\"" + style + "\">" + (x+"").split("<").join("&lt;").split(">").join("&gt;").split(" ").join("&nbsp;").split("\t").join("&nbsp;&nbsp;&nbsp;&nbsp;").split("\n").join("<br />") + "</span>"})
 							}
 						}
 						
@@ -1532,11 +1533,11 @@ window.Tester.TestPanel = function(data, forEveryOtherPanelCB, getFilterDataCB, 
 		// Tab handler for text area
 		var cancF = function(event) {
 			if(event.keyCode === 9) {
-				var v = self.value
-				var s = self.selectionStart
-				var e = self.selectionEnd;
-				self.value = v.substring(0, s)+'\t'+v.substring(e);
-				self.selectionStart = self.selectionEnd = s + 1;
+				var v = self.codeArea.value;
+				var s = self.codeArea.selectionStart
+				var e = self.codeArea.selectionEnd;
+				self.codeArea.value = v.substring(0, s)+'\t'+v.substring(e);
+				self.codeArea.selectionStart = self.codeArea.selectionEnd = s + 1;
 				event.preventDefault();
 				return false;
 			}

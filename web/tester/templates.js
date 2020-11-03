@@ -391,7 +391,7 @@ window.Tester.Templates = function() {
 			{
 				"type": "td",
 				"id": "contents",
-				"style": "border-right: 1px solid black; text-align: right; font-family: courier;padding-right: 10px;padding-left:10px;padding-top: 5px; padding-bottom: 5px;"
+				"style": "border-right: 1px solid black; text-align: left; font-family: courier;padding-right: 10px;padding-left:10px;padding-top: 5px; padding-bottom: 5px;"
 			}
 		]
 	};

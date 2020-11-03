@@ -222,6 +222,7 @@ public class TestManager {
 
 	public List<GenericTest> getAllTests(Toolchain toolchain) {
 		synchronized (Tests) {
+			reloadTests();
 			TestCollection cache = Tests.get(toolchain);
 			if (cache.tests.containsKey(toolchain.getName().toLowerCase())) {
 				return cache.tests.get(toolchain.getName().toLowerCase());
@@ -361,12 +362,14 @@ public class TestManager {
 			logger.log("Toolchain for compiling set to " + runner.getName());
 			try {
 				ExecutionResult result = runner.run(errorLogger, test, workingDirectory, userCode, "", login);
-
+				workingDirectory = result.newWorkingDirectory;
 				if (result.wasOK()) {
 					logger.log("Executing result is OK");
 					TestInput input = new TestInput(workingDirectory, runner.getLastOutputFileName());
-					testResult = test.perform(badResults, input);
+					testResult = test.perform(logger, badResults, input);
 					MyFS.deleteFileSilent(workingDirectory);
+				} else {
+					logger.logError("Compilation failulre");
 				}
 				if (testResult != null) {
 					logger.log("Executing result details available");

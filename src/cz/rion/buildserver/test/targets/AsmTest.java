@@ -7,6 +7,8 @@ import java.util.regex.Pattern;
 
 import cz.rion.buildserver.db.RuntimeDB.BadResultType;
 import cz.rion.buildserver.db.RuntimeDB.BadResults;
+import cz.rion.buildserver.db.StaticDB;
+import cz.rion.buildserver.db.VirtualFileManager;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
@@ -21,8 +23,8 @@ public class AsmTest extends JsonTest {
 	public final boolean replace;
 	private final ReplacementEntry[] replacement;
 
-	public AsmTest(String id, Toolchain toolchain, String title, String description, List<TestVerificationData> tests, String initialASM, String append, String prepend, boolean isHidden, boolean isSecret, String[] allowedInstructions, boolean replace, ReplacementEntry[] replacement) {
-		super(id, toolchain, title, description, initialASM, tests, isHidden, isSecret);
+	public AsmTest(String id, StaticDB sdb, VirtualFileManager files, Toolchain toolchain, String title, String description, List<TestVerificationData> tests, String initialASM, String append, String prepend, boolean isHidden, boolean isSecret, String[] allowedInstructions, boolean replace, ReplacementEntry[] replacement) {
+		super(id, sdb, files, toolchain, title, description, initialASM, tests, isHidden, isSecret);
 		this.prepend = prepend;
 		this.append = append;
 		this.allowedInstructions = allowedInstructions;
@@ -30,7 +32,7 @@ public class AsmTest extends JsonTest {
 		this.replacement = replacement;
 	}
 
-	public static AsmTest get(Toolchain toolchain, String id, String descr, String title, String type, List<TestVerificationData> tvd, JsonObject obj) {
+	public static AsmTest get(Toolchain toolchain, StaticDB sdb, VirtualFileManager files, String id, String descr, String title, String type, List<TestVerificationData> tvd, JsonObject obj) {
 		String[] allowedInstructions = null;
 
 		if (obj.containsArray("instructions")) {
@@ -65,7 +67,7 @@ public class AsmTest extends JsonTest {
 		boolean secret = obj.containsNumber("secret") ? obj.getNumber("secret").Value == 1 : false;
 		boolean replace = obj.containsNumber("replace") ? obj.getNumber("replace").Value == 1 : false;
 
-		return new AsmTest(id, toolchain, title, description, tvd, initialASM, append, prepend, hidden, secret, allowedInstructions, replace, replacement);
+		return new AsmTest(id, sdb, files, toolchain, title, description, tvd, initialASM, append, prepend, hidden, secret, allowedInstructions, replace, replacement);
 	}
 
 	private static final Pattern pattern = Pattern.compile("\\%include +\"([^\\\"]+)\"", Pattern.MULTILINE);

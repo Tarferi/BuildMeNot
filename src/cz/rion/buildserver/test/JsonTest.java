@@ -3,8 +3,11 @@ package cz.rion.buildserver.test;
 import java.util.List;
 import cz.rion.buildserver.db.RuntimeDB.BadResultType;
 import cz.rion.buildserver.db.RuntimeDB.BadResults;
+import cz.rion.buildserver.db.StaticDB;
+import cz.rion.buildserver.db.VirtualFileManager;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.exceptions.CommandLineExecutionException;
+import cz.rion.buildserver.test.TestManager.RunnerLogger;
 import cz.rion.buildserver.test.TestManager.TestInput;
 import cz.rion.buildserver.test.TestManager.TestResult;
 import cz.rion.buildserver.wrappers.MyExec.MyExecResult;
@@ -20,26 +23,36 @@ public abstract class JsonTest implements GenericTest {
 	private final Toolchain toolchain;
 	private final String initialCode;
 	private final List<TestVerificationData> tests;
+	private final StaticDB sdb;
+	private VirtualFileManager files;
 
 	@Override
 	public String getID() {
 		return id;
 	}
 
+	public String getErrorDescription(TestResultsExpectations data) {
+		return null;
+	}
+
 	@Override
-	public TestResult perform(BadResults badResults, TestInput input) {
+	public TestResult perform(RunnerLogger logger, BadResults badResults, TestInput input) {
 		int total = tests.size();
 		int passed = 0;
 		TestResultsExpectations[] results = new TestResultsExpectations[tests.size()];
 		int index = 0;
 		SystemFailureMessage finalOsError = new SystemFailureMessage();
+		String lastErrorMessage = null;
 		for (TestVerificationData test : tests) {
 			try {
+				logger.log("Begin test. Stdin [0], timeout [1], arguments [2]", test.stdin, test.timeout, test.arguments);
 				MyExecResult result = input.execute(test.stdin, test.arguments, test.timeout, toolchain);
 				SystemFailureMessage osError = new SystemFailureMessage(result);
 				if (osError.Type == SystemFailureMessageType.Segfault) {
+					logger.logError("Segfault");
 					badResults.setNext(BadResultType.SegFault);
 				} else if (osError.Type == SystemFailureMessageType.Timeout) {
+					logger.logError("Timeout");
 					badResults.setNext(BadResultType.Timeout);
 				}
 				if (osError.Severity > finalOsError.Severity) {
@@ -48,12 +61,17 @@ public abstract class JsonTest implements GenericTest {
 				TestResultsExpectations data = new TestResultsExpectations(test.code, result.returnCode, test.stdout, result.stdout, test.stderr, result.stderr, test.stdin);
 				results[index] = data;
 				if (!data.passed) {
+					if (lastErrorMessage == null) {
+						lastErrorMessage = getErrorDescription(data);
+					}
+					data.logDetails(logger);
 					passed++;
 					passed--;
 					if (test.isBase) {
 						badResults.setNext(BadResultType.BadBase);
 					}
 				} else {
+					logger.log("Test passed");
 					passed++;
 				}
 			} catch (CommandLineExecutionException e) {
@@ -70,11 +88,17 @@ public abstract class JsonTest implements GenericTest {
 		} else {
 			int perc = (passed * 100) / total;
 			badResults.setNext(BadResultType.BadTests);
-			return new TestResult(false, "<span class='log_err'>Chyba: Prošlo " + perc + " % testù!</span>", results);
+			String resultText = "<span class='log_err'>Chyba: Prošlo " + perc + " % testù!</span>";
+			if (lastErrorMessage != null) {
+				resultText += "<br /><span class='log_err'>Pøíklad chyb: " + lastErrorMessage + "</span>";
+			}
+			return new TestResult(false, resultText, results);
 		}
 	}
 
-	protected JsonTest(String id, Toolchain toolchain, String title, String description, String initialCode, List<TestVerificationData> tests, boolean hidden, boolean secret) {
+	protected JsonTest(String id, StaticDB sdb, VirtualFileManager files, Toolchain toolchain, String title, String description, String initialCode, List<TestVerificationData> tests, boolean hidden, boolean secret) {
+		this.sdb = sdb;
+		this.files = files;
 		this.id = id;
 		this.title = title;
 		this.tests = tests;
@@ -83,6 +107,16 @@ public abstract class JsonTest implements GenericTest {
 		this.hidden = hidden;
 		this.secret = secret;
 		this.toolchain = toolchain;
+	}
+
+	@Override
+	public StaticDB getStaticDB() {
+		return sdb;
+	}
+
+	@Override
+	public VirtualFileManager getFiles() {
+		return files;
 	}
 
 	@Override

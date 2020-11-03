@@ -53,7 +53,11 @@ public abstract class LayeredCodeModifiersDB extends LayeredBuildersDB {
 					errors.logError(res);
 					return null;
 				} else {
-					return t.getFinalCode(login, input);
+					String newCode = t.getFinalCode(errors, test.getStaticDB(), test.getToolchain(), test.getFiles(), login, input);
+					if (newCode == null) {
+						errors.logError("Failed to handle replacements of GCC file contents", input);
+					}
+					return newCode;
 				}
 			} else {
 				errors.logError("Interni chyba. Toolchain prijal kod pro GCC v rezimu nepodporujici GCC");
