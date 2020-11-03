@@ -221,6 +221,17 @@ window.Tester.Templates = function() {
 								"id": "btnSet",
 								"style": "float: right; margin-right: 6px; padding-left: 20px; padding-right: 20px; padding-top: 4px; padding-bottom:4px; margin-top:6px;",
 								"innerHTML": "Nastavit výběr"
+							},
+							{
+								"type": "checkbox",
+								"base": "input",
+								"id": "checkRemember",
+								"style": "float: right; margin-right: 6px; padding-right: 20px; padding-top: 4px; padding-bottom:4px; margin-top:15px;",
+							},
+							{
+								"type": "div",
+								"style": "font-size: 12pt; display: inline-block; float: right; margin-right: 6px;line-height:40px;",
+								"innerHTML": "Zapamatovat"
 							}
 						]		
 					},

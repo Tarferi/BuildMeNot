@@ -15,6 +15,45 @@ window.Tester.Main = function() {
 	document.body.appendChild(self.root);
 	
 	self.allTests = [];
+	
+	self.filterGroups = [];
+	self.filterLogins = [];
+	self.lastRemember = false;
+	
+	var getRememberedFilters = function() {
+		var entry = window.localStorage.getItem("rion.filter.remember");
+		try {
+			entry = JSON.parse(entry);			
+		} catch(e) {
+		}
+		var remember = entry && entry.logins !== undefined && entry && entry.groups && entry.groups.length !== undefined;
+		if(remember) {
+			return [entry.groups, entry.logins];
+		} else {
+			return false;
+		}
+	}
+	
+	var remembered = getRememberedFilters();
+	if(remembered) {
+		self.filterGroups = remembered[0]
+		self.filterLogins = remembered[1]
+		self.lastRemember = true;
+	}
+	
+	self.getFilterDataCB = function() {
+		return [self.filterGroups, self.filterLogins, self.lastRemember];
+	},
+	
+	self.setFilterDataCB = function(filterGroups, filterUsers, filterRemember) {
+		self.filterGroups = filterGroups;
+		self.filterLogins = filterUsers;
+		if(filterRemember) {
+			var entry = {"logins": filterUsers, "groups": filterGroups};
+			entry = self.common.JSONstringify(entry);
+			window.localStorage.setItem("rion.filter.remember", entry);
+		}
+	}
 
 	self.setAllTestsEnabled = function(enabled) {
 		for (var i = 0; i < self.allTests.length; i++) {
@@ -32,7 +71,7 @@ window.Tester.Main = function() {
 		}
 		
 		for(var i = 0; i < data.length; i++) {
-			var pnl = new window.Tester.TestPanel(data[i], forEveryOtherPanel);
+			var pnl = new window.Tester.TestPanel(data[i], forEveryOtherPanel, self.getFilterDataCB, self.setFilterDataCB);
 			self.allTests[self.allTests.length] = pnl;
 			var node = pnl.getNode();
 			if(i == 0) {
@@ -872,6 +911,7 @@ window.Tester.FilterPanel = function(getDataCB, setDataCB) {
 		self.filterUsers = ids.filter_logins;
 		self.contentGroups = ids.contents_groups;
 		self.contentUsers = ids.contents_users;
+		self.checkRemember = ids.checkRemember;
 		
 		var filterUsers = function(){
 			self.filterChanged(self.filterUsers.value, self.shownUsers);
@@ -905,13 +945,15 @@ window.Tester.FilterPanel = function(getDataCB, setDataCB) {
 	self.shownGroups = {};
 	self.shownUsers = {};
 	self.selectionStorage = {};
+	self.openAfter = false;
 	
 	self.save = function() {
 		var data = self.UIToData();
 		var selectedGroups = data[0];
 		var selectedUsers = data[1];
+		var remember = data[2];
 		self.close();
-		setDataCB(selectedGroups, selectedUsers);
+		setDataCB(selectedGroups, selectedUsers, remember, self.openAfter);
 	}
 	
 	self.close = function() {
@@ -922,6 +964,7 @@ window.Tester.FilterPanel = function(getDataCB, setDataCB) {
 	
 	self.UIToData = function() {
 		var selectedUsers = [];
+		var remember = self.checkRemember.checked;
 		
 		for(var usr in self.shownUsers) {
 			if(self.shownUsers.hasOwnProperty(usr)) {
@@ -941,7 +984,7 @@ window.Tester.FilterPanel = function(getDataCB, setDataCB) {
 			}
 		}
 		
-		return [selectedGroups, selectedUsers];
+		return [selectedGroups, selectedUsers, remember];
 	}
 	
 	self.dataToUI = function() {
@@ -976,7 +1019,9 @@ window.Tester.FilterPanel = function(getDataCB, setDataCB) {
 				self.shownUsers[usr].hook();
 			}
 		});
-		
+	
+		var remember = data[2];
+		self.checkRemember.checked = remember;	
 	}
 	
 	
@@ -994,7 +1039,8 @@ window.Tester.FilterPanel = function(getDataCB, setDataCB) {
 		return self.allGroups !== undefined && self.allLogins !== undefined;
 	};
 	
-	self.open = function(allGroups, allLogins) {
+	self.open = function(allGroups, allLogins, openAfter) {
+		self.openAfter = openAfter;
 		if(allGroups!=null) {
 			self.allGroups = allGroups;
 		} else {
@@ -1142,7 +1188,7 @@ window.Tester.FilterPanel = function(getDataCB, setDataCB) {
 	return this;
 }
 
-window.Tester.HistoryPanel = function(data, historyBtn, rowPnl, filterBtn) {
+window.Tester.HistoryPanel = function(data, historyBtn, rowPnl, filterBtn, getFilterCB, setFilterCB) {
 	var self = this;
 	self.data = data;
 	var hideLbl = "Skrýt historii";
@@ -1150,9 +1196,20 @@ window.Tester.HistoryPanel = function(data, historyBtn, rowPnl, filterBtn) {
 	self.isCollapsed = false;
 	self.limit = 100;
 	self.page = 0;
-	self.logins = [];
-	self.groups = [];
-	self.filterPnl = new window.Tester.FilterPanel(function() {return [self.groups, self.logins]}, function(groups, logins){self.page = 0; self.groups = groups; self.logins = logins;self.setVisible(true);});
+	self.getFilterCB = getFilterCB;
+	self.setFilterCB = setFilterCB;
+	
+	self.filterCloseCB = function(groups, logins, remember, openAfter) {
+		self.setFilterCB(groups, logins, remember);
+		if(self.isVisible()) {
+			self.loadData();
+		} else if(openAfter) {
+			self.setVisible(true);
+		}
+	}
+	
+	self.filterPnl = new window.Tester.FilterPanel(self.getFilterCB, self.filterCloseCB);
+		//function() {return [self.groups, self.logins]}, function(groups, logins){self.page = 0; self.groups = groups; self.logins = logins;self.setVisible(true);});
 	
 	self.common = new Common();
 	self.templates = new window.Tester.Templates();
@@ -1178,7 +1235,7 @@ window.Tester.HistoryPanel = function(data, historyBtn, rowPnl, filterBtn) {
 		filterBtn.style.display = "none";
 		filterBtn.addEventListener("click", function(){
 			if(self.filterPnl.hasData()) {
-				self.filterPnl.open();
+				self.filterPnl.open(undefined, undefined, self.isVisible());
 			} else {
 				self.common.showLoader();
 				var cbFail = function(err) {
@@ -1188,7 +1245,7 @@ window.Tester.HistoryPanel = function(data, historyBtn, rowPnl, filterBtn) {
 				var cbOk = function(data) {
 					self.common.hideLoader();
 					if(data.result && data.result.Groups && data.result.Users) {
-						self.filterPnl.open(data.result.Groups, data.result.Users);
+						self.filterPnl.open(data.result.Groups, data.result.Users, self.isVisible());
 						return;
 					}
 					cbFail("Server vrátil neplatnou strukturu");
@@ -1282,7 +1339,7 @@ window.Tester.HistoryPanel = function(data, historyBtn, rowPnl, filterBtn) {
 			self.common.hideLoader();
 			if(data.result && data.result.Groups && data.result.Users) {
 				filterBtn.style.display = "";
-				self.filterPnl.open(data.result.Groups, data.result.Users);
+				self.filterPnl.open(data.result.Groups, data.result.Users, true);
 			} else if(data.data === undefined || data.data.length === undefined) {
 				cbFail("Neplatná příchozí struktura");
 			} else {
@@ -1328,9 +1385,15 @@ window.Tester.HistoryPanel = function(data, historyBtn, rowPnl, filterBtn) {
 		var data = {"action":"COLLECT_HISTORY", "testID": self.data.id + ""};
 		data.limit = self.limit;
 		data.page = self.page;
-		if(self.logins.length > 0 || self.groups.length > 0) {
-			data.logins = self.logins;
-			data.groups = self.groups;
+		
+		var filterData = self.getFilterCB();
+		var groups = filterData[0];
+		var logins = filterData[1];
+		
+		if(logins.length > 0 || groups.length > 0) {
+			data.logins = logins;
+			data.groups = groups;
+			filterBtn.style.display = "";
 		}
 		self.common.async(data, cbOk, cbFail, false);
 	}
@@ -1340,13 +1403,15 @@ window.Tester.HistoryPanel = function(data, historyBtn, rowPnl, filterBtn) {
 };
 
 
-window.Tester.TestPanel = function(data, forEveryOtherPanelCB) {
+window.Tester.TestPanel = function(data, forEveryOtherPanelCB, getFilterDataCB, setFilterDataCB) {
 	var self = this;
 
 	this.data = data;
 	self.forEveryOtherPanelCB = forEveryOtherPanelCB;
 	self.common = new Common();
 	self.templates = new window.Tester.Templates();
+	self.getFilterDataCB = getFilterDataCB;
+	self.setFilterDataCB = setFilterDataCB;
 	
 	self.codeArea = null;
 
@@ -1489,7 +1554,7 @@ window.Tester.TestPanel = function(data, forEveryOtherPanelCB) {
 		self.codeArea.addEventListener("keydown", cancF);
 		self.btnRun.addEventListener("click", function() {self.runTest();});
 		
-		self.historyPnl = new window.Tester.HistoryPanel(self.data, self.btnHist, ids.feedbackPnl, ids.btnHistFiltr);
+		self.historyPnl = new window.Tester.HistoryPanel(self.data, self.btnHist, ids.feedbackPnl, ids.btnHistFiltr, self.getFilterDataCB , self.setFilterDataCB );
 		
 		if(data.finished_date) {
 			self.setFinished(true);
