@@ -112,8 +112,8 @@ public class JsonTestManager {
 							int timeout = tsto.getNumber("timeout").Value;
 							int code = tsto.getNumber("code").Value;
 							String[] arguments = new String[0];
-							if (obj.containsArray("arguments")) {
-								JsonArray args = obj.getArray("arguments").asArray();
+							if (tsto.containsArray("arguments")) {
+								JsonArray args = tsto.getArray("arguments").asArray();
 								int argsNum = 0;
 								for (JsonValue arg : args.Value) {
 									if (arg.isString() || arg.isBoolean() || arg.isNumber()) {

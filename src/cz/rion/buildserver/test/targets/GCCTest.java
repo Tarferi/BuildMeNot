@@ -56,13 +56,13 @@ public class GCCTest extends JsonTest {
 						sb.append((sb.length() > 0 ? ", " : "") + "uniklá pamì " + leaks + " krát");
 					}
 					if (invalid_frees > 0) {
-						sb.append((sb.length() > 0 ? ", " : "") + "Neplatné uvolnìní " + invalid_frees + " krát");
+						sb.append((sb.length() > 0 ? ", " : "") + "neplatné uvolnìní " + invalid_frees + " krát");
 					}
 					if (invalid_mallocs > 0) {
-						sb.append((sb.length() > 0 ? ", " : "") + "Neplatná alokace " + invalid_mallocs + " krát");
+						sb.append((sb.length() > 0 ? ", " : "") + "neplatná alokace " + invalid_mallocs + " krát");
 					}
 					if (corruption > 0) {
-						sb.append((sb.length() > 0 ? ", " : "") + "Poškození pamìti " + corruption + " krát");
+						sb.append((sb.length() > 0 ? ", " : "") + "poškození pamìti " + corruption + " krát");
 					}
 					return sb.toString() + ".";
 				}
