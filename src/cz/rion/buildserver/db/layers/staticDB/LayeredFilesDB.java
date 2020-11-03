@@ -13,6 +13,7 @@ import com.google.javascript.jscomp.SourceFile;
 
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.DatabaseInitData;
+import cz.rion.buildserver.db.StaticDB;
 import cz.rion.buildserver.db.VirtualFileManager;
 import cz.rion.buildserver.db.VirtualFileManager.ReadVirtualFile;
 import cz.rion.buildserver.db.VirtualFileManager.UserContext;
@@ -26,6 +27,7 @@ import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
+import cz.rion.buildserver.test.TestManager;
 
 public abstract class LayeredFilesDB extends LayeredStaticDB {
 
@@ -93,6 +95,11 @@ public abstract class LayeredFilesDB extends LayeredStaticDB {
 				return false;
 			}
 			synchronized (fileTable) {
+				StaticDB sdb = (StaticDB) LayeredFilesDB.this;
+				TestManager tests = sdb.getTestManager();
+				if (tests != null) {
+					tests.reloadTests();
+				}
 				final String tableName = "files";
 				return update(tableName, file.ID, new ValuedField(getField(tableName, "name"), newName), new ValuedField(getField(tableName, "contents"), encodeFileContents(getCompressedDataStreams(newName, newContents), true)));
 			}

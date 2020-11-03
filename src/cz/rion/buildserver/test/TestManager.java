@@ -215,6 +215,7 @@ public class TestManager {
 		this.testDirectory = testDirectory;
 		this.sdb = sdb;
 		this.files = files;
+		this.sdb.setTestManager(this);
 	}
 
 	private static final List<GenericTest> emptyListOfTests = new ArrayList<>();
