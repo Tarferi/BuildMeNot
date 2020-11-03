@@ -338,7 +338,7 @@ var Common = function() {
 			safe.push([ '9', '9' ]);
 			safe.push(' <>@&#:.;=()');
 			self.safeCodes = [];
-			for (var i = 0; i < safe.legnth; i++) {
+			for (var i = 0; i < safe.length; i++) {
 				var d = safe[i];
 				if (d.length == 2) {
 					var from = d[0].charCodeAt(0);
