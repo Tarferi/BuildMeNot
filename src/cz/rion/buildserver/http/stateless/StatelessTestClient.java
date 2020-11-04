@@ -249,8 +249,13 @@ public class StatelessTestClient extends StatelessPresenceClient {
 	}
 
 	private JsonObject execute_collect_history_users(ProcessState state) {
+		JsonObject idata = new JsonObject();
+		idata.add("action", "get_history_users");
+		idata.add("result", false);
+		state.setIntention(Intention.HISTORY_COMMAND, idata);
 		JsonObject obj = new JsonObject();
 		obj.add("code", 1);
+		
 		boolean admin = state.getPermissions().allowEditHistoryOfSomeoneElsesTest(state.Toolchain);
 		if (!admin) {
 			obj.add("result", "Nedostateèná úroveò oprávnìní");
@@ -290,10 +295,18 @@ public class StatelessTestClient extends StatelessPresenceClient {
 
 		obj.add("code", 0);
 		obj.add("result", total);
+		idata.add("result", true);
 		return obj;
 	}
 
 	private JsonObject execute_getHistory(ProcessState state, String testID, JsonObject input) {
+		JsonObject idata = new JsonObject();
+		idata.add("action", "get_history");
+		idata.add("test_id", testID);
+		idata.add("input", input);
+		idata.add("result", false);
+		state.setIntention(Intention.HISTORY_COMMAND, idata);
+		
 		JsonObject obj = new JsonObject();
 		obj.add("code", 1);
 		boolean admin = state.getPermissions().allowEditHistoryOfSomeoneElsesTest(state.Toolchain);
@@ -339,6 +352,7 @@ public class StatelessTestClient extends StatelessPresenceClient {
 				m.add("more", hist.hasMore());
 				obj.add("result", m);
 				obj.add("code", 0);
+				idata.add("result", true);				
 			} catch (DatabaseException e) {
 				e.printStackTrace();
 				obj.add("code", 1);
@@ -352,6 +366,12 @@ public class StatelessTestClient extends StatelessPresenceClient {
 	}
 
 	private JsonObject execute_collect_protocol(ProcessState state, int compilationID) {
+		JsonObject idata = new JsonObject();
+		idata.add("action", "get_protocol");
+		idata.add("compilation_id", compilationID);
+		idata.add("result", false);
+		state.setIntention(Intention.HISTORY_COMMAND, idata);
+		
 		JsonObject obj = new JsonObject();
 		obj.add("code", 1);
 		boolean admin = state.getPermissions().allowEditHistoryOfSomeoneElsesTest(state.Toolchain);
@@ -373,6 +393,7 @@ public class StatelessTestClient extends StatelessPresenceClient {
 				}
 				obj.add("result", result);
 				obj.add("code", 0);
+				idata.add("result", true);
 			} catch (DatabaseException e) {
 				e.printStackTrace();
 				obj.add("code", 1);
@@ -383,6 +404,12 @@ public class StatelessTestClient extends StatelessPresenceClient {
 	}
 
 	private JsonObject execute_getFeedback(ProcessState state, int compilationID) {
+		JsonObject idata = new JsonObject();
+		idata.add("action", "get_feedback");
+		idata.add("compilation_id", compilationID);
+		idata.add("result", false);
+		state.setIntention(Intention.HISTORY_COMMAND, idata);
+		
 		JsonObject obj = new JsonObject();
 		obj.add("code", 1);
 		try {
@@ -406,6 +433,7 @@ public class StatelessTestClient extends StatelessPresenceClient {
 
 			obj.add("result", r);
 			obj.add("code", 0);
+			idata.add("result", true);
 		} catch (DatabaseException e) {
 			e.printStackTrace();
 			obj.add("code", 1);
@@ -414,7 +442,15 @@ public class StatelessTestClient extends StatelessPresenceClient {
 		return obj;
 	}
 
-	private JsonObject execute_saveFeedback(ProcessState state, int feedbackID, JsonValue jsonValue, boolean del) {
+	private JsonObject execute_saveFeedback(ProcessState state, int feedbackID, JsonValue data, boolean del) {
+		JsonObject idata = new JsonObject();
+		idata.add("action", "save_feedback");
+		idata.add("feedback_id", feedbackID);
+		idata.add("del", del);
+		idata.add("data", data);
+		idata.add("result", false);
+		state.setIntention(Intention.HISTORY_COMMAND, idata);
+		
 		JsonObject obj = new JsonObject();
 		obj.add("code", 1);
 		try {
@@ -432,7 +468,7 @@ public class StatelessTestClient extends StatelessPresenceClient {
 				}
 			} else { // Editing our own
 			}
-			state.Data.RuntimeDB.updateFeedback(state.Toolchain, feedbackID, jsonValue, del);
+			state.Data.RuntimeDB.updateFeedback(state.Toolchain, feedbackID, data, del);
 			if (del) {
 				obj.add("result", "OK");
 			} else {
@@ -440,6 +476,7 @@ public class StatelessTestClient extends StatelessPresenceClient {
 				obj.add("result", existing);
 			}
 			obj.add("code", 0);
+			idata.add("result", true);
 		} catch (DatabaseException e) {
 			e.printStackTrace();
 			obj.add("code", 1);
@@ -456,6 +493,7 @@ public class StatelessTestClient extends StatelessPresenceClient {
 		idata.add("compilationID", compilation_id);
 		idata.add("data", data);
 		idata.add("result", false);
+		state.setIntention(Intention.HISTORY_COMMAND, idata);
 
 		JsonObject obj = new JsonObject();
 		obj.add("code", 1);
@@ -484,11 +522,16 @@ public class StatelessTestClient extends StatelessPresenceClient {
 			obj.add("result", e.description);
 			return obj;
 		}
-		state.setIntention(Intention.HISTORY_COMMAND, idata);
 		return obj;
 	}
 
 	private JsonObject execute_retests(ProcessState state, String testID) {
+		JsonObject idata = new JsonObject();
+		idata.add("action", "retests");
+		idata.add("test_id", testID);
+		idata.add("result", false);
+		state.setIntention(Intention.HISTORY_COMMAND, idata);
+		
 		JsonObject obj = new JsonObject();
 		obj.add("code", 1);
 		boolean admin = state.getPermissions().allowEditHistoryOfSomeoneElsesTest(state.Toolchain);
@@ -508,12 +551,12 @@ public class StatelessTestClient extends StatelessPresenceClient {
 						e.printStackTrace();
 					}
 					RunnerLogger logger = new RunnerLogger();
-					JsonObject idata = new JsonObject();
 					JsonObject returnValue = new JsonObject();
 					execute_test(state.Data.RuntimeDB, state.Data.Tests, item.TestID, item.Code, item.ID, state.BuilderID, badResults, state.Toolchain, item.Login, logger, idata, returnValue, false, item.Address, item.SessionID, item.UserID, completed);
 				}
 				obj.add("result", new JsonObject());
 				obj.add("code", 0);
+				idata.add("result", true);
 			} catch (DatabaseException e) {
 				e.printStackTrace();
 				obj.add("code", 1);
@@ -524,12 +567,18 @@ public class StatelessTestClient extends StatelessPresenceClient {
 	}
 
 	private JsonObject execute_update_stats(ProcessState state) {
+		JsonObject idata = new JsonObject();
+		idata.add("action", "update_stats");
+		idata.add("result", false);
+		state.setIntention(Intention.HISTORY_COMMAND, idata);
+		
 		JsonObject obj = new JsonObject();
 		obj.add("code", 1);
 		try {
 			state.Data.RuntimeDB.updateStatsForAllUsers(state.Toolchain);
 			obj.add("result", "ok");
 			obj.add("code", 0);
+			idata.add("result", true);
 		} catch (DatabaseException e) {
 			e.printStackTrace();
 			obj.add("code", 1);
@@ -645,6 +694,7 @@ public class StatelessTestClient extends StatelessPresenceClient {
 	}
 
 	private JsonObject execute(ProcessState state, JsonObject input) {
+		state.setIntention(Intention.UNKNOWN, input);
 		if (!state.IsLoggedIn()) {
 			JsonObject returnValue = new JsonObject();
 			returnValue.add("code", new JsonNumber(53));
@@ -694,7 +744,6 @@ public class StatelessTestClient extends StatelessPresenceClient {
 		obj.add("result", new JsonString("Internal error"));
 		return obj;
 	}
-
 
 	@Override
 	protected HTTPResponse handle(ProcessState state) {

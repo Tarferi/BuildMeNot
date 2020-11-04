@@ -20,6 +20,8 @@ import cz.rion.buildserver.db.layers.common.LayeredMetaDB;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.db.layers.staticDB.LayeredPermissionDB.UsersPermission;
 import cz.rion.buildserver.db.layers.staticDB.LayeredStaticDB.ToolchainCallback;
+import cz.rion.buildserver.db.meta.DatabaseObject;
+import cz.rion.buildserver.db.meta.DatabaseObject.MetaTable;
 import cz.rion.buildserver.exceptions.ChangeOfSessionAddressException;
 import cz.rion.buildserver.exceptions.CompressionException;
 import cz.rion.buildserver.exceptions.DatabaseException;
@@ -54,13 +56,97 @@ public class RuntimeDB extends LayeredMetaDB {
 		makeTable("users", false, KEY("ID"), TEXT("login"), TEXT("toolchain"));
 		makeTable("session", false, KEY("ID"), TEXT("address"), TEXT("hash"), NUMBER("live"), NUMBER("user_id"), DATE("last_action"), DATE("creation_time"), TEXT("toolchain"));
 		makeTable("compilations", false, KEY("ID"), NUMBER("session_id"), TEXT("toolchain"), TEXT("test_id"), NUMBER("user_id"), TEXT("address"), NUMBER("port"), BIGTEXT("asm"), DATE("creation_time"), NUMBER("code"), BIGTEXT("result"), BIGTEXT("full"), NUMBER("good_tests"), NUMBER("bad_tests"), BIGTEXT("bad_tests_details"));
-		makeTable("compilations_feedback", false, KEY("ID"), NUMBER("compilation_id"), NUMBER("author_id"), BIGTEXT("data"), DATE("creation_time"), NUMBER("valid"), TEXT("toolchain"));
+		//makeTable("compilations_feedback", false, KEY("ID"), NUMBER("compilation_id"), NUMBER("author_id"), BIGTEXT("data"), DATE("creation_time"), DATE("last_change_time"), NUMBER("valid"), TEXT("toolchain"));
+
+		makeTable("compilations_feedback", false, KEY("ID"), NUMBER("compilation_id"), NUMBER("author_id"), BIGTEXT("contents"), BIGTEXT("config"), DATE("creation_time"), DATE("last_change_time"), NUMBER("valid"), TEXT("toolchain"));
+
 		makeTable("page_loads", false, KEY("ID"), NUMBER("session_id"), TEXT("toolchain"), TEXT("address"), TEXT("host"), TEXT("path"), DATE("creation_time"), NUMBER("result"));
 		makeTable("crypto_expire_log", true, KEY("ID"), TEXT("address"), BIGTEXT("crypto"), DATE("creation_time"), TEXT("description"), TEXT("toolchain"));
 		makeTable("user_timeouts", false, KEY("ID"), NUMBER("user_id"), DATE("last_time"), DATE("allow_next"), NUMBER("bad_instr"), NUMBER("bad_segfaults"), NUMBER("bad_base"), NUMBER("bad_uncompilable"), NUMBER("live"), TEXT("toolchain"));
 		makeCompilationStatsTable();
 		makeRetestsTable();
 		LayeredDBFileWrapperDB.initTableFiles(sdb, this, dbData.Files, sdb.getRootToolchain(), sdb.getSharedToolchain());
+
+		//convertFeedback();
+	}
+
+	@DatabaseObject(TableName = "compilations_feedback")
+	public static final class TmpCompilationFeedback {
+		@DatabaseObject.KEY
+		public int ID;
+		public int compilation_id;
+		public int author_id;
+		@DatabaseObject.BIGTEXT
+		public String data;
+		public long creation_time;
+		public long last_change_time;
+		public int valid;
+		public String toolchain;
+	}
+
+	@DatabaseObject(TableName = "compilations_feedback2")
+	public final static class TmpCompilationFeedback2 {
+		@DatabaseObject.KEY
+		public int ID;
+		public int compilation_id;
+		public int author_id;
+		@DatabaseObject.BIGTEXT
+		public String contents;
+		@DatabaseObject.BIGTEXT
+		public String config;
+		public long creation_time;
+		public long last_change_time;
+		public int valid;
+		public String toolchain;
+
+		public static TmpCompilationFeedback2 get(TmpCompilationFeedback old) {
+			JsonValue data = JsonValue.parse(old.data);
+			if (data != null) {
+				if (data.isObject()) {
+					JsonObject obj = data.asObject();
+					if (obj.containsArray("selections") && obj.containsString("text")) {
+						JsonArray selection = obj.getArray("selections");
+						String text = obj.getString("text").Value;
+						TmpCompilationFeedback2 nw = new TmpCompilationFeedback2();
+
+						nw.compilation_id = old.compilation_id;
+						nw.author_id = old.author_id;
+						nw.contents = text;
+						nw.config = selection.getJsonString();
+						nw.creation_time = old.creation_time;
+						nw.last_change_time = old.last_change_time;
+						nw.valid = old.valid;
+						nw.toolchain = old.toolchain;
+						return nw;
+					}
+				}
+
+			}
+			return null;
+		}
+	}
+
+	@SuppressWarnings("deprecation")
+	private void convertFeedback() throws DatabaseException {
+		List<TmpCompilationFeedback> lst = new DatabaseObject.MetaTable<TmpCompilationFeedback>(TmpCompilationFeedback.class, this).get();
+
+		List<TmpCompilationFeedback2> lst2 = new ArrayList<>();
+		for (TmpCompilationFeedback item : lst) {
+			TmpCompilationFeedback2 nw = TmpCompilationFeedback2.get(item);
+			if (nw == null) {
+				throw new DatabaseException("Failed to convert format");
+			}
+			lst2.add(nw);
+		}
+		this.execute_raw("DELETE FROM compilations_feedback2");
+
+		MetaTable<TmpCompilationFeedback2> newTable = new DatabaseObject.MetaTable<>(TmpCompilationFeedback2.class, this);
+		for (TmpCompilationFeedback2 nw : lst2) {
+			if (!newTable.insert(nw)) {
+				throw new DatabaseException("Failed to insert new format");
+			}
+		}
+		return;
 	}
 
 	public final static class TestFeedback implements JsonValuable {
@@ -177,21 +263,34 @@ public class RuntimeDB extends LayeredMetaDB {
 
 	public void updateFeedback(Toolchain toolchain, int feedbackID, JsonValue data, boolean delete) throws DatabaseException {
 		final String tableName = "compilations_feedback";
-		ValuedField[] fields = delete ? new ValuedField[] { new ValuedField(getField(tableName, "valid"), 0) } : new ValuedField[] { new ValuedField(getField(tableName, "data"), data.getJsonString()) };
-		this.update(tableName, feedbackID, fields);
+		if (data.isObject()) {
+			if (data.asObject().containsArray("selections") && data.asObject().containsString("text")) {
+				String text = data.asObject().getString("text").Value;
+				JsonArray config = data.asObject().getArray("selections");
+				ValuedField[] fields = delete ? new ValuedField[] { new ValuedField(getField(tableName, "valid"), 0) } : new ValuedField[] { new ValuedField(getField(tableName, "config"), config.getJsonString()), new ValuedField(getField(tableName, "contents"), text), new ValuedField(getField(tableName, "last_change_time"), System.currentTimeMillis()) };
+				this.update(tableName, feedbackID, fields);
+			}
+		}
 	}
 
 	public void storeFeedback(Toolchain toolchain, int userID, int compilation_id, JsonValue data) throws DatabaseException {
 		final String tableName = "compilations_feedback";
-		ValuedField[] fields = new ValuedField[] { new ValuedField(getField(tableName, "compilation_id"), compilation_id), new ValuedField(getField(tableName, "data"), data.getJsonString()), new ValuedField(getField(tableName, "author_id"), userID), new ValuedField(getField(tableName, "compilation_id"), compilation_id), new ValuedField(getField(tableName, "creation_time"), System.currentTimeMillis()), new ValuedField(getField(tableName, "valid"), 1), new ValuedField(getField(tableName, "toolchain"), toolchain.getName()) };
-		this.insert(tableName, fields);
+		final long now = System.currentTimeMillis();
+		if (data.isObject()) {
+			if (data.asObject().containsArray("selections") && data.asObject().containsString("text")) {
+				String text = data.asObject().getString("text").Value;
+				JsonArray config = data.asObject().getArray("selections");
+				ValuedField[] fields = new ValuedField[] { new ValuedField(getField(tableName, "compilation_id"), compilation_id), new ValuedField(getField(tableName, "contents"), text), new ValuedField(getField(tableName, "config"), config.getJsonString()), new ValuedField(getField(tableName, "author_id"), userID), new ValuedField(getField(tableName, "compilation_id"), compilation_id), new ValuedField(getField(tableName, "creation_time"), now), new ValuedField(getField(tableName, "last_change_time"), now), new ValuedField(getField(tableName, "valid"), 1), new ValuedField(getField(tableName, "toolchain"), toolchain.getName()) };
+				this.insert(tableName, fields);
+			}
+		}
 	}
 
 	public List<TestFeedback> getFeedbacks(Toolchain toolchain, int compilationID, int currentUserID, boolean canEditAnything) throws DatabaseException {
 		List<TestFeedback> lst = new ArrayList<>();
 		final String tableName = "compilations_feedback";
 		final String tableName2 = "users";
-		TableField[] fields = new TableField[] { getField(tableName, "ID"), getField(tableName, "author_id"), getField(tableName, "data"), getField(tableName, "creation_time"), getField(tableName, "toolchain"), getField(tableName2, "login") };
+		TableField[] fields = new TableField[] { getField(tableName, "ID"), getField(tableName, "author_id"), getField(tableName, "config"), getField(tableName, "contents"), getField(tableName, "creation_time"), getField(tableName, "toolchain"), getField(tableName2, "login") };
 		ComparisionField t_valid = new ComparisionField(getField(tableName, "valid"), 1);
 		ComparisionField t_compilation_id = new ComparisionField(getField(tableName, "compilation_id"), compilationID);
 		ComparisionField[] conjunctions = new ComparisionField[] { t_valid, t_compilation_id };
@@ -200,16 +299,20 @@ public class RuntimeDB extends LayeredMetaDB {
 		for (JsonValue val : res.Value) {
 			if (val.isObject()) {
 				JsonObject obj = val.asObject();
-				if (obj.containsNumber("ID") && obj.containsNumber("author_id") && obj.containsString("data") && obj.containsNumber("creation_time") && obj.containsString("login") && obj.containsString("toolchain")) {
+				if (obj.containsNumber("ID") && obj.containsNumber("author_id") && obj.containsString("config") && obj.containsString("contents") && obj.containsNumber("creation_time") && obj.containsString("login") && obj.containsString("toolchain")) {
 					int id = obj.getNumber("ID").Value;
 					int author_id = obj.getNumber("author_id").Value;
-					String data = obj.getString("data").Value;
+					String config = obj.getString("config").Value;
+					String contents = obj.getString("contents").Value;
 					long creation = obj.getNumber("creation_time").asLong();
 					String login = obj.getString("login").Value;
 					String tc = obj.getString("toolchain").Value;
-					JsonValue dataV = JsonValue.parse(data);
+					JsonValue dataV = JsonValue.parse(config);
 					if (dataV != null) {
-						TestFeedback tf = new TestFeedback(id, author_id, login, "", tc, dataV, creation, currentUserID, canEditAnything);
+						JsonObject dataObj = new JsonObject();
+						dataObj.add("selections", dataV);
+						dataObj.add("text", contents);
+						TestFeedback tf = new TestFeedback(id, author_id, login, "", tc, dataObj, creation, currentUserID, canEditAnything);
 						lst.add(tf);
 					}
 				}
@@ -388,7 +491,7 @@ public class RuntimeDB extends LayeredMetaDB {
 	public TestFeedback getSingleFeedback(Toolchain toolchain, int feedbackID, int currentUserID, boolean canEditAnything) throws DatabaseException {
 		final String tableName = "compilations_feedback";
 		final String tableName2 = "users";
-		TableField[] fields = new TableField[] { getField(tableName, "ID"), getField(tableName, "author_id"), getField(tableName, "data"), getField(tableName, "creation_time"), getField(tableName, "toolchain"), getField(tableName2, "login") };
+		TableField[] fields = new TableField[] { getField(tableName, "ID"), getField(tableName, "author_id"), getField(tableName, "contents"), getField(tableName, "config"), getField(tableName, "creation_time"), getField(tableName, "toolchain"), getField(tableName2, "login") };
 		ComparisionField t_valid = new ComparisionField(getField(tableName, "valid"), 1);
 		ComparisionField t_compilation_id = new ComparisionField(getField(tableName, "ID"), feedbackID);
 		ComparisionField[] conjunctions = new ComparisionField[] { t_valid, t_compilation_id };
@@ -397,16 +500,20 @@ public class RuntimeDB extends LayeredMetaDB {
 		for (JsonValue val : res.Value) {
 			if (val.isObject()) {
 				JsonObject obj = val.asObject();
-				if (obj.containsNumber("ID") && obj.containsNumber("author_id") && obj.containsString("data") && obj.containsNumber("creation_time") && obj.containsString("login") && obj.containsString("toolchain")) {
+				if (obj.containsNumber("ID") && obj.containsNumber("author_id") && obj.containsString("contents") && obj.containsString("config") && obj.containsNumber("creation_time") && obj.containsString("login") && obj.containsString("toolchain")) {
 					int id = obj.getNumber("ID").Value;
 					int author_id = obj.getNumber("author_id").Value;
-					String data = obj.getString("data").Value;
+					String contents = obj.getString("contents").Value;
+					String config = obj.getString("config").Value;
 					long creation = obj.getNumber("creation_time").asLong();
 					String login = obj.getString("login").Value;
 					String tc = obj.getString("toolchain").Value;
-					JsonValue dataV = JsonValue.parse(data);
+					JsonValue dataV = JsonValue.parse(config);
 					if (dataV != null) {
-						TestFeedback tf = new TestFeedback(id, author_id, login, "", tc, dataV, creation, currentUserID, canEditAnything);
+						JsonObject dataObj = new JsonObject();
+						dataObj.add("selections", dataV);
+						dataObj.add("text", contents);
+						TestFeedback tf = new TestFeedback(id, author_id, login, "", tc, dataObj, creation, currentUserID, canEditAnything);
 						return tf;
 					}
 				}
@@ -443,7 +550,7 @@ public class RuntimeDB extends LayeredMetaDB {
 	public TestFeedback fetchSingleFeedback(Toolchain toolchain, int ID, int currentUserID, boolean canEditAnything) throws DatabaseException {
 		final String tableName = "compilations_feedback";
 		final String tableName2 = "users";
-		TableField[] fields = new TableField[] { getField(tableName, "ID"), getField(tableName, "author_id"), getField(tableName, "data"), getField(tableName, "creation_time"), getField(tableName, "toolchain"), getField(tableName2, "login") };
+		TableField[] fields = new TableField[] { getField(tableName, "ID"), getField(tableName, "author_id"), getField(tableName, "contents"), getField(tableName, "config"), getField(tableName, "creation_time"), getField(tableName, "toolchain"), getField(tableName2, "login") };
 		ComparisionField t_valid = new ComparisionField(getField(tableName, "valid"), 1);
 		ComparisionField t_compilation_id = new ComparisionField(getField(tableName, "id"), ID);
 		ComparisionField[] conjunctions = new ComparisionField[] { t_valid, t_compilation_id };
@@ -452,16 +559,20 @@ public class RuntimeDB extends LayeredMetaDB {
 		for (JsonValue val : res.Value) {
 			if (val.isObject()) {
 				JsonObject obj = val.asObject();
-				if (obj.containsNumber("ID") && obj.containsNumber("author_id") && obj.containsString("data") && obj.containsNumber("creation_time") && obj.containsString("login") && obj.containsString("toolchain")) {
+				if (obj.containsNumber("ID") && obj.containsNumber("author_id") && obj.containsString("contents") && obj.containsString("config") && obj.containsNumber("creation_time") && obj.containsString("login") && obj.containsString("toolchain")) {
 					int id = obj.getNumber("ID").Value;
 					int author_id = obj.getNumber("author_id").Value;
-					String data = obj.getString("data").Value;
+					String contents = obj.getString("contents").Value;
+					String config = obj.getString("config").Value;
 					long creation = obj.getNumber("creation_time").asLong();
 					String login = obj.getString("login").Value;
 					String tc = obj.getString("toolchain").Value;
-					JsonValue dataV = JsonValue.parse(data);
+					JsonValue dataV = JsonValue.parse(config);
 					if (dataV != null) {
-						TestFeedback tf = new TestFeedback(id, author_id, login, "", tc, dataV, creation, currentUserID, canEditAnything);
+						JsonObject dataObj = new JsonObject();
+						dataObj.add("selections", dataV);
+						dataObj.add("text", contents);
+						TestFeedback tf = new TestFeedback(id, author_id, login, "", tc, dataObj, creation, currentUserID, canEditAnything);
 						return tf;
 					}
 				}

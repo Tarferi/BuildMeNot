@@ -303,7 +303,7 @@ window.Tester.FeedbackCommentPanel = function(comment, codeFmt, projectSelection
 	};
 	
 	self.createCommentElements = function(root, text) {
-	
+
 		var findSel = function(id) {
 			for (var i = 0; i < self.selections.length; i++) {
 				if (self.selections[i][0] == id) {
@@ -315,13 +315,13 @@ window.Tester.FeedbackCommentPanel = function(comment, codeFmt, projectSelection
 
 		var appendRaw = function(txt) {
 			var span = document.createElement("span");
-			span.innerHTML = self.codeFmt(txt);
+			span.innerHTML = self.codeFmt(txt).split("\n").join("<br />");
 			root.appendChild(span);
 		};
 
 		var appendSel = function(txt, begin, end) {
 			var span = document.createElement("span");
-			span.innerHTML = self.codeFmt(txt);
+			span.innerHTML = self.codeFmt(txt).split("\n").join("<br />");
 			span.style.cursor = "pointer";
 			span.style.textDecoration = "underline";
 			span.addEventListener("mouseenter", function() {
