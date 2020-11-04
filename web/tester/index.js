@@ -212,6 +212,7 @@ window.Tester.Main = function() {
 	
 	self.hideStats = function() {
 		self.common.setLoginPanelVisible(true);
+		self.graphRootContent.innerHTML = "";
 		document.body.removeChild(self.graphRoot);
 		document.body.appendChild(self.root);
 	}
