@@ -113,8 +113,12 @@ public class RuntimeDB extends LayeredMetaDB {
 		public final String LastFeedbackLogin;
 		public final long CreationTime;
 		public final boolean AllowProtocol;
+		public final String Code;
+		public final String Address;
+		public final int SessionID;
+		public final int UserID;
 
-		private TestHistory(int ID, String toolchain, String login, String testID, String result, long creation_time, JsonNumber totalFeedbacks, JsonNumber lastFeedbackDate, String lastFeedbackLogin, boolean allowProtocol) {
+		private TestHistory(int ID, String toolchain, String login, String testID, String result, long creation_time, JsonNumber totalFeedbacks, JsonNumber lastFeedbackDate, String lastFeedbackLogin, boolean allowProtocol, String code, String address, int sessionID, int userID) {
 			this.ID = ID;
 			this.Login = login;
 			this.Toolchain = toolchain;
@@ -125,6 +129,10 @@ public class RuntimeDB extends LayeredMetaDB {
 			this.CreationTime = creation_time;
 			this.LastFeedbackLogin = lastFeedbackLogin;
 			this.AllowProtocol = allowProtocol;
+			this.Code = code;
+			this.Address = address;
+			this.SessionID = sessionID;
+			this.UserID = userID;
 		}
 
 		@Override
@@ -289,19 +297,29 @@ public class RuntimeDB extends LayeredMetaDB {
 					JsonNumber cnt = (JsonNumber) x[0];
 					JsonNumber last = (JsonNumber) x[1];
 					String lastLogin = (String) x[2];
-					return new TestHistory(id, tc, login, test_id, result, creation_time, cnt, last, lastLogin, allowProtocol);
+					String code = obj.containsString("asm") ? obj.getString("asm").Value : null;
+					String address = obj.containsString("address") ? obj.getString("address").Value : null;
+					int session_id = obj.containsNumber("session_id") ? obj.getNumber("session_id").Value : -1;
+					int user_id = obj.containsNumber("user_id") ? obj.getNumber("user_id").Value : -1;
+
+					return new TestHistory(id, tc, login, test_id, result, creation_time, cnt, last, lastLogin, allowProtocol, code, address, session_id, user_id);
 				}
 			}
 		}
 		return null;
 	}
 
-	public HistoryListPart getHistory(Toolchain toolchain, UsersPermission perms, String testID, boolean onlyMine, boolean allowProtocol, int limit, int offset, Set<String> logins) throws DatabaseException {
+	public HistoryListPart getHistory(Toolchain toolchain, UsersPermission perms, String testID, boolean onlyMine, boolean allowProtocol, int limit, int offset, Set<String> logins, boolean includeCode) throws DatabaseException {
 		HistoryListPart lst = new HistoryListPart(limit);
 		final String tableName = "compilations";
 		final String tableName2 = "users";
 
-		TableField[] fields = new TableField[] { getField(tableName, "ID"), getField(tableName2, "login"), getField(tableName, "toolchain"), getField(tableName, "result"), getField(tableName, "user_id"), getField(tableName, "creation_time"), getField(tableName, "test_id") };
+		TableField[] fields;
+		if (includeCode) {
+			fields = new TableField[] { getField(tableName, "ID"), getField(tableName2, "login"), getField(tableName, "asm"), getField(tableName, "address"), getField(tableName, "user_id"), getField(tableName, "session_id"), getField(tableName, "toolchain"), getField(tableName, "result"), getField(tableName, "user_id"), getField(tableName, "creation_time"), getField(tableName, "test_id") };
+		} else {
+			fields = new TableField[] { getField(tableName, "ID"), getField(tableName2, "login"), getField(tableName, "toolchain"), getField(tableName, "result"), getField(tableName, "user_id"), getField(tableName, "creation_time"), getField(tableName, "test_id") };
+		}
 		ComparisionField tidc = new ComparisionField(getField(tableName, "test_id"), testID);
 		ComparisionField tuidc = new ComparisionField(getField(tableName, "user_id"), perms.getUserID());
 
@@ -311,47 +329,56 @@ public class RuntimeDB extends LayeredMetaDB {
 
 		final TableField f_login = getField(tableName2, "login");
 		final int max_logins = 5;
-		if (logins.size() > max_logins) {
-			int neededIgnored = offset;
-			int microOffset = 0;
-
-			int need = limit + 1;
-			while (need > 0) {
-				JsonArray res = this.select(tableName, fields, conjunctions, new TableJoin[] { new TableJoin(getField(tableName, "user_id"), getField(tableName2, "ID")) }, true, limit + 1, microOffset, order);
-				if (res.Value.isEmpty()) {
-					break;
+		if (logins == null) {
+			JsonArray res = this.select(tableName, fields, conjunctions, new TableJoin[] { new TableJoin(getField(tableName, "user_id"), getField(tableName2, "ID")) }, true);
+			for (JsonValue val : res.Value) {
+				TestHistory hist = getTestHistoryFromResult(toolchain, val, allowProtocol);
+				if (hist != null) {
+					lst.add(hist);
 				}
-				for (JsonValue val : res.Value) {
-					microOffset++;
-					TestHistory hist = getTestHistoryFromResult(toolchain, val, allowProtocol);
-					if (hist != null) {
-						if (logins.contains(hist.Login)) {
-							if (neededIgnored > 0) {
-								neededIgnored--;
-							} else {
-								lst.add(hist);
-								need--;
-								if (need == 0) {
-									break;
+			}
+		} else {
+			if (logins.size() > max_logins) {
+				int neededIgnored = offset;
+				int microOffset = 0;
+
+				int need = limit + 1;
+				while (need > 0) {
+					JsonArray res = this.select(tableName, fields, conjunctions, new TableJoin[] { new TableJoin(getField(tableName, "user_id"), getField(tableName2, "ID")) }, true, limit + 1, microOffset, order);
+					if (res.Value.isEmpty()) {
+						break;
+					}
+					for (JsonValue val : res.Value) {
+						microOffset++;
+						TestHistory hist = getTestHistoryFromResult(toolchain, val, allowProtocol);
+						if (hist != null) {
+							if (logins.contains(hist.Login)) {
+								if (neededIgnored > 0) {
+									neededIgnored--;
+								} else {
+									lst.add(hist);
+									need--;
+									if (need == 0) {
+										break;
+									}
 								}
 							}
 						}
 					}
 				}
-			}
-
-		} else {
-			ComparisionField[] loginFields = new ComparisionField[logins.size()];
-			Object[] loginsA = logins.toArray();
-			for (int i = 0; i < loginsA.length; i++) {
-				loginFields[i] = new ComparisionField(f_login, loginsA[i].toString());
-			}
-			ComparisionFieldGroup loginsGroups = new ComparisionFieldGroup(loginFields, "OR");
-			JsonArray res = this.select(tableName, fields, conjunctions, new TableJoin[] { new TableJoin(getField(tableName, "user_id"), getField(tableName2, "ID")) }, true, limit + 1, offset, order, loginsGroups);
-			for (JsonValue val : res.Value) {
-				TestHistory hist = getTestHistoryFromResult(toolchain, val, allowProtocol);
-				if (hist != null) {
-					lst.add(hist);
+			} else {
+				ComparisionField[] loginFields = new ComparisionField[logins.size()];
+				Object[] loginsA = logins.toArray();
+				for (int i = 0; i < loginsA.length; i++) {
+					loginFields[i] = new ComparisionField(f_login, loginsA[i].toString());
+				}
+				ComparisionFieldGroup loginsGroups = new ComparisionFieldGroup(loginFields, "OR");
+				JsonArray res = this.select(tableName, fields, conjunctions, new TableJoin[] { new TableJoin(getField(tableName, "user_id"), getField(tableName2, "ID")) }, true, limit + 1, offset, order, loginsGroups);
+				for (JsonValue val : res.Value) {
+					TestHistory hist = getTestHistoryFromResult(toolchain, val, allowProtocol);
+					if (hist != null) {
+						lst.add(hist);
+					}
 				}
 			}
 		}
@@ -716,7 +743,7 @@ public class RuntimeDB extends LayeredMetaDB {
 		}
 	}
 
-	public void storeCompilation(List<CompletedTest> knownCompleted, String remoteAddress, Date time, String asm, int session_id, String test_id, int resultCode, String result, String full, int user_id, Toolchain toolchain, String details, int good_test, int bad_tests) throws DatabaseException {
+	public void storeCompilation(List<CompletedTest> knownCompleted, String remoteAddress, Date time, String asm, int session_id, String test_id, int resultCode, String result, String full, int user_id, Toolchain toolchain, String details, int good_test, int bad_tests, int existingCompilationID) throws DatabaseException {
 		synchronized (syncer_compilations) {
 			storeCompilationStats(user_id, toolchain, resultCode, test_id, knownCompleted);
 			String[] addrParts = reverse(remoteAddress).split(":", 2);
@@ -731,7 +758,11 @@ public class RuntimeDB extends LayeredMetaDB {
 
 			ValuedField[] updateData = new ValuedField[] { new ValuedField(this.getField(tableName, "address"), address), new ValuedField(this.getField(tableName, "port"), port), new ValuedField(this.getField(tableName, "asm"), asm), new ValuedField(this.getField(tableName, "toolchain"), toolchain.getName()), new ValuedField(this.getField(tableName, "test_id"), test_id), new ValuedField(this.getField(tableName, "user_id"), user_id), new ValuedField(this.getField(tableName, "session_id"), session_id), new ValuedField(this.getField(tableName, "creation_time"), time.getTime()), new ValuedField(this.getField(tableName, "code"), resultCode), new ValuedField(this.getField(tableName, "result"), result), new ValuedField(this.getField(tableName, "full"), full), new ValuedField(this.getField(
 					tableName, "bad_tests_details"), details), new ValuedField(this.getField(tableName, "bad_tests"), bad_tests), new ValuedField(this.getField(tableName, "good_tests"), good_test) };
-			insert(tableName, updateData);
+			if (existingCompilationID >= 0) {
+				update(tableName, existingCompilationID, updateData);
+			} else {
+				insert(tableName, updateData);
+			}
 		}
 
 	}

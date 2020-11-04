@@ -11,11 +11,13 @@ import java.util.Set;
 
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.VirtualFileManager;
+import cz.rion.buildserver.db.RuntimeDB;
 import cz.rion.buildserver.db.RuntimeDB.BadResults;
 import cz.rion.buildserver.db.RuntimeDB.CodedHistory;
 import cz.rion.buildserver.db.RuntimeDB.CompletedTest;
 import cz.rion.buildserver.db.RuntimeDB.HistoryListPart;
 import cz.rion.buildserver.db.RuntimeDB.TestFeedback;
+import cz.rion.buildserver.db.RuntimeDB.TestHistory;
 import cz.rion.buildserver.db.VirtualFileManager.UserContext;
 import cz.rion.buildserver.db.VirtualFileManager.VirtualFile;
 import cz.rion.buildserver.db.VirtualFileManager.VirtualFile.VirtualFileException;
@@ -31,6 +33,7 @@ import cz.rion.buildserver.json.JsonValue.JsonNumber;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.json.JsonValue.JsonString;
 import cz.rion.buildserver.test.GenericTest;
+import cz.rion.buildserver.test.TestManager;
 import cz.rion.buildserver.test.TestManager.RunnerLogger;
 import cz.rion.buildserver.test.TestManager.TestResults;
 import cz.rion.buildserver.utils.CachedData;
@@ -149,6 +152,32 @@ public class StatelessTestClient extends StatelessPresenceClient {
 		return null;
 	}
 
+	private TestResults execute_test(RuntimeDB db, TestManager tests, String testID, String code, int existingCompilationID, int builderID, BadResults badResults, Toolchain toolchain, String login, RunnerLogger logger, JsonObject idata, JsonObject returnValue, boolean allowDetails, String remoteAddr, int sessionID, int userID, List<CompletedTest> completed) {
+		TestResults res = tests.run(badResults, builderID, toolchain, testID, code, login, logger);
+		idata.add("success", true);
+		returnValue.add("code", new JsonNumber(res.ResultCode));
+		returnValue.add("result", new JsonString(res.ResultDescription));
+		JsonObject full = new JsonObject();
+		full.add("Log", logger.getLogs());
+		full.add("Process", res.ResultDescription);
+		if (allowDetails) {
+			returnValue.add("good", new JsonNumber(res.GoodTests));
+			returnValue.add("bad", new JsonNumber(res.BadTests));
+			if (res.Details != null) {
+				full.add("Details", res.Details);
+				returnValue.add("details", new JsonString(res.Details));
+				idata.add("details", true);
+			}
+		}
+
+		try {
+			db.storeCompilation(completed, remoteAddr, new Date(), code, sessionID, testID, res.ResultCode, returnValue.getJsonString(), full.getJsonString(), userID, toolchain, res.Details == null ? "" : res.Details, res.GoodTests, res.BadTests, existingCompilationID);
+		} catch (DatabaseException e1) {
+			e1.printStackTrace();
+		}
+		return res;
+	}
+
 	private JsonObject execute_tests(ProcessState state, String testID, String code) {
 		JsonObject idata = new JsonObject();
 		idata.add("testID", testID);
@@ -190,28 +219,10 @@ public class StatelessTestClient extends StatelessPresenceClient {
 			return returnValue;
 		}
 		RunnerLogger logger = new RunnerLogger();
-		TestResults res = state.Data.Tests.run(badResults, state.BuilderID, state.Toolchain, testID, code, state.getPermissions().Login, logger);
-		idata.add("success", true);
-		returnValue.add("code", new JsonNumber(res.ResultCode));
-		returnValue.add("result", new JsonString(res.ResultDescription));
-		JsonObject full = new JsonObject();
-		full.add("Log", logger.getLogs());
-		full.add("Process", res.ResultDescription);
-		if (state.getPermissions().allowDetails(testID)) {
-			returnValue.add("good", new JsonNumber(res.GoodTests));
-			returnValue.add("bad", new JsonNumber(res.BadTests));
-			if (res.Details != null) {
-				full.add("Details", res.Details);
-				returnValue.add("details", new JsonString(res.Details));
-				idata.add("details", true);
-			}
-		}
 
-		try {
-			state.Data.RuntimeDB.storeCompilation(completed, state.Request.remoteAddress, new Date(), code, state.getPermissions().getSessionID(), testID, res.ResultCode, returnValue.getJsonString(), full.getJsonString(), state.getPermissions().getUserID(), state.Toolchain, res.Details == null ? "" : res.Details, res.GoodTests, res.BadTests);
-		} catch (DatabaseException e1) {
-			e1.printStackTrace();
-		}
+		// String testID, String code, int existingCompilationID, int builderID,
+		// BadResults badResults, Toolchain toolchain, String login, RunnerLogger logger
+		TestResults res = execute_test(state.Data.RuntimeDB, state.Data.Tests, testID, code, -1, state.BuilderID, badResults, state.Toolchain, state.getPermissions().Login, logger, idata, returnValue, state.getPermissions().allowDetails(testID), state.Request.remoteAddress, state.getPermissions().getSessionID(), state.getPermissions().getUserID(), completed);
 
 		// See if user has finished this test before
 		boolean newlyFinished = res.ResultCode == 0;
@@ -321,7 +332,7 @@ public class StatelessTestClient extends StatelessPresenceClient {
 					loginsS.add(state.getPermissions().Login);
 				}
 
-				HistoryListPart hist = state.Data.RuntimeDB.getHistory(state.Toolchain, state.getPermissions(), testID, !admin, admin, limit, limit * page, loginsS);
+				HistoryListPart hist = state.Data.RuntimeDB.getHistory(state.Toolchain, state.getPermissions(), testID, !admin, admin, limit, limit * page, loginsS, false);
 				JsonArray h = JsonArray.get(hist);
 				JsonObject m = new JsonObject();
 				m.add("data", h);
@@ -477,6 +488,57 @@ public class StatelessTestClient extends StatelessPresenceClient {
 		return obj;
 	}
 
+	private JsonObject execute_retests(ProcessState state, String testID) {
+		JsonObject obj = new JsonObject();
+		obj.add("code", 1);
+		boolean admin = state.getPermissions().allowEditHistoryOfSomeoneElsesTest(state.Toolchain);
+		if (admin) {
+			try {
+				HistoryListPart history = state.Data.RuntimeDB.getHistory(state.Toolchain, state.getPermissions(), testID, false, false, 10000, 0, (Set<String>) null, true);
+				int total = history.size();
+				int current = 0;
+				for (TestHistory item : history) {
+					current++;
+					System.out.println("Retesting " + current + "/" + total);
+					List<CompletedTest> completed = state.Data.RuntimeDB.getCompletedTests(item.Login, state.Toolchain);
+					BadResults badResults = null;
+					try {
+						badResults = state.Data.RuntimeDB.GetBadResultsForUser(state.getPermissions().getUserID(), state.Toolchain);
+					} catch (DatabaseException e) {
+						e.printStackTrace();
+					}
+					RunnerLogger logger = new RunnerLogger();
+					JsonObject idata = new JsonObject();
+					JsonObject returnValue = new JsonObject();
+					execute_test(state.Data.RuntimeDB, state.Data.Tests, item.TestID, item.Code, item.ID, state.BuilderID, badResults, state.Toolchain, item.Login, logger, idata, returnValue, false, item.Address, item.SessionID, item.UserID, completed);
+				}
+				obj.add("result", new JsonObject());
+				obj.add("code", 0);
+			} catch (DatabaseException e) {
+				e.printStackTrace();
+				obj.add("code", 1);
+				obj.add("result", e.description);
+			}
+		}
+		return obj;
+	}
+
+	private JsonObject execute_update_stats(ProcessState state) {
+		JsonObject obj = new JsonObject();
+		obj.add("code", 1);
+		try {
+			state.Data.RuntimeDB.updateStatsForAllUsers(state.Toolchain);
+			obj.add("result", "ok");
+			obj.add("code", 0);
+		} catch (DatabaseException e) {
+			e.printStackTrace();
+			obj.add("code", 1);
+			obj.add("result", e.description);
+			return obj;
+		}
+		return obj;
+	}
+	
 	private JsonObject execute_collect(ProcessState state) {
 		state.setIntention(Intention.COLLECT_TESTS, new JsonObject());
 		JsonObject returnValue = new JsonObject();
@@ -621,6 +683,10 @@ public class StatelessTestClient extends StatelessPresenceClient {
 				return execute_collect_protocol(state, input.getNumber("compilationID").Value);
 			} else if (act.equals("COLLECT_HISTORY_USERS")) {
 				return execute_collect_history_users(state);
+			} else if (act.equals("RETEST") && input.containsString("testID")) {
+				return execute_retests(state, input.getString("testID").Value);
+			} else if (act.equals("UPDATE_STATS")) {
+				return execute_update_stats(state);
 			}
 		}
 		JsonObject obj = new JsonObject();
@@ -628,6 +694,7 @@ public class StatelessTestClient extends StatelessPresenceClient {
 		obj.add("result", new JsonString("Internal error"));
 		return obj;
 	}
+
 
 	@Override
 	protected HTTPResponse handle(ProcessState state) {

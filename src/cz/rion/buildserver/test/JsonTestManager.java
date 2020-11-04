@@ -124,7 +124,7 @@ public class JsonTestManager {
 								int argsI = 0;
 								for (JsonValue arg : args.Value) {
 									if (arg.isString() || arg.isBoolean() || arg.isNumber()) {
-										arguments[argsI] = arg.getJsonString();
+										arguments[argsI] = arg.isString() ? arg.asString().Value : arg.getJsonString();
 										argsI++;
 									}
 								}
