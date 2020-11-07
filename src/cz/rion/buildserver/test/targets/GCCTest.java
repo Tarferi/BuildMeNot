@@ -9,9 +9,9 @@ import java.util.regex.Pattern;
 
 import cz.rion.buildserver.db.StaticDB;
 import cz.rion.buildserver.db.VirtualFileManager;
-import cz.rion.buildserver.db.VirtualFileManager.ReadVirtualFile;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.ToolchainLogger;
+import cz.rion.buildserver.db.layers.staticDB.LayeredTestDB.MallocData;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
@@ -144,57 +144,42 @@ public class GCCTest extends JsonTest {
 		return new GCCTest(id, sdb, files, toolchain, title, description, tests, initialASM, append, prepend, hidden, secret, allowedIncludes, replace, replacement, malloc);
 	}
 
-	final Pattern pattern = Pattern.compile("int\\s+main\\s*\\(((\\s*)|(void))\\)", Pattern.MULTILINE);
-	final Pattern pattern2 = Pattern.compile("int\\s+main\\s*\\(", Pattern.MULTILINE);
-
-	private static final String mallocFileBefore = "tests/includes/malloc_before_code.c";
-	private static final String mallocFileAfter = "tests/includes/malloc_after_code.c";
-
-	private static final String mallocMainFile = "tests/includes/malloc_main.c";
+	private static final Pattern pattern = Pattern.compile("int\\s+main\\s*\\(((\\s*)|(void))\\)", Pattern.MULTILINE);
+	private static final Pattern pattern2 = Pattern.compile("int\\s+main\\s*\\(", Pattern.MULTILINE);
 
 	public String getFinalCode(ToolchainLogger errors, StaticDB sdb, Toolchain toolchain, VirtualFileManager files, String login, String code) {
 		code = prepend + code + append;
 		if (replace) {
 			code = code.replaceAll("\\$LOGIN\\$", login);
 		}
-
-		String random = getRandomString(10);
-
 		if (Malloc != null) {
-			ReadVirtualFile f1 = sdb.loadRootFile(mallocFileBefore);
-			ReadVirtualFile f2 = sdb.loadRootFile(mallocFileAfter);
-
-			if (f1 != null && f2 != null) {
-				String contentsBefore = f1.Contents;
-				String contentsAfter = f2.Contents;
-				contentsAfter = contentsAfter.replaceAll("\\%RANDOM\\%", random);
-				contentsBefore = contentsBefore.replaceAll("\\%RANDOM\\%", random);
-				code = contentsBefore + "\r\n" + code;
-				contentsAfter = contentsAfter.replace("%MALLOC_MEM_BLOCK_SIZE%", Malloc.BlockSize + "");
-				contentsAfter = contentsAfter.replace("%MALLOC_MEM_BLOCK_COUNT%", Malloc.TotalBlocks + "");
-				contentsAfter = contentsAfter.replace("%MALLOC_MEM_BLOCK_COUNT_PRE%", Malloc.BlockSizeBefore + "");
-				contentsAfter = contentsAfter.replace("%MALLOC_MEM_BLOCK_COUNT_POST%", Malloc.BlockSizeAfter + "");
-				if (Malloc.ReplaceMain) {
-					ReadVirtualFile mf = sdb.loadRootFile(mallocMainFile);
-					if (mf != null) {
-						errors.logInfo("Replacing main function");
-						Matcher matcher = pattern.matcher(code);
-						code = matcher.replaceAll("int main(int argc, char** argv)");
-						final Matcher matcher2 = pattern2.matcher(code);
-						code = matcher2.replaceAll("int MALLOC_DATA_PREFIX(main)(");
-
-						contentsAfter += "\r\n" + mf.Contents + "\r\n";
-					} else {
-						errors.logError("Failed to replace malloc main: cannot read " + mallocMainFile);
-						return null;
-					}
-				}
-				code = code + "\r\n" + contentsAfter;
-				errors.logInfo("Replacing malloc", code);
-			} else {
-				errors.logError("Failed to replace malloc: cannot read " + mallocFileBefore + " or " + mallocFileAfter);
+			String random = getRandomString(10);
+			MallocData mfiles = sdb.MallocFilesCache.get();
+			if (files == null) {
+				errors.logError("Failed to replace malloc: cannot read malloc files");
 				return null;
 			}
+
+			String contentsBefore = mfiles.MallocFileBefore;
+			String contentsAfter = mfiles.MallocFileAfter;
+			contentsAfter = contentsAfter.replaceAll("\\%RANDOM\\%", random);
+			contentsBefore = contentsBefore.replaceAll("\\%RANDOM\\%", random);
+			code = contentsBefore + "\r\n" + code;
+			contentsAfter = contentsAfter.replace("%MALLOC_MEM_BLOCK_SIZE%", Malloc.BlockSize + "");
+			contentsAfter = contentsAfter.replace("%MALLOC_MEM_BLOCK_COUNT%", Malloc.TotalBlocks + "");
+			contentsAfter = contentsAfter.replace("%MALLOC_MEM_BLOCK_COUNT_PRE%", Malloc.BlockSizeBefore + "");
+			contentsAfter = contentsAfter.replace("%MALLOC_MEM_BLOCK_COUNT_POST%", Malloc.BlockSizeAfter + "");
+			if (Malloc.ReplaceMain) {
+				errors.logInfo("Replacing main function");
+				Matcher matcher = pattern.matcher(code);
+				code = matcher.replaceAll("int main(int argc, char** argv)");
+				final Matcher matcher2 = pattern2.matcher(code);
+				code = matcher2.replaceAll("int MALLOC_DATA_PREFIX(main)(");
+
+				contentsAfter += "\r\n" + mfiles.MallocFile + "\r\n";
+			}
+			code = code + "\r\n" + contentsAfter;
+			errors.logInfo("Replacing malloc", code);
 		} else {
 			errors.logInfo("Skipping malloc replacement because it's not part of test JSON structure");
 		}

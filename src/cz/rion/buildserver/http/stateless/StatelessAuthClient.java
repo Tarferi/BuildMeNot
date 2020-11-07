@@ -6,9 +6,12 @@ import java.util.List;
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.RuntimeDB;
 import cz.rion.buildserver.db.RuntimeDB.BypassedClient;
+import cz.rion.buildserver.db.RuntimeDB.LitePermissionManager;
+import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.exceptions.ChangeOfSessionAddressException;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.http.HTTPResponse;
+import cz.rion.buildserver.permissions.PermissionBranch;
 
 public class StatelessAuthClient extends StatelessTestClient {
 
@@ -62,6 +65,15 @@ public class StatelessAuthClient extends StatelessTestClient {
 		return vl;
 	}
 
+	private final LitePermissionManager litePerms = new LitePermissionManager() {
+
+		@Override
+		public boolean can(Toolchain tc, String login, PermissionBranch branch) {
+			return liteCan(tc, login, branch);
+		}
+
+	};
+
 	protected HTTPResponse handleAuth(ProcessState state) {
 		if (!Settings.isAuth()) {
 			loadPermissions(state, 0, Settings.GetDefaultUsername());
@@ -77,6 +89,8 @@ public class StatelessAuthClient extends StatelessTestClient {
 				return resp;
 			}
 		}
+
+		String requestHost = state.hasOriginalHost() ? state.getOriginalHost() : state.Request.host;
 
 		// Validate cookie session
 		List<String> cookieSeessions = getSessionFromCookie(state);
@@ -100,7 +114,6 @@ public class StatelessAuthClient extends StatelessTestClient {
 						}
 						toDelete.add(cookieSession);
 					} catch (DatabaseException e) {
-						// TODO Auto-generated catch block
 						e.printStackTrace();
 					}
 					toDelete.add(cookieSession);
@@ -114,7 +127,7 @@ public class StatelessAuthClient extends StatelessTestClient {
 			}
 		}
 
-		String redirectLocation = Settings.getAuthURL(state.Request.protocol_norm, state.Request.host) + "&cache=" + RuntimeDB.randomstr(32);
+		String redirectLocation = Settings.getAuthURL(state.Request.protocol_norm, requestHost) + "&cache=" + RuntimeDB.randomstr(32);
 
 		String redirectMessage = "OK but login first";
 		List<String> cookieLines = state.Request.cookiesLines;
@@ -134,20 +147,17 @@ public class StatelessAuthClient extends StatelessTestClient {
 		// Validate token session (right after login)
 		if (state.Request.authData != null) {
 			try {
-				String session = state.Data.RuntimeDB.storeSession(state.Request.remoteAddress, state.Request.authData, state.Toolchain);
+				String session = state.Data.RuntimeDB.storeSession(state.Request.remoteAddress, state.Request.authData, state.Toolchain, state.getSudoLogin(), litePerms);
 				if (session != null) { // Logged in, set cookie and redirect once more to here
-					String host = state.Request.headers.containsKey("host") ? state.Request.headers.get("host") : null;
-					if (host != null) {
-						redirectLocation = state.Request.protocol_norm + "://" + host + (state.Request.path.startsWith("/") ? "" : "/") + state.Request.path;
-						redirectMessage = "Logged in, redirect once more";
-						// Create new cookies
-						cookieLines = new ArrayList<>();
-						cookieLines.add(Settings.getCookieName(state.Toolchain) + "=" + session + "; Max-Age=2592000; Domain=" + host + "; Path=/");
-						if (Settings.DoJsRedirect()) {
-							return getJSRedirect(state, cookieLines, Settings.getCookieName(state.Toolchain), session);
-						} else {
+					redirectLocation = state.Request.protocol_norm + "://" + requestHost + (state.Request.path.startsWith("/") ? "" : "/") + state.Request.path;
+					redirectMessage = "Logged in, redirect once more";
+					// Create new cookies
+					cookieLines = new ArrayList<>();
+					cookieLines.add(Settings.getCookieName(state.Toolchain) + "=" + session + "; Max-Age=2592000; Domain=" + requestHost + "; Path=/");
+					if (Settings.DoJsRedirect()) {
+						return getJSRedirect(state.Request.protocol, requestHost, cookieLines, Settings.getCookieName(state.Toolchain), session);
+					} else {
 
-						}
 					}
 				}
 			} catch (Exception e) {
@@ -161,16 +171,16 @@ public class StatelessAuthClient extends StatelessTestClient {
 		return resp;
 	}
 
-	private HTTPResponse getJSRedirect(ProcessState state, List<String> cookieLines, String newCookieName, String newCookieContents) {
+	private HTTPResponse getJSRedirect(String protocol, String host, List<String> cookieLines, String newCookieName, String newCookieContents) {
 		StringBuilder sb = new StringBuilder();
 		sb.append("<script>\r\n");
 		sb.append("var d = new Date();\r\n");
 		sb.append("d.setTime(d.getTime() + (7*24*60*60*1000));\r\n");
 		sb.append("var expires = \"expires=\"+ d.toUTCString();\r\n");
 		sb.append("document.cookie = \"" + newCookieName + "=" + newCookieContents + "; expires=\" + expires + \" UTC; path=/\";\r\n");
-		sb.append("window.location.href=document.location.protocol + \"//" + state.Request.host + "\"\r\n");
+		sb.append("window.location.href=document.location.protocol + \"//" + host + "\"\r\n");
 		sb.append("</script>");
-		HTTPResponse resp = new HTTPResponse(state.Request.protocol, 200, "OK", sb.toString(), "text/html", cookieLines);
+		HTTPResponse resp = new HTTPResponse(protocol, 200, "OK", sb.toString(), "text/html", cookieLines);
 		return resp;
 	}
 

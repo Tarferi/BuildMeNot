@@ -30,6 +30,7 @@ import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonNumber;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.json.JsonValue.JsonValuable;
+import cz.rion.buildserver.permissions.PermissionBranch;
 import cz.rion.buildserver.utils.CachedData;
 
 public class RuntimeDB extends LayeredMetaDB {
@@ -56,7 +57,10 @@ public class RuntimeDB extends LayeredMetaDB {
 		makeTable("users", false, KEY("ID"), TEXT("login"), TEXT("toolchain"));
 		makeTable("session", false, KEY("ID"), TEXT("address"), TEXT("hash"), NUMBER("live"), NUMBER("user_id"), DATE("last_action"), DATE("creation_time"), TEXT("toolchain"));
 		makeTable("compilations", false, KEY("ID"), NUMBER("session_id"), TEXT("toolchain"), TEXT("test_id"), NUMBER("user_id"), TEXT("address"), NUMBER("port"), BIGTEXT("asm"), DATE("creation_time"), NUMBER("code"), BIGTEXT("result"), BIGTEXT("full"), NUMBER("good_tests"), NUMBER("bad_tests"), BIGTEXT("bad_tests_details"));
-		//makeTable("compilations_feedback", false, KEY("ID"), NUMBER("compilation_id"), NUMBER("author_id"), BIGTEXT("data"), DATE("creation_time"), DATE("last_change_time"), NUMBER("valid"), TEXT("toolchain"));
+		// makeTable("compilations_feedback", false, KEY("ID"),
+		// NUMBER("compilation_id"), NUMBER("author_id"), BIGTEXT("data"),
+		// DATE("creation_time"), DATE("last_change_time"), NUMBER("valid"),
+		// TEXT("toolchain"));
 
 		makeTable("compilations_feedback", false, KEY("ID"), NUMBER("compilation_id"), NUMBER("author_id"), BIGTEXT("contents"), BIGTEXT("config"), DATE("creation_time"), DATE("last_change_time"), NUMBER("valid"), TEXT("toolchain"));
 
@@ -67,7 +71,7 @@ public class RuntimeDB extends LayeredMetaDB {
 		makeRetestsTable();
 		LayeredDBFileWrapperDB.initTableFiles(sdb, this, dbData.Files, sdb.getRootToolchain(), sdb.getSharedToolchain());
 
-		//convertFeedback();
+		// convertFeedback();
 	}
 
 	@DatabaseObject(TableName = "compilations_feedback")
@@ -985,7 +989,11 @@ public class RuntimeDB extends LayeredMetaDB {
 
 	}
 
-	public String storeSession(String address, String authToken, Toolchain toolchain) throws Exception {
+	public static interface LitePermissionManager {
+		public boolean can(Toolchain tc, String login, PermissionBranch branch);
+	}
+
+	public String storeSession(String address, String authToken, Toolchain toolchain, String sudoLogin, LitePermissionManager perms) throws Exception {
 		if (crypto == null) {
 			throw new Exception("No crypto");
 		}
@@ -1017,6 +1025,11 @@ public class RuntimeDB extends LayeredMetaDB {
 				}
 
 				String login = obj.getString("login").Value;
+				if (sudoLogin != null) {
+					if (perms.can(toolchain, login, new PermissionBranch(toolchain, "SUDO"))) {
+						login = sudoLogin;
+					}
+				}
 				return storeSessionKnownLogin(address, authToken, login, false, toolchain);
 			} else {
 				this.log_expired_crypto(address, authToken, "Parse failed - missing fields", toolchain);

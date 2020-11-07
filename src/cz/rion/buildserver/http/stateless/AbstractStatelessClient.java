@@ -72,11 +72,29 @@ public class AbstractStatelessClient {
 		private IntentionData Intention = new IntentionData();
 		public final int BuilderID;
 		private UserContext context = null;
+		private final String sudoLogin;
+		private final String originalHost;
 
 		private Toolchain ContextToolchain = null;
 
 		public void setContextToolchain(Toolchain tc) {
 			ContextToolchain = tc;
+		}
+
+		public boolean hasOriginalHost() {
+			return originalHost != null;
+		}
+
+		public String getOriginalHost() {
+			return originalHost;
+		}
+
+		public boolean hasSudoLogin() {
+			return sudoLogin != null;
+		}
+
+		public String getSudoLogin() {
+			return sudoLogin;
 		}
 
 		public UserContext getContext() {
@@ -113,12 +131,14 @@ public class AbstractStatelessClient {
 			this.Intention = new IntentionData(intention, value);
 		}
 
-		private ProcessState(StatelessInitData data, HTTPRequest request, Toolchain toolchain, UsersPermission defaultPerms, int BuilderID) {
+		private ProcessState(StatelessInitData data, HTTPRequest request, Toolchain toolchain, UsersPermission defaultPerms, int BuilderID, String sudoLogin, String originalHost) {
 			this.Data = data;
 			this.Request = request;
 			this.Toolchain = toolchain;
 			this.defaultPerms = defaultPerms;
 			this.BuilderID = BuilderID;
+			this.sudoLogin = sudoLogin;
+			this.originalHost = originalHost;
 		}
 
 		public boolean IsLoggedIn() {
@@ -188,8 +208,22 @@ public class AbstractStatelessClient {
 		}
 
 		Toolchain t = Data.StaticDB.getToolchainMapping(request.host);
+
+		String sudoLogin = null;
+		String originalHost = request.host;
+
+		// Sudo support
+		if (request.host.startsWith("sudo.")) {
+			String[] parts = request.host.split("\\.", 3);
+			if (parts.length == 3) {
+				t = Data.StaticDB.getToolchainMapping(parts[2]);
+				sudoLogin = parts[1];
+				request = request.getAnotherHost(parts[2]);
+			}
+		}
+
 		if (t != null) {
-			ProcessState state = new ProcessState(Data, request, t, cachedDefaultPermissions.get(t), 0);
+			ProcessState state = new ProcessState(Data, request, t, cachedDefaultPermissions.get(t), 0, sudoLogin, originalHost);
 			HTTPResponse response = handle(state);
 			log(state);
 			return response;

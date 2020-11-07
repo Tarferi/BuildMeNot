@@ -5,6 +5,7 @@ import cz.rion.buildserver.db.StaticDB;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.db.layers.staticDB.LayeredPermissionDB.PermissionManager;
 import cz.rion.buildserver.db.layers.staticDB.LayeredPermissionDB.UsersPermission;
+import cz.rion.buildserver.permissions.PermissionBranch;
 import cz.rion.buildserver.utils.CachedData;
 import cz.rion.buildserver.utils.CachedDataGetter;
 import cz.rion.buildserver.utils.CachedDataWrapper2;
@@ -59,6 +60,11 @@ public class StatelessPermissionClient extends AbstractStatelessClient {
 		}
 	});
 
+	protected boolean liteCan(Toolchain tc, String login, PermissionBranch branch) {
+		UsersPermission perms = contexts.get(tc).usersPermissionByLogin.get(login);
+		return perms.can(branch);
+	}
+
 	protected void loadPermissions(ProcessState state, int sessionID, String login) {
 		UsersPermission perms = contexts.get(state.Toolchain).usersPermissionByLogin.get(login);
 		if (perms != null) {
@@ -71,4 +77,5 @@ public class StatelessPermissionClient extends AbstractStatelessClient {
 		super.clearCache();
 		contexts.clear();
 	}
+
 }

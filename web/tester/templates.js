@@ -618,7 +618,7 @@ window.Tester.Templates = function() {
 							},
 							{
 								"type": "td",
-								"style": "border-left: 1px solid black; border-bottom: 1px solid black; height: 40px; background-color: #aaddee;margin: 0px; padding: 0px;text-align: center;line-height: 40px; font-size: 20pt;width: 178px;",
+								"style": "border-left: 1px solid black; border-bottom: 1px solid black; height: 40px; background-color: #aaddee;margin: 0px; padding: 0px;text-align: center;line-height: 40px; font-size: 20pt;width: 178px;min-width:178px",
 								"innerHTML": "Akce"
 							}
 						]
@@ -672,7 +672,7 @@ window.Tester.Templates = function() {
 															},
 															{
 																"type": "td",
-																"style": "border-bottom: 1px solid black; height: 40px; background-color: #aaddee;margin: 0px; padding: 0px;text-align: center;line-height: 40px; font-size: 20pt;width: calc(100% - 200px);",
+																"style": "border-bottom: 1px solid black; height: 40px; background-color: #aaddee;margin: 0px; padding: 0px;text-align: center;line-height: 40px; font-size: 20pt;width: calc(100% - 200px); min-width: 300px;",
 																"innerHTML": "Komentář"
 															}
 														]

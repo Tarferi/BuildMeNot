@@ -54,6 +54,7 @@ public abstract class LayeredFilesDB extends LayeredStaticDB {
 				Toolchain tc = entry.getValue();
 				uninitFiles(tc);
 				initFiles(tc);
+				clearCache();
 			}
 		}
 	}
