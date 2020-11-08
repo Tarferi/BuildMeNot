@@ -13,6 +13,8 @@
                 <attribute name="Class-Path" value="."/>
             </manifest>
             <fileset dir="${dir.jarfile}/bin"/>
+        </jar>
+    	<jar destfile="${dir.jarfile}/bs_dep.jar" filesetmanifest="mergewithoutmain">
             <zipfileset excludes="META-INF/*.SF" src="${dir.jarfile}/miglayout15-swing.jar"/>
             <zipfileset excludes="META-INF/*.SF" src="${dir.jarfile}/sqlite.jar"/>
         	<zipfileset excludes="META-INF/*.SF" src="${dir.jarfile}/acme4j-client-2.10.jar"/>

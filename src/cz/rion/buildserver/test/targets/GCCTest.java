@@ -36,33 +36,31 @@ public class GCCTest extends JsonTest {
 		this.Malloc = malloc;
 	}
 
-	private static final Pattern pattern_res = Pattern.compile("Memory Error: leaks: (\\d+), invalid frees: (\\d+), invalid mallocs: (\\d+), corruptions: (\\d+)$", Pattern.MULTILINE);
+	private static final Pattern pattern_res = Pattern.compile("Memory Error: leaks: (\\d+), invalid frees: (\\d+), zero mallocs: (\\d+), negative mallocs: (\\d+), big mallocs: (\\d+), too many allocs: (\\d+), writes beyond: (\\d+), writes before: (\\d+), invalid realloc: (\\d+)$", Pattern.MULTILINE);
+	private static final String[] error_types = new String[] { "neuvolnÏn· pamÏù", "neplatnÈ uvolnÏnÌ", "pr·zdn· alokace", "z·porn· alokace", "p¯Ìliö velk· alokace", "p¯Ìliö mnoho alokacÌ", "z·pis za alokovanou pamÏù", "z·pis p¯ed alokovanou pamÏù", "neplatn· realokace" };
 
 	@Override
 	public String getErrorDescription(TestResultsExpectations data) {
 		String parentError = super.getErrorDescription(data);
-		if (parentError == null && Malloc != null) {
+		if (Malloc != null) {
 			final Matcher matcher = pattern_res.matcher(data.returnedSTDOUT);
-
 			if (matcher.find()) {
-				if (matcher.groupCount() == 4) {
-					int leaks = Integer.parseInt(matcher.group(1));
-					int invalid_frees = Integer.parseInt(matcher.group(2));
-					int invalid_mallocs = Integer.parseInt(matcher.group(3));
-					int corruption = Integer.parseInt(matcher.group(4));
-
+				if (matcher.groupCount() == error_types.length) {
 					StringBuilder sb = new StringBuilder();
-					if (leaks > 0) {
-						sb.append((sb.length() > 0 ? ", " : "") + "neuvolnÏn· pamÏù " + leaks + " kr·t");
+					for (int i = 0; i < error_types.length; i++) {
+						int val = Integer.parseInt(matcher.group(i + 1));
+						String descr = error_types[i];
+						if (val > 0) {
+							if (sb.length() > 0) {
+								sb.append(", ");
+							}
+							sb.append(descr + ": " + val + " kr·t");
+						}
 					}
-					if (invalid_frees > 0) {
-						sb.append((sb.length() > 0 ? ", " : "") + "neplatnÈ uvolnÏnÌ " + invalid_frees + " kr·t");
-					}
-					if (invalid_mallocs > 0) {
-						sb.append((sb.length() > 0 ? ", " : "") + "neplatn· alokace " + invalid_mallocs + " kr·t");
-					}
-					if (corruption > 0) {
-						sb.append((sb.length() > 0 ? ", " : "") + "poökozenÌ pamÏti " + corruption + " kr·t");
+					if (parentError != null) {
+						if (parentError.length() > sb.length()) {
+							return parentError;
+						}
 					}
 					return sb.toString() + ".";
 				}
@@ -160,10 +158,8 @@ public class GCCTest extends JsonTest {
 				return null;
 			}
 
-			String contentsBefore = mfiles.MallocFileBefore;
-			String contentsAfter = mfiles.MallocFileAfter;
-			contentsAfter = contentsAfter.replaceAll("\\%RANDOM\\%", random);
-			contentsBefore = contentsBefore.replaceAll("\\%RANDOM\\%", random);
+			String contentsBefore = mfiles.MallocFileBefore.get(random);
+			String contentsAfter = mfiles.MallocFileAfter.get(random);
 			code = contentsBefore + "\r\n" + code;
 			contentsAfter = contentsAfter.replace("%MALLOC_MEM_BLOCK_SIZE%", Malloc.BlockSize + "");
 			contentsAfter = contentsAfter.replace("%MALLOC_MEM_BLOCK_COUNT%", Malloc.TotalBlocks + "");
@@ -173,10 +169,10 @@ public class GCCTest extends JsonTest {
 				errors.logInfo("Replacing main function");
 				Matcher matcher = pattern.matcher(code);
 				code = matcher.replaceAll("int main(int argc, char** argv)");
-				final Matcher matcher2 = pattern2.matcher(code);
-				code = matcher2.replaceAll("int MALLOC_DATA_PREFIX(main)(");
+				//final Matcher matcher2 = pattern2.matcher(code);
+				//code = matcher2.replaceAll("int main(");
 
-				contentsAfter += "\r\n" + mfiles.MallocFile + "\r\n";
+				contentsAfter += "\r\n" + mfiles.MallocFile.get(random) + "\r\n";
 			}
 			code = code + "\r\n" + contentsAfter;
 			errors.logInfo("Replacing malloc", code);

@@ -7,16 +7,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
-import com.sun.org.apache.xml.internal.security.utils.Base64;
 
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.exceptions.FileWriteException;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
+import cz.rion.buildserver.utils.Base64;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.wrappers.FileReadException;
 import cz.rion.buildserver.wrappers.MyFS;
-import jdk.jfr.SettingControl;
 
 public class Settings {
 

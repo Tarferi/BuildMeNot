@@ -93,11 +93,12 @@ public class MAIN {
 	}
 
 	public static void main(String[] args) throws InvocationTargetException, InterruptedException {
-		setUI();
 		if (Settings.RunOnlyUI()) {
+			setUI();
 			onlyUI();
 		} else {
 			if (Settings.showUI()) {
+				setUI();
 				new MainWindow("127.0.0.1", Settings.GetHTTPServerPort(), Settings.getPasscode());
 			}
 			HTTPServer server;
