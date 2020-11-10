@@ -1,15 +1,11 @@
 package cz.rion.buildserver.test.targets;
 
 import java.io.File;
-import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import cz.rion.buildserver.db.RuntimeDB.BadResultType;
 import cz.rion.buildserver.db.RuntimeDB.BadResults;
-import cz.rion.buildserver.db.StaticDB;
-import cz.rion.buildserver.db.VirtualFileManager;
-import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
@@ -23,8 +19,8 @@ public class AsmTest extends JsonTest {
 	public final boolean replace;
 	private final ReplacementEntry[] replacement;
 
-	public AsmTest(String id, StaticDB sdb, VirtualFileManager files, Toolchain toolchain, String title, String description, List<TestVerificationData> tests, String initialASM, String append, String prepend, boolean isHidden, boolean isSecret, String[] allowedInstructions, boolean replace, ReplacementEntry[] replacement) {
-		super(id, sdb, files, toolchain, title, description, initialASM, tests, isHidden, isSecret);
+	public AsmTest(TestConfiguration config, String prepend, String append, String[] allowedInstructions, boolean replace, ReplacementEntry[] replacement) {
+		super(config);
 		this.prepend = prepend;
 		this.append = append;
 		this.allowedInstructions = allowedInstructions;
@@ -32,7 +28,7 @@ public class AsmTest extends JsonTest {
 		this.replacement = replacement;
 	}
 
-	public static AsmTest get(Toolchain toolchain, StaticDB sdb, VirtualFileManager files, String id, String descr, String title, String type, List<TestVerificationData> tvd, JsonObject obj) {
+	public static AsmTest get(TestConfiguration config, JsonObject obj) {
 		String[] allowedInstructions = null;
 
 		if (obj.containsArray("instructions")) {
@@ -58,16 +54,11 @@ public class AsmTest extends JsonTest {
 			}
 		}
 
-		String description = obj.getString("description").Value;
 		String prepend = obj.containsString("prepend") ? obj.getString("prepend").Value : "";
 		String append = obj.containsString("append") ? obj.getString("append").Value : "";
-
-		String initialASM = obj.containsString("init") ? obj.getString("init").Value : "";
-		boolean hidden = obj.containsNumber("hidden") ? obj.getNumber("hidden").Value == 1 : false;
-		boolean secret = obj.containsNumber("secret") ? obj.getNumber("secret").Value == 1 : false;
 		boolean replace = obj.containsNumber("replace") ? obj.getNumber("replace").Value == 1 : false;
 
-		return new AsmTest(id, sdb, files, toolchain, title, description, tvd, initialASM, append, prepend, hidden, secret, allowedInstructions, replace, replacement);
+		return new AsmTest(config, prepend, append, allowedInstructions, replace, replacement);
 	}
 
 	private static final Pattern pattern = Pattern.compile("\\%include +\"([^\\\"]+)\"", Pattern.MULTILINE);

@@ -1,7 +1,6 @@
 package cz.rion.buildserver.test.targets;
 
 import java.util.HashSet;
-import java.util.List;
 import java.util.Random;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -27,8 +26,8 @@ public class GCCTest extends JsonTest {
 	private final boolean replace;
 	public final MallocOverload Malloc;
 
-	private GCCTest(String id, StaticDB sdb, VirtualFileManager files, Toolchain toolchain, String title, String description, List<TestVerificationData> tests, String initialCode, String append, String prepend, boolean hidden, boolean secret, Set<String> allowedIncludes, boolean replace, ReplacementEntry[] replacement, MallocOverload malloc) {
-		super(id, sdb, files, toolchain, title, description, initialCode, tests, hidden, secret);
+	private GCCTest(TestConfiguration config, String prepend, String append, Set<String> allowedIncludes, boolean replace, ReplacementEntry[] replacement, MallocOverload malloc) {
+		super(config);
 		this.prepend = prepend;
 		this.append = append;
 		this.AllowedIncludes = allowedIncludes;
@@ -103,7 +102,7 @@ public class GCCTest extends JsonTest {
 		}
 	}
 
-	public static GenericTest get(Toolchain toolchain, StaticDB sdb, VirtualFileManager files, String id, String descr, String title, String type, List<TestVerificationData> tests, JsonObject obj) {
+	public static GenericTest get(TestConfiguration config, JsonObject obj) {
 
 		Set<String> allowedIncludes = null;
 
@@ -128,22 +127,15 @@ public class GCCTest extends JsonTest {
 			}
 		}
 
-		String description = obj.getString("description").Value;
 		String prepend = obj.containsString("prepend") ? obj.getString("prepend").Value : "";
 		String append = obj.containsString("append") ? obj.getString("append").Value : "";
-
-		String initialASM = obj.containsString("init") ? obj.getString("init").Value : "";
-		boolean hidden = obj.containsNumber("hidden") ? obj.getNumber("hidden").Value == 1 : false;
-		boolean secret = obj.containsNumber("secret") ? obj.getNumber("secret").Value == 1 : false;
 		boolean replace = obj.containsNumber("replace") ? obj.getNumber("replace").Value == 1 : false;
 
 		MallocOverload malloc = MallocOverload.get(obj);
-
-		return new GCCTest(id, sdb, files, toolchain, title, description, tests, initialASM, append, prepend, hidden, secret, allowedIncludes, replace, replacement, malloc);
+		return new GCCTest(config, prepend, append, allowedIncludes, replace, replacement, malloc);
 	}
 
 	private static final Pattern pattern = Pattern.compile("int\\s+main\\s*\\(((\\s*)|(void))\\)", Pattern.MULTILINE);
-	private static final Pattern pattern2 = Pattern.compile("int\\s+main\\s*\\(", Pattern.MULTILINE);
 
 	public String getFinalCode(ToolchainLogger errors, StaticDB sdb, Toolchain toolchain, VirtualFileManager files, String login, String code) {
 		code = prepend + code + append;
@@ -169,8 +161,8 @@ public class GCCTest extends JsonTest {
 				errors.logInfo("Replacing main function");
 				Matcher matcher = pattern.matcher(code);
 				code = matcher.replaceAll("int main(int argc, char** argv)");
-				//final Matcher matcher2 = pattern2.matcher(code);
-				//code = matcher2.replaceAll("int main(");
+				// final Matcher matcher2 = pattern2.matcher(code);
+				// code = matcher2.replaceAll("int main(");
 
 				contentsAfter += "\r\n" + mfiles.MallocFile.get(random) + "\r\n";
 			}
@@ -194,4 +186,5 @@ public class GCCTest extends JsonTest {
 		}
 		return sb.toString();
 	}
+
 }

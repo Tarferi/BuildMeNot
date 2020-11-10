@@ -1,5 +1,7 @@
 package cz.rion.buildserver.test;
 
+import java.util.Set;
+
 import cz.rion.buildserver.db.RuntimeDB.BadResults;
 import cz.rion.buildserver.db.StaticDB;
 import cz.rion.buildserver.db.VirtualFileManager;
@@ -29,4 +31,6 @@ public interface GenericTest {
 	public StaticDB getStaticDB();
 
 	public VirtualFileManager getFiles();
+	
+	public Set<String> getPriorTestsIDs();
 }

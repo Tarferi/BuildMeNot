@@ -6,6 +6,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.RuntimeDB.BadResults;
@@ -391,6 +392,19 @@ public class TestManager {
 		}
 		return new TestResults(code, good, bad, message.get(), details);
 
+	}
+
+	public Set<String> getPriorTestIDs(Toolchain toolchain, String test_id) {
+		synchronized (Tests) {
+			synchronized (Tests.get(toolchain).tests) {
+				String testKey = toolchain.getName().toUpperCase() + "/" + test_id.toLowerCase();
+				if (Tests.get(toolchain).mtest.containsKey(testKey)) {
+					GenericTest test = Tests.get(toolchain).mtest.get(testKey);
+					return test.getPriorTestsIDs();
+				}
+			}
+		}
+		return null;
 	}
 
 }

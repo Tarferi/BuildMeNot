@@ -1447,6 +1447,37 @@ window.Tester.TestPanel = function(data, forEveryOtherPanelCB, getFilterDataCB, 
 		}, 1000);
 	};
 	
+	self.handleUnlocked = function(data) {
+		var handleTest = function(test) {
+			var found = false;
+			self.forEveryOtherPanelCB(function(pnl){
+				if(pnl.data.id == test.id) {
+					found = true;
+					pnl.codeArea.innerHTML = test.init;
+					pnl.txtBrief.innerHTML = test.title
+					pnl.txtDescr.innerHTML = test.zadani
+					pnl.btnHide.style.visibility = "";
+					pnl.nwBorder.style.textAlign = "left";
+					pnl.nwBorder.style.background = "#eeeeee";
+					pnl.setCollapsed(false);
+					
+				}
+			})
+			var msg = "Odemčen test " + test.id + ".";
+			if(!found) {
+				msg = msg + " Pro zobrazení testu prosím obnovte stránku.";
+			}
+			return "<span class=log_ok>" + msg + "</span>";
+		}
+		
+		
+		if(data && data.map) {
+			var result = data.map(handleTest);
+			return result.join("<br />");	
+		}
+		return undefined;
+	}
+	
 	self.runTest = function() {
 		self.setComponentsEnabled(false);
 		var cbFail = function(descr, waiter) {
@@ -1468,7 +1499,11 @@ window.Tester.TestPanel = function(data, forEveryOtherPanelCB, getFilterDataCB, 
 						cbFail("Uživatel není přihlášen");
 						return;
 					} else if(data.code == 0) {
-						self.setResult(data.result);
+						var toAppend = undefined;
+						if(data.unlocked) {
+							toAppend = self.handleUnlocked(data.unlocked);
+						}
+						self.setResult(data.result + (toAppend ? "<br />" + toAppend : ""));
 						self.setFinished(false);
 						confetti.frameInterval = 15;
 						confetti.maxCount = 900;
@@ -1516,9 +1551,11 @@ window.Tester.TestPanel = function(data, forEveryOtherPanelCB, getFilterDataCB, 
 		var solvStr = data.finished_date ? " (vyřešeno "+data.finished_date+")" : "";
 		
 		ids.txtArea.innerHTML = data.finished_code ? data.finished_code :  data.init;
-		ids.txtBrief.innerHTML = data.title+solvStr;
-		ids.txtDescr.innerHTML = data.zadani;
+		ids.txtBrief.innerHTML = data.title ? data.title + solvStr : "";
+		ids.txtDescr.innerHTML = data.zadani ? data.zadani : "";
 		
+		self.txtBrief = ids.txtBrief;
+		self.txtDescr = ids.txtDescr;
 		self.codeArea = ids.txtArea;
 		self.btnRun = ids.runtests;
 		self.resultArea = ids.txtSolution;
@@ -1567,6 +1604,13 @@ window.Tester.TestPanel = function(data, forEveryOtherPanelCB, getFilterDataCB, 
 		}
 		if(data.hidden === 1) {
 			self.setCollapsed(true);
+		}
+		if(!data.title) {
+			ids.txtBrief.innerHTML = data.id;
+			ids.nwBorder.style.background = "#999999"
+			ids.nwBorder.style.textAlign = "center";
+			self.setCollapsed(true);
+			self.btnHide.style.visibility = "hidden";
 		}
 	}
 	

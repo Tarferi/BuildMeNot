@@ -169,7 +169,6 @@ public class StatelessTestClient extends StatelessPresenceClient {
 				idata.add("details", true);
 			}
 		}
-
 		try {
 			db.storeCompilation(completed, remoteAddr, new Date(), code, sessionID, testID, res.ResultCode, returnValue.getJsonString(), full.getJsonString(), userID, toolchain, res.Details == null ? "" : res.Details, res.GoodTests, res.BadTests, existingCompilationID);
 		} catch (DatabaseException e1) {
@@ -189,6 +188,24 @@ public class StatelessTestClient extends StatelessPresenceClient {
 		returnValue.add("result", new JsonString("Internal error"));
 
 		List<CompletedTest> completed = state.Data.RuntimeDB.getCompletedTests(state.getPermissions().Login, state.Toolchain);
+
+		Set<String> completedTestsIDs = new HashSet<>();
+		for (CompletedTest t : completed) {
+			completedTestsIDs.add(t.TestID);
+		}
+
+		Set<String> after = state.Data.Tests.getPriorTestIDs(state.Toolchain, testID);
+		boolean priorTestsCompleted = false;
+		if (after != null) {
+			priorTestsCompleted = true;
+			for (String anotherTest : after) {
+				if (!completedTestsIDs.contains(anotherTest)) {
+					priorTestsCompleted = false;
+					break;
+				}
+			}
+		}
+
 		BadResults badResults = null;
 		try {
 			badResults = state.Data.RuntimeDB.GetBadResultsForUser(state.getPermissions().getUserID(), state.Toolchain);
@@ -203,7 +220,7 @@ public class StatelessTestClient extends StatelessPresenceClient {
 		}
 		boolean canBypassTimeout = canBypassTimeout(state);
 
-		if (!state.getPermissions().allowExecute(testID)) {
+		if (!state.getPermissions().allowExecute(testID) || !priorTestsCompleted) {
 			idata.add("reason", "No permission to execute this test");
 			returnValue.add("code", new JsonNumber(55));
 			returnValue.add("result", new JsonString("Hacking much?"));
@@ -226,9 +243,38 @@ public class StatelessTestClient extends StatelessPresenceClient {
 
 		// See if user has finished this test before
 		boolean newlyFinished = res.ResultCode == 0;
+
 		for (CompletedTest test : completed) {
 			if (test.Code.equals(testID)) {
 				newlyFinished = false;
+			}
+		}
+
+		if (newlyFinished) { // See if there are tests to be unlocked
+			JsonArray newlyUnlocked = new JsonArray();
+			for (GenericTest test : state.Data.Tests.getAllTests(state.Toolchain)) {
+				boolean unlocked = test.getPriorTestsIDs().contains(testID);
+				for (String anotherTest : test.getPriorTestsIDs()) {
+					if (!anotherTest.equals(testID) && !completedTestsIDs.contains(anotherTest)) {
+						unlocked = false;
+						break;
+					}
+				}
+				if (unlocked) {
+					JsonObject tobj = new JsonObject();
+					tobj.add("title", new JsonString(test.getTitle()));
+					tobj.add("zadani", new JsonString(test.getDescription()));
+					tobj.add("init", new JsonString(test.getInitialCode()));
+					tobj.add("hidden", new JsonNumber(test.isHidden() ? 1 : 0));
+					if (!state.getPermissions().allowExecute(test.getID())) {
+						tobj.add("noexec", new JsonNumber(1));
+					}
+					tobj.add("id", new JsonString(test.getID()));
+					newlyUnlocked.add(tobj);
+				}
+			}
+			if (!newlyUnlocked.Value.isEmpty()) {
+				returnValue.add("unlocked", newlyUnlocked);
 			}
 		}
 
@@ -255,7 +301,7 @@ public class StatelessTestClient extends StatelessPresenceClient {
 		state.setIntention(Intention.HISTORY_COMMAND, idata);
 		JsonObject obj = new JsonObject();
 		obj.add("code", 1);
-		
+
 		boolean admin = state.getPermissions().allowEditHistoryOfSomeoneElsesTest(state.Toolchain);
 		if (!admin) {
 			obj.add("result", "Nedostateèná úroveò oprávnìní");
@@ -306,7 +352,7 @@ public class StatelessTestClient extends StatelessPresenceClient {
 		idata.add("input", input);
 		idata.add("result", false);
 		state.setIntention(Intention.HISTORY_COMMAND, idata);
-		
+
 		JsonObject obj = new JsonObject();
 		obj.add("code", 1);
 		boolean admin = state.getPermissions().allowEditHistoryOfSomeoneElsesTest(state.Toolchain);
@@ -352,7 +398,7 @@ public class StatelessTestClient extends StatelessPresenceClient {
 				m.add("more", hist.hasMore());
 				obj.add("result", m);
 				obj.add("code", 0);
-				idata.add("result", true);				
+				idata.add("result", true);
 			} catch (DatabaseException e) {
 				e.printStackTrace();
 				obj.add("code", 1);
@@ -371,7 +417,7 @@ public class StatelessTestClient extends StatelessPresenceClient {
 		idata.add("compilation_id", compilationID);
 		idata.add("result", false);
 		state.setIntention(Intention.HISTORY_COMMAND, idata);
-		
+
 		JsonObject obj = new JsonObject();
 		obj.add("code", 1);
 		boolean admin = state.getPermissions().allowEditHistoryOfSomeoneElsesTest(state.Toolchain);
@@ -409,7 +455,7 @@ public class StatelessTestClient extends StatelessPresenceClient {
 		idata.add("compilation_id", compilationID);
 		idata.add("result", false);
 		state.setIntention(Intention.HISTORY_COMMAND, idata);
-		
+
 		JsonObject obj = new JsonObject();
 		obj.add("code", 1);
 		try {
@@ -450,7 +496,7 @@ public class StatelessTestClient extends StatelessPresenceClient {
 		idata.add("data", data);
 		idata.add("result", false);
 		state.setIntention(Intention.HISTORY_COMMAND, idata);
-		
+
 		JsonObject obj = new JsonObject();
 		obj.add("code", 1);
 		try {
@@ -531,7 +577,7 @@ public class StatelessTestClient extends StatelessPresenceClient {
 		idata.add("test_id", testID);
 		idata.add("result", false);
 		state.setIntention(Intention.HISTORY_COMMAND, idata);
-		
+
 		JsonObject obj = new JsonObject();
 		obj.add("code", 1);
 		boolean admin = state.getPermissions().allowEditHistoryOfSomeoneElsesTest(state.Toolchain);
@@ -571,7 +617,7 @@ public class StatelessTestClient extends StatelessPresenceClient {
 		idata.add("action", "update_stats");
 		idata.add("result", false);
 		state.setIntention(Intention.HISTORY_COMMAND, idata);
-		
+
 		JsonObject obj = new JsonObject();
 		obj.add("code", 1);
 		try {
@@ -587,7 +633,7 @@ public class StatelessTestClient extends StatelessPresenceClient {
 		}
 		return obj;
 	}
-	
+
 	private JsonObject execute_collect(ProcessState state) {
 		state.setIntention(Intention.COLLECT_TESTS, new JsonObject());
 		JsonObject returnValue = new JsonObject();
@@ -628,15 +674,28 @@ public class StatelessTestClient extends StatelessPresenceClient {
 			if (tst.isSecret() && !state.getPermissions().allowSeeSecretTests(state.Toolchain)) {
 				continue;
 			}
-			JsonObject tobj = new JsonObject();
-			tobj.add("title", new JsonString(tst.getTitle()));
-			tobj.add("zadani", new JsonString(tst.getDescription()));
-			tobj.add("init", new JsonString(tst.getInitialCode()));
-			tobj.add("id", new JsonString(tst.getID()));
-			if (!state.getPermissions().allowExecute(tst.getID())) {
-				tobj.add("noexec", new JsonNumber(1));
+
+			// Check if all prior tests are completed
+			Set<String> after = tst.getPriorTestsIDs();
+			boolean priorTestsCompleted = true;
+			for (String anotherTest : after) {
+				if (!finishedByTestID.containsKey(anotherTest)) {
+					priorTestsCompleted = false;
+					break;
+				}
 			}
-			tobj.add("hidden", new JsonNumber(tst.isHidden() ? 1 : 0));
+
+			JsonObject tobj = new JsonObject();
+			if (priorTestsCompleted) {
+				tobj.add("title", new JsonString(tst.getTitle()));
+				tobj.add("zadani", new JsonString(tst.getDescription()));
+				tobj.add("init", new JsonString(tst.getInitialCode()));
+				tobj.add("hidden", new JsonNumber(tst.isHidden() ? 1 : 0));
+				if (!state.getPermissions().allowExecute(tst.getID())) {
+					tobj.add("noexec", new JsonNumber(1));
+				}
+			}
+			tobj.add("id", new JsonString(tst.getID()));
 			if (finishedByTestID.containsKey(tst.getID())) {
 				CompletedTest result = finishedByTestID.get(tst.getID());
 				tobj.add("finished_date", new JsonString(result.CompletionDateStr));

@@ -1,6 +1,8 @@
 package cz.rion.buildserver.test;
 
 import java.util.List;
+import java.util.Set;
+
 import cz.rion.buildserver.db.RuntimeDB.BadResultType;
 import cz.rion.buildserver.db.RuntimeDB.BadResults;
 import cz.rion.buildserver.db.StaticDB;
@@ -15,20 +17,44 @@ import cz.rion.buildserver.wrappers.MyExec.TestResultsExpectations;
 
 public abstract class JsonTest implements GenericTest {
 
-	private final String id;
-	private final String description;
-	private final String title;
-	private final boolean hidden;
-	private final boolean secret;
-	private final Toolchain toolchain;
-	private final String initialCode;
-	private final List<TestVerificationData> tests;
-	private final StaticDB sdb;
-	private VirtualFileManager files;
+	public static final class TestConfiguration {
+		private final String id;
+		private final String description;
+		private final String title;
+		private final boolean hidden;
+		private final boolean secret;
+		private final Toolchain toolchain;
+		private final String initialCode;
+		private final List<TestVerificationData> tests;
+		private final StaticDB sdb;
+		private VirtualFileManager files;
+		private final Set<String> priorTests;
+
+		TestConfiguration(Toolchain toolchain, StaticDB sdb, List<TestVerificationData> tests, String id, VirtualFileManager files, String title, String description, String initialCode, boolean hidden, boolean secret, Set<String> priorTests) {
+			this.sdb = sdb;
+			this.files = files;
+			this.id = id;
+			this.title = title;
+			this.tests = tests;
+			this.initialCode = initialCode;
+			this.description = description;
+			this.hidden = hidden;
+			this.secret = secret;
+			this.toolchain = toolchain;
+			this.priorTests = priorTests;
+		}
+	}
+
+	private final TestConfiguration config;
 
 	@Override
 	public String getID() {
-		return id;
+		return config.id;
+	}
+
+	@Override
+	public Set<String> getPriorTestsIDs() {
+		return config.priorTests;
 	}
 
 	public String getErrorDescription(TestResultsExpectations data) {
@@ -37,16 +63,16 @@ public abstract class JsonTest implements GenericTest {
 
 	@Override
 	public TestResult perform(RunnerLogger logger, BadResults badResults, TestInput input) {
-		int total = tests.size();
+		int total = config.tests.size();
 		int passed = 0;
-		TestResultsExpectations[] results = new TestResultsExpectations[tests.size()];
+		TestResultsExpectations[] results = new TestResultsExpectations[config.tests.size()];
 		int index = 0;
 		SystemFailureMessage finalOsError = new SystemFailureMessage();
 		String lastErrorMessage = null;
-		for (TestVerificationData test : tests) {
+		for (TestVerificationData test : config.tests) {
 			try {
 				logger.log("Begin test. Stdin [0], timeout [1], arguments [2]", test.stdin, test.timeout, test.arguments);
-				MyExecResult result = input.execute(test.stdin, test.arguments, test.timeout, toolchain);
+				MyExecResult result = input.execute(test.stdin, test.arguments, test.timeout, config.toolchain);
 				SystemFailureMessage osError = new SystemFailureMessage(result);
 				if (osError.Type == SystemFailureMessageType.Segfault) {
 					logger.logError("Segfault");
@@ -96,42 +122,33 @@ public abstract class JsonTest implements GenericTest {
 		}
 	}
 
-	protected JsonTest(String id, StaticDB sdb, VirtualFileManager files, Toolchain toolchain, String title, String description, String initialCode, List<TestVerificationData> tests, boolean hidden, boolean secret) {
-		this.sdb = sdb;
-		this.files = files;
-		this.id = id;
-		this.title = title;
-		this.tests = tests;
-		this.initialCode = initialCode;
-		this.description = description;
-		this.hidden = hidden;
-		this.secret = secret;
-		this.toolchain = toolchain;
+	protected JsonTest(TestConfiguration config) {
+		this.config = config;
 	}
 
 	@Override
 	public StaticDB getStaticDB() {
-		return sdb;
+		return config.sdb;
 	}
 
 	@Override
 	public VirtualFileManager getFiles() {
-		return files;
+		return config.files;
 	}
 
 	@Override
 	public String getDescription() {
-		return description;
+		return config.description;
 	}
 
 	@Override
 	public String getInitialCode() {
-		return initialCode;
+		return config.initialCode;
 	}
 
 	@Override
 	public String getTitle() {
-		return id + ": " + title;
+		return config.id + ": " + config.title;
 	}
 
 	/**
@@ -146,17 +163,17 @@ public abstract class JsonTest implements GenericTest {
 
 	@Override
 	public boolean isHidden() {
-		return this.hidden;
+		return config.hidden;
 	}
 
 	@Override
 	public boolean isSecret() {
-		return secret;
+		return config.secret;
 	}
 
 	@Override
 	public Toolchain getToolchain() {
-		return toolchain;
+		return config.toolchain;
 	}
 
 	public enum SystemFailureMessageType {

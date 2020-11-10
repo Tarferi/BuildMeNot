@@ -3,7 +3,9 @@ package cz.rion.buildserver.test;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import cz.rion.buildserver.db.StaticDB;
 import cz.rion.buildserver.db.VirtualFileManager;
@@ -15,6 +17,7 @@ import cz.rion.buildserver.exceptions.NoSuchToolchainException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
+import cz.rion.buildserver.test.JsonTest.TestConfiguration;
 import cz.rion.buildserver.test.JsonTest.TestVerificationData;
 import cz.rion.buildserver.test.targets.AsmTest;
 import cz.rion.buildserver.test.targets.GCCTest;
@@ -142,14 +145,32 @@ public class JsonTestManager {
 					if (!testOk) {
 						return null;
 					}
+
+					Set<String> priorTests = new HashSet<>();
+					if (obj.containsArray("after")) {
+						for (JsonValue afterVal : obj.getArray("after").Value) {
+							if (!afterVal.isString()) {
+								return null;
+							} else {
+								priorTests.add(afterVal.asString().Value);
+							}
+						}
+					}
+
 					String id = obj.getString("id").Value;
 					String descr = obj.getString("description").Value;
 					String title = obj.getString("title").Value;
 					String type = obj.getString("type").Value;
+
+					String initial = obj.containsString("init") ? obj.getString("init").Value : "";
+					boolean hidden = obj.containsNumber("hidden") ? obj.getNumber("hidden").Value == 1 : false;
+					boolean secret = obj.containsNumber("secret") ? obj.getNumber("secret").Value == 1 : false;
+
+					TestConfiguration config = new TestConfiguration(tc, sdb, tvd, id, files, title, descr, initial, hidden, secret, priorTests);
 					if (type.equals("asm")) {
-						return AsmTest.get(tc, sdb, files, id, descr, title, type, tvd, obj);
+						return AsmTest.get(config, obj);
 					} else if (type.equals("gcc")) {
-						return GCCTest.get(tc, sdb, files, id, descr, title, type, tvd, obj);
+						return GCCTest.get(config, obj);
 					}
 				}
 			}
