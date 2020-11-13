@@ -447,7 +447,7 @@ public class RuntimeDB extends LayeredMetaDB {
 		final String tableName2 = "users";
 		final String tableName3 = "compilations_feedback";
 
-		final String sql = "SELECT compilations_feedback.ID as id,	compilations.test_id as test_id, count(*) as Cnt _SEL_ FROM compilations_feedback, compilations, users as users1, users as users2 WHERE compilations_feedback.compilation_id = compilations.ID AND compilations.user_id = users1.ID AND compilations_feedback.author_id = users2.ID AND compilations_feedback.id > ? AND users2.login != ? AND users1.toolchain = ? AND compilations_feedback.valid=1 _AND_ GROUP BY compilations.ID ORDER BY compilations_feedback.ID DESC _LIMIT_";
+		final String sql = "SELECT compilations_feedback.ID as id, compilations.test_id as test_id, count(*) as Cnt _SEL_ FROM compilations_feedback, compilations, users as users1, users as users2 WHERE compilations_feedback.compilation_id = compilations.ID AND compilations.user_id = users1.ID AND compilations_feedback.author_id = users2.ID AND compilations_feedback.id > ? AND users2.login != ? AND users1.toolchain = ? AND compilations_feedback.valid=1 _AND_ GROUP BY compilations.ID ORDER BY compilations_feedback.ID DESC _LIMIT_";
 
 		final int max_logins = 50;
 
@@ -489,13 +489,13 @@ public class RuntimeDB extends LayeredMetaDB {
 				Object[] loginsO = new Object[logins.size() + 3];
 				loginsO[0] = lastReadID;
 				loginsO[1] = exceptLogin;
-				loginsO[1] = toolchain.getName();
+				loginsO[2] = toolchain.getName();
 				int i = 0;
 				for (String login : logins) {
 					if (i > 0) {
 						sb.append(" OR ");
 					}
-					sb.append(" login = ? ");
+					sb.append(" users1.login = ? ");
 					loginsO[3 + i] = login;
 					i++;
 				}
