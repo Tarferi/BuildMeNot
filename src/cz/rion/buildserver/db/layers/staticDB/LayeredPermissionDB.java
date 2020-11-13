@@ -278,7 +278,7 @@ public abstract class LayeredPermissionDB extends LayeredTestDB {
 		}
 		ComparisionFieldGroup grp = new ComparisionFieldGroup(cmps, "OR");
 		List<String> result = new ArrayList<>();
-		JsonArray res = this.select(tableName1, new TableField[] { f_login }, cmps, new TableJoin[] { join }, false, grp);
+		JsonArray res = this.select(tableName1, new TableField[] { f_login }, new ComparisionField[0], new TableJoin[] { join }, false, grp);
 		for (JsonValue val : res.Value) {
 			if (val.isObject()) {
 				JsonObject obj = val.asObject();

@@ -16,6 +16,7 @@ import cz.rion.buildserver.db.RuntimeDB.BadResults;
 import cz.rion.buildserver.db.RuntimeDB.CodedHistory;
 import cz.rion.buildserver.db.RuntimeDB.CompletedTest;
 import cz.rion.buildserver.db.RuntimeDB.HistoryListPart;
+import cz.rion.buildserver.db.RuntimeDB.LiteStoredFeedbackData;
 import cz.rion.buildserver.db.RuntimeDB.TestFeedback;
 import cz.rion.buildserver.db.RuntimeDB.TestHistory;
 import cz.rion.buildserver.db.VirtualFileManager.UserContext;
@@ -195,7 +196,7 @@ public class StatelessTestClient extends StatelessPresenceClient {
 		}
 
 		Set<String> after = state.Data.Tests.getPriorTestIDs(state.Toolchain, testID);
-		boolean priorTestsCompleted = false;
+		boolean priorTestsCompleted = after == null ? true : after.isEmpty();
 		if (after != null) {
 			priorTestsCompleted = true;
 			for (String anotherTest : after) {
@@ -571,6 +572,42 @@ public class StatelessTestClient extends StatelessPresenceClient {
 		return obj;
 	}
 
+	private JsonObject execute_poll_feedback(ProcessState state, int lastReadID, JsonArray logins, JsonArray groups) {
+		JsonObject obj = new JsonObject();
+		obj.add("code", 1);
+		try {
+			UsersPermission perms = state.getPermissions();
+			boolean admin = perms.allowEditHistoryOfSomeoneElsesTest(state.Toolchain);
+			Set<String> loginsS = new HashSet<>();
+			if (admin) {
+				List<Integer> groupIDs = new ArrayList<>();
+				for (JsonValue val : groups.Value) {
+					if (val.isNumber()) {
+						groupIDs.add(val.asNumber().Value);
+					}
+				}
+				for (JsonValue val : logins.Value) {
+					if (val.isString()) {
+						loginsS.add(val.asString().Value);
+					}
+				}
+				if (groupIDs.size() > 0) {
+					List<String> groupLogins = state.Data.StaticDB.getLoginsByGroupIDs(state.Toolchain, groupIDs);
+					loginsS.addAll(groupLogins);
+				}
+			} else {
+				loginsS.add(state.getPermissions().Login);
+			}
+			LiteStoredFeedbackData res = state.Data.RuntimeDB.getFeedbacksFor(state.Toolchain, loginsS, lastReadID, state.getPermissions().Login);
+			obj.add("code", 0);
+			obj.add("result", res);
+		} catch (DatabaseException e) {
+			e.printStackTrace();
+			obj.add("result", e.description);
+		}
+		return obj;
+	}
+
 	private JsonObject execute_retests(ProcessState state, String testID) {
 		JsonObject idata = new JsonObject();
 		idata.add("action", "retests");
@@ -792,6 +829,8 @@ public class StatelessTestClient extends StatelessPresenceClient {
 				return execute_collect_protocol(state, input.getNumber("compilationID").Value);
 			} else if (act.equals("COLLECT_HISTORY_USERS")) {
 				return execute_collect_history_users(state);
+			} else if (act.equals("POLL_FEEDBACK") && input.containsNumber("lastReadID") && input.containsArray("logins") && input.containsArray("groups")) {
+				return execute_poll_feedback(state, input.getNumber("lastReadID").Value, input.getArray("logins"), input.getArray("groups"));
 			} else if (act.equals("RETEST") && input.containsString("testID")) {
 				return execute_retests(state, input.getString("testID").Value);
 			} else if (act.equals("UPDATE_STATS")) {

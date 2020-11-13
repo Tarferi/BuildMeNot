@@ -71,7 +71,7 @@ window.Tester.Main = function() {
 		}
 		
 		for(var i = 0; i < data.length; i++) {
-			var pnl = new window.Tester.TestPanel(data[i], forEveryOtherPanel, self.getFilterDataCB, self.setFilterDataCB);
+			var pnl = new window.Tester.TestPanel(data[i], forEveryOtherPanel, self.getFilterDataCB, self.setFilterDataCB, self.readCommentCB);
 			self.allTests[self.allTests.length] = pnl;
 			var node = pnl.getNode();
 			if(i == 0) {
@@ -101,6 +101,8 @@ window.Tester.Main = function() {
 				self.materialize(data.tests, data.wait);
 				self.common.setLoginPanelVisible(true);
 				self.common.hideInitLoader();
+				self.historian.start();
+				
 			} else {
 				cbFail("Nepodařilo se nahrát testy");
 			}
@@ -241,12 +243,29 @@ window.Tester.Main = function() {
 	self.faqRootContent.classList.add("faq_contents");
 	self.graphRootContent = setBigPanel(self.graphRoot, self.hideStats);
 	
+	self.readCommentCB = function(testID, compilationID, feedbackID) {
+		self.historian.handleOpenFeedback(testID, compilationID, feedbackID);
+	}
 
 	self.init = function() {
 		self.common.addLoginPanel();
 		self.common.setLoginPanelVisible(false);
 		self.common.addButtonToLoginPanel("Statistiky", self.showStats);
 		self.common.addButtonToLoginPanel("FAQ", self.showFaq);
+		var setUnreadCount = function(testID, cnt) {
+			for (var i = 0; i < self.allTests.length; i++) {
+				if(self.allTests[i].data.id == testID) {
+					self.allTests[i].setUnreadCount(cnt);
+				}
+			}
+		};
+		
+		var getFilterCB = function() {
+			return self.getFilterDataCB();
+		}
+		
+		self.historian = new window.Tester.Historian(setUnreadCount, getFilterCB);
+		
 		self.loadRemoteTests();
 		
 		if(window.pastAload){
@@ -259,9 +278,6 @@ window.Tester.Main = function() {
 };
 
 
-function aload() {
-	new window.Tester.Main();
-}
 
 
 window.Tester.FeedbackCommentPanel = function(comment, codeFmt, projectSelectionsToEditView, setSelectionRange) {
@@ -329,7 +345,10 @@ window.Tester.FeedbackCommentPanel = function(comment, codeFmt, projectSelection
 				self.setSelectionRange(begin, end);
 			});
 			span.addEventListener("mouseleave", function() {
-				self.setSelectionRange(0, 0);
+				//self.setSelectionRange(0, 0);
+			});
+			span.addEventListener("click", function() {
+				self.setSelectionRange(begin, end, true);
 			});
 			root.appendChild(span);
 		};
@@ -425,6 +444,182 @@ window.Tester.FeedbackCommentPanel = function(comment, codeFmt, projectSelection
 	return this;
 };
 
+window.Tester.Historian = function(setNotificationCB, getFilterCB) {
+	var self = this;
+	self.common = new Common();
+	
+	var storageAvailable = function() {
+		return window && window.localStorage && window.localStorage.getItem && window.localStorage.setItem;
+	}
+	
+	var clearUnreads = function(testID) {
+		if(storageAvailable()) {
+			var data = window.localStorage.getItem("rion.history_polling.tests." + testID);
+			if(data) {
+				data = JSON.parse(data);
+				if (data && data.length) {
+					window.localStorage.setItem("rion.history_polling.tests." + testID, "[]");
+				}	
+			}
+		}
+	}
+	
+	var addUnreads = function(testID, feedbackID) {
+		if(storageAvailable()) {
+			var data = window.localStorage.getItem("rion.history_polling.tests." + testID);
+			var nt = [feedbackID];
+			if(data) {
+				data = JSON.parse(data);
+				if (data && data.length && data.indexOf) {
+					if(data.indexOf(feedbackID) == -1) {
+						data.push(feedbackID);
+					}
+					nt = data;
+				}
+			}
+			window.localStorage.setItem("rion.history_polling.tests." + testID, JSON.stringify(nt));
+			var data = window.localStorage.getItem("rion.history_polling.known_tests");
+			nt = [testID];
+			if(data) {
+				data = JSON.parse(data);
+				if (data && data.length && data.indexOf) {
+					if(data.indexOf(testID) == -1) {
+						data.push(testID);
+					}
+					nt = data;
+				}
+			}
+			window.localStorage.setItem("rion.history_polling.known_tests", JSON.stringify(nt));
+		}
+	}
+	
+	var getKnownTestIDs = function() {
+		var data = window.localStorage.getItem("rion.history_polling.known_tests");
+		var res = [];
+		if(data) {
+			data = JSON.parse(data);
+			if (data && data.length) {
+				res = data
+			}
+		}
+		return res;
+	}
+	
+	var getUnreads = function(testID) {
+		var res = [];
+		if(storageAvailable()) {
+			var data = window.localStorage.getItem("rion.history_polling.tests." + testID);
+			if(data) {
+				data = JSON.parse(data);
+				if (data && data.length) {
+					res = data;
+				}
+			}
+		}
+		return res;
+	}
+	
+	self.handleOpenFeedback = function(testID, compilationID, feedbackID) {
+		if(storageAvailable()) {
+			clearUnreads(testID);
+			setNotificationCB(testID, 0);
+		}
+	}
+	
+	var getLastReadID = function() {
+		var id = window.localStorage.getItem("rion.history_polling.last_id");
+		if(id === undefined || id === null) {
+			return -1;
+		}
+		return id*1;
+	}
+	
+	var setLastReadID = function(feedbackID) {
+		window.localStorage.setItem("rion.history_polling.last_id", feedbackID);
+	}
+
+	var beginPoll = function() {
+		window.setTimeout(self.poll, 1000 * 60);
+	}
+
+	self.poll = function() {
+		var lastRead = getLastReadID();
+		var cbFail = function(err) {
+			self.common.showError("Chyba", "Nepodařilo se načíst nové komentáře", true, err).then(function(){
+				beginPoll();
+			});
+		}
+		var cbOk = function(data) {
+			var flatten = function(x) {
+				var res = [];
+				for(var a in x) {
+					if(x.hasOwnProperty(a)){
+						var d = x[a];
+						for(var i = 0; i < d.length; i++) {
+							res.push(d[i]);
+						}
+					}
+				}
+				return res;
+			}
+			
+			if(data && data.data) {
+				var allIDs = flatten(data.data);
+				var max = function(a, b) {return a > b ? a : b};
+				var last = allIDs.reduce(max, lastRead);
+				if(last != lastRead) { // Updated
+					for(var testID in data.data) {
+						if(data.data.hasOwnProperty(testID)) {
+							var ids = data.data[testID];
+							for(var i = 0; i < ids.length; i++) {
+								addUnreads(testID, ids[i]);								
+							}
+							setNotificationCB(testID, getUnreads(testID).length);
+						}
+					}
+					setLastReadID(last);
+				}
+				beginPoll();
+				return;
+			}
+			cbFail("Neplatná struktura ze serveru");
+		}
+		var filterData = getFilterCB();
+		var groups = filterData[0];
+		var logins = filterData[1];
+		if(logins.length == 0 && groups.length == 0) {
+			logins.push(self.common.identity.login);
+		}
+		
+		var data = { "action":"POLL_FEEDBACK", "lastReadID": lastRead};
+		if(logins.length > 0 || groups.length > 0) {
+			data.logins = logins;
+			data.groups = groups;
+			self.common.async(data, cbOk, cbFail, false);
+		}
+	}
+	
+	var started = false;
+	
+	self.start = function() {
+		if(storageAvailable() && !started) {
+			started=true;
+			
+			// Init previously detected
+			getKnownTestIDs().map(function(testID) {setNotificationCB(testID, getUnreads(testID).length);}); 
+			self.poll();			
+		}
+	}
+	
+	self.init = function() {
+	}
+	
+	
+	
+	self.init();
+	return self;
+}
+
 window.Tester.FeedbackCodePanel = function(node, codeFmt, originalCode, selectionNode, commentEditorNode) {
 	var self = this;
 	self.codeFmt = codeFmt;
@@ -432,16 +627,31 @@ window.Tester.FeedbackCodePanel = function(node, codeFmt, originalCode, selectio
 	self.originalCode = originalCode;
 	self.selections = [];
 
-	self.setSelectionRange = function(begin, end) {
+	self.setSelectionRange = function(begin, end, focus) {
 		node.innerHTML = "";
 		var newCode = self.codeFmt(self.originalCode);
-		if (end - begin > 0) {
-			var pre = self.codeFmt(self.originalCode.substr(0, begin));
-			var post = self.codeFmt(self.originalCode.substr(end));
-			var sel = "<span style=\"background-color: #aaffee; border: 1px solid black;\">" + self.codeFmt(self.originalCode.substr(begin, end - begin)) + "</span>";
-			newCode = pre + sel + post;
+		var getSpan = function(text) {
+			var el = document.createElement("span");
+			el.innerHTML = text;
+			return el;
 		}
-		node.innerHTML = newCode;
+		
+		if (end - begin > 0) {
+			var pre = getSpan(self.codeFmt(self.originalCode.substr(0, begin)));
+			var post = getSpan(self.codeFmt(self.originalCode.substr(end)));
+			var sel = getSpan(self.codeFmt(self.originalCode.substr(begin, end - begin)));
+			sel.style.backgroundColor = "#aaffee";
+			sel.style.border = "1px solid black";
+			node.appendChild(pre);
+			node.appendChild(sel);
+			node.appendChild(post);
+			if(focus) {
+				sel.scrollIntoView({"behavior": "smooth", "block": "nearest" });
+				sel.focus();
+			}
+		} else {
+			node.innerHTML = newCode;
+		}
 	};
 
 	self.getSelectionRange = function() {
@@ -651,6 +861,7 @@ window.Tester.LoadedFeedbackPanel = function(data, compilationID, codeFmt, reloa
 		// Create table for comments
 
 		ids.codecontents.innerHTML = self.codeFmt(data.data.Code);
+		ids.codecontents.addEventListener("mousedown", function() {self.editor.setSelectionRange(0, 0); });
 		ids.btnAddSel.addEventListener("click", function() { self.editor.addCurentSelection(); })
 		ids.btnComment.addEventListener("click", function() {
 
@@ -688,7 +899,7 @@ window.Tester.LoadedFeedbackPanel = function(data, compilationID, codeFmt, reloa
 	return this;
 };
 
-window.Tester.FeedbackPanel = function(data, showLoginColumn) {
+window.Tester.FeedbackPanel = function(data, showLoginColumn, readCommentCB) {
 	var self = this;
 	self.data = data;
 	self.common = new Common();
@@ -783,6 +994,12 @@ window.Tester.FeedbackPanel = function(data, showLoginColumn) {
 				self.loadedPnl = new window.Tester.LoadedFeedbackPanel(data, self.data.ID, self.codeFmt, self.reload);
 				self.detailRoot.appendChild(self.loadedPnl.getNode());
 				self.loadedPnl.handleInitSize();
+				
+				// Get highest comment ID and report is as read
+				var highestID = data.comments.reduce(function(total, item){return total > item.ID ? total : item.ID;}, -1)
+				if(highestID >= 0) {
+					readCommentCB(self.data.TestID /* TestID */, self.data.ID /* compilationID */  , highestID /* feedbackID */);
+				}
 			} else {
 				cbFail("Neplatná příchozí struktura");
 			}
@@ -1190,7 +1407,7 @@ window.Tester.FilterPanel = function(getDataCB, setDataCB) {
 	return this;
 }
 
-window.Tester.HistoryPanel = function(data, historyBtn, rowPnl, filterBtn, getFilterCB, setFilterCB) {
+window.Tester.HistoryPanel = function(data, historyBtn, rowPnl, filterBtn, getFilterCB, setFilterCB, readCommentCB) {
 	var self = this;
 	self.data = data;
 	var hideLbl = "Skrýt historii";
@@ -1370,7 +1587,7 @@ window.Tester.HistoryPanel = function(data, historyBtn, rowPnl, filterBtn, getFi
 					addNewer(bottomRow[1]);
 				}
 				data.map(function(item){
-					var pnl = new window.Tester.FeedbackPanel(item, showLoginColumn);
+					var pnl = new window.Tester.FeedbackPanel(item, showLoginColumn, readCommentCB);
 					allFeedbacks.push(pnl)
 					pnl.getNodes().map(function(node) {
 						self.nodeContents.appendChild(node);
@@ -1405,7 +1622,7 @@ window.Tester.HistoryPanel = function(data, historyBtn, rowPnl, filterBtn, getFi
 };
 
 
-window.Tester.TestPanel = function(data, forEveryOtherPanelCB, getFilterDataCB, setFilterDataCB) {
+window.Tester.TestPanel = function(data, forEveryOtherPanelCB, getFilterDataCB, setFilterDataCB, readCommentCB) {
 	var self = this;
 
 	this.data = data;
@@ -1421,6 +1638,14 @@ window.Tester.TestPanel = function(data, forEveryOtherPanelCB, getFilterDataCB, 
 	self.btnRun = null;
 	self.resultArea = null;
 
+	self.setUnreadCount = function(cnt) {
+		if(cnt == 0) {
+			self.lblUnread.style.display = "none";
+		} else {
+			self.lblUnread.style.display = "";
+			self.lblUnreadLbl.innerHTML = cnt;
+		}
+	}
 
 	self.setBlockTimeout = function(then) {
 		if (window.timeoutIntervals) {
@@ -1567,7 +1792,14 @@ window.Tester.TestPanel = function(data, forEveryOtherPanelCB, getFilterDataCB, 
 		self.timeoutLbl = ids.timeoutLbl;
 		self.node = node;
 		self.marginPnl = ids.marginPnl;
+		self.lblUnread = ids.lblUnread;
+		self.lblUnreadLbl = ids.lblUnreadLbl;
+		
+		self.lblUnread.style.display = "none";
 
+		ids.lblUnreadBtn.addEventListener("click", function(){
+			readCommentCB(self.data.id);
+		});
 
 		// Tab handler for text area
 		var cancF = function(event) {
@@ -1594,7 +1826,7 @@ window.Tester.TestPanel = function(data, forEveryOtherPanelCB, getFilterDataCB, 
 		self.codeArea.addEventListener("keydown", cancF);
 		self.btnRun.addEventListener("click", function() {self.runTest();});
 		
-		self.historyPnl = new window.Tester.HistoryPanel(self.data, self.btnHist, ids.feedbackPnl, ids.btnHistFiltr, self.getFilterDataCB , self.setFilterDataCB );
+		self.historyPnl = new window.Tester.HistoryPanel(self.data, self.btnHist, ids.feedbackPnl, ids.btnHistFiltr, self.getFilterDataCB , self.setFilterDataCB, readCommentCB);
 		
 		if(data.finished_date) {
 			self.setFinished(true);
@@ -1660,6 +1892,9 @@ window.Tester.TestPanel = function(data, forEveryOtherPanelCB, getFilterDataCB, 
 	return this;
 };
 
+function aload() {
+	new window.Tester.Main();
+}
 
 window.inject("tester/templates.js");
 window.inject("common.js");

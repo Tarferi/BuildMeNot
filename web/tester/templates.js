@@ -29,8 +29,33 @@ window.Tester.Templates = function() {
 							},
 							{
 								"type": "td",
-								"style": "padding-right: 10px;width: 200px;text-align: right;",
+								"style": "padding-right: 10px;min-width: 400px;text-align: right;",
 								"contents": [
+									{
+										"type": "span",
+										"id": "lblUnread",
+										"style": "background: #fcba03; display: inline; font-size: 11pt;margin-right: 20px;position: relative; top: -2px; padding: 6px; border-radius: 15px; border: 2px solid black",
+										"contents": [
+											{
+												"type": "span",
+												"innerHTML": "Nové komentáře ("
+											},
+											{
+												"type": "span",
+												"id": "lblUnreadLbl"
+											},
+											{
+												"type": "span",
+												"innerHTML": ")&nbsp;&nbsp;&nbsp;"
+											},
+											{
+												"type": "span",
+												"id": "lblUnreadBtn",
+												"style": "cursor: pointer",
+												"innerHTML": "[X]"
+											}
+										]
+									},							
 									{
 										"type": "button",
 										"innerHTML": "Skrýt",

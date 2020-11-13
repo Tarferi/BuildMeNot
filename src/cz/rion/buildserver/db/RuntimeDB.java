@@ -416,6 +416,120 @@ public class RuntimeDB extends LayeredMetaDB {
 		return null;
 	}
 
+	public static class LiteStoredFeedbackData implements JsonValuable {
+		private final Map<String, List<Integer>> data;
+		private final int lastID;
+
+		private LiteStoredFeedbackData(Map<String, List<Integer>> data, int lastID) {
+			this.data = data;
+			this.lastID = lastID;
+		}
+
+		@Override
+		public JsonValue getValue() {
+			JsonObject obj = new JsonObject();
+			for (Entry<String, List<Integer>> entry : data.entrySet()) {
+				JsonArray arr = new JsonArray();
+				for (Integer i : entry.getValue()) {
+					arr.add(i);
+				}
+				obj.add(entry.getKey(), arr);
+			}
+			JsonObject o = new JsonObject();
+			o.add("data", obj);
+			o.add("last", lastID);
+			return o;
+		}
+	}
+
+	public LiteStoredFeedbackData getFeedbacksFor(Toolchain toolchain, Set<String> logins, int lastReadID, String exceptLogin) throws DatabaseException {
+		final String tableName = "compilations";
+		final String tableName2 = "users";
+		final String tableName3 = "compilations_feedback";
+
+		final String sql = "SELECT compilations_feedback.ID as id,	compilations.test_id as test_id, count(*) as Cnt _SEL_ FROM compilations_feedback, compilations, users as users1, users as users2 WHERE compilations_feedback.compilation_id = compilations.ID AND compilations.user_id = users1.ID AND compilations_feedback.author_id = users2.ID AND compilations_feedback.id > ? AND users2.login != ? AND users1.toolchain = ? AND compilations_feedback.valid=1 _AND_ GROUP BY compilations.ID ORDER BY compilations_feedback.ID DESC _LIMIT_";
+
+		final int max_logins = 50;
+
+		Map<String, List<Integer>> data = new HashMap<>();
+		int max_id = -1;
+
+		try {
+			if (logins.size() > max_logins) {
+				Object[] rawData = new Object[] { lastReadID, exceptLogin, toolchain.getName() };
+				String eql = sql.replace("_AND_", "").replace("_LIMIT_", "").replace("_SEL_", ", users1.login as login");
+				@SuppressWarnings("deprecation")
+				DatabaseResult res = this.select_raw(eql, rawData);
+
+				for (JsonValue val : res.getJSON(false, new TableField[] { getField(tableName3, "id"), getField(tableName, "test_id"), getField(tableName2, "login") }, toolchain).Value) {
+					if (val.isObject()) {
+						JsonObject obj = val.asObject();
+						if (obj.contains("login")) {
+							String login = obj.getString("login").Value;
+							if (logins.contains(login)) {
+
+								if (obj.containsString("test_id") && obj.containsNumber("id")) {
+									String testID = obj.getString("test_id").Value;
+									int id = obj.getNumber("id").Value;
+									max_id = max_id > id ? id : max_id;
+									if (data.containsKey(testID)) {
+										data.get(testID).add(id);
+									} else {
+										List<Integer> a = new ArrayList<>();
+										a.add(id);
+										data.put(testID, a);
+									}
+								}
+							}
+						}
+					}
+				}
+			} else {
+				StringBuilder sb = new StringBuilder();
+				Object[] loginsO = new Object[logins.size() + 3];
+				loginsO[0] = lastReadID;
+				loginsO[1] = exceptLogin;
+				loginsO[1] = toolchain.getName();
+				int i = 0;
+				for (String login : logins) {
+					if (i > 0) {
+						sb.append(" OR ");
+					}
+					sb.append(" login = ? ");
+					loginsO[3 + i] = login;
+					i++;
+				}
+				String eql = sql.replace("_AND_", " AND (" + sb.toString() + ") ").replace("_LIMIT_", "").replace("_SEL_", "");
+				@SuppressWarnings("deprecation")
+				DatabaseResult res = this.select_raw(eql, loginsO);
+
+				for (JsonValue val : res.getJSON(false, new TableField[] { getField(tableName3, "id"), getField(tableName, "test_id") }, toolchain).Value) {
+					if (val.isObject()) {
+						JsonObject obj = val.asObject();
+						if (obj.containsString("test_id") && obj.containsNumber("id")) {
+							String testID = obj.getString("test_id").Value;
+							int id = obj.getNumber("id").Value;
+							max_id = max_id > id ? id : max_id;
+							if (data.containsKey(testID)) {
+								data.get(testID).add(id);
+							} else {
+								List<Integer> a = new ArrayList<>();
+								a.add(id);
+								data.put(testID, a);
+							}
+						}
+					}
+				}
+			}
+		} catch (CompressionException e) {
+			e.printStackTrace();
+			throw new DatabaseException("Failed to decompress data", e);
+		}
+
+		return new LiteStoredFeedbackData(data, max_id);
+
+	}
+
 	public HistoryListPart getHistory(Toolchain toolchain, UsersPermission perms, String testID, boolean onlyMine, boolean allowProtocol, int limit, int offset, Set<String> logins, boolean includeCode) throws DatabaseException {
 		HistoryListPart lst = new HistoryListPart(limit);
 		final String tableName = "compilations";
@@ -435,7 +549,7 @@ public class RuntimeDB extends LayeredMetaDB {
 		final OrderField order = new OrderField(getField(tableName, "ID"), "DESC");
 
 		final TableField f_login = getField(tableName2, "login");
-		final int max_logins = 5;
+		final int max_logins = 50;
 		if (logins == null) {
 			JsonArray res = this.select(tableName, fields, conjunctions, new TableJoin[] { new TableJoin(getField(tableName, "user_id"), getField(tableName2, "ID")) }, true);
 			for (JsonValue val : res.Value) {
@@ -1315,4 +1429,5 @@ public class RuntimeDB extends LayeredMetaDB {
 	public void registerToolchainUpdator(ToolchainCallback cb) {
 		sdb.registerToolchainListener(cb);
 	}
+
 }
