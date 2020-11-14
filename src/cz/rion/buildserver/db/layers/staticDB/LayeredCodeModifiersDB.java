@@ -35,6 +35,14 @@ public abstract class LayeredCodeModifiersDB extends LayeredBuildersDB {
 			}
 		}
 
+		@Override
+		public String getDescription() {
+			StringBuilder sb = new StringBuilder();
+			sb.append("Ovìøí, že kód neobsahuje zakázané instrukce a pøipojí ke kódu prepend a append èást\n");
+			sb.append("Použitelné pouze pro testy typu \"asm\" s builderem \"NASM\"");
+			return sb.toString();
+		}
+
 	}
 
 	private static final class GCCBaseModifier implements LayeredBuildersDB.ToolInputModifier {
@@ -63,6 +71,14 @@ public abstract class LayeredCodeModifiersDB extends LayeredBuildersDB {
 				errors.logError("Interni chyba. Toolchain prijal kod pro GCC v rezimu nepodporujici GCC");
 				return null;
 			}
+		}
+
+		@Override
+		public String getDescription() {
+			StringBuilder sb = new StringBuilder();
+			sb.append("Pøipojí ke kódu prepend a append èást. Dále pøipojuje malloc kód a nahrazuje main, je-li povolen\n");
+			sb.append("Použitelné pouze pro testy typu \"gcc\" s builderem \"GCC\"");
+			return sb.toString();
 		}
 	}
 
@@ -100,6 +116,14 @@ public abstract class LayeredCodeModifiersDB extends LayeredBuildersDB {
 				return false;
 			}
 			return true;
+		}
+
+		@Override
+		public String getDescription() {
+			StringBuilder sb = new StringBuilder();
+			sb.append("Ovìøuje, že není v uživatelském kódu nepoovolený hlavièkový soubor, je-li u testu uveden seznam povolených hlavièkových souborù.\n");
+			sb.append("Použitelné pouze pro testy typu \"gcc\" s builderem \"GCC\"");
+			return sb.toString();
 		}
 
 		@Override

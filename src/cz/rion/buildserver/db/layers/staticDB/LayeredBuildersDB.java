@@ -66,6 +66,36 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 		modifiers.put(mod.getName(), mod);
 	}
 
+	private final class ModifiersFile extends VirtualFile {
+
+		public ModifiersFile(Toolchain toolchain) {
+			super("toolchains/modifiers.ini", toolchain);
+		}
+
+		@Override
+		public String read(UserContext context) throws VirtualFileException {
+			StringBuilder sb = new StringBuilder();
+			sb.append("Seznam dostupných nodifikátorù:\n");
+			synchronized (modifiers) {
+				for (Entry<String, ToolInputModifier> mod : modifiers.entrySet()) {
+					ToolInputModifier m = mod.getValue();
+					sb.append("\t" + m.getName() + ":\n");
+					for (String line : m.getDescription().split("\n")) {
+						sb.append("\t\t" + line + "\n");
+					}
+					sb.append("\n");
+				}
+			}
+			return sb.toString();
+		}
+
+		@Override
+		public boolean write(UserContext context, String newName, String value) throws VirtualFileException {
+			return false;
+		}
+
+	}
+
 	public static class ExecutionResult {
 		public final ToolExecutionResult[] SubExecutions;
 		private final boolean hadError;
@@ -96,6 +126,8 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 		public String getModified(ToolchainLogger errors, String input, GenericTest test, String login);
 
 		public String getName();
+
+		public String getDescription();
 	}
 
 	public void reloadToolchains() {
@@ -633,6 +665,7 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 		this.sharedToolchain = new Toolchain("shared", new ArrayList<>());
 		initDefaultToolchains(dbData);
 
+		dbData.Files.registerVirtualFile(new ModifiersFile(this.sharedToolchain));
 	}
 
 	@Override
