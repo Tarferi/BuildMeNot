@@ -166,7 +166,9 @@ public class JsonTestManager {
 					boolean hidden = obj.containsNumber("hidden") ? obj.getNumber("hidden").Value == 1 : false;
 					boolean secret = obj.containsNumber("secret") ? obj.getNumber("secret").Value == 1 : false;
 
-					TestConfiguration config = new TestConfiguration(tc, sdb, tvd, id, files, title, descr, initial, hidden, secret, priorTests);
+					String builder = obj.containsString("builder") ? obj.getString("builder").Value : tc.getName();
+
+					TestConfiguration config = new TestConfiguration(tc, sdb, tvd, id, files, title, descr, initial, hidden, secret, priorTests, builder);
 					if (type.equals("asm")) {
 						return AsmTest.get(config, obj);
 					} else if (type.equals("gcc")) {

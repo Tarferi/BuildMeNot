@@ -33,4 +33,6 @@ public interface GenericTest {
 	public VirtualFileManager getFiles();
 	
 	public Set<String> getPriorTestsIDs();
+	
+	public String getBuilder();
 }

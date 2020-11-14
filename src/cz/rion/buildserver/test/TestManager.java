@@ -122,8 +122,8 @@ public class TestManager {
 			this.exeName = exeName;
 		}
 
-		public MyExecResult execute(String stdin, String[] arguments, int timeout, Toolchain toolchain) throws CommandLineExecutionException {
-			String[] runArgs = toolchain.runnerParams;
+		public MyExecResult execute(String stdin, String[] arguments, int timeout, Toolchain toolchain, String builderName) throws CommandLineExecutionException {
+			String[] runArgs = toolchain.getRunnerParams(builderName);
 			String[] nargs = new String[arguments.length + runArgs.length];
 			System.arraycopy(runArgs, 0, nargs, 0, runArgs.length);
 			System.arraycopy(arguments, 0, nargs, runArgs.length, arguments.length);
@@ -362,11 +362,11 @@ public class TestManager {
 			logger.log("Working directory set to " + workingDirectory);
 			logger.log("Toolchain for compiling set to " + runner.getName());
 			try {
-				ExecutionResult result = runner.run(errorLogger, test, workingDirectory, userCode, "", login);
+				ExecutionResult result = runner.run(errorLogger, test, workingDirectory, userCode, "", login, test.getBuilder());
 				workingDirectory = result.newWorkingDirectory;
 				if (result.wasOK()) {
 					logger.log("Executing result is OK");
-					TestInput input = new TestInput(workingDirectory, runner.getLastOutputFileName());
+					TestInput input = new TestInput(workingDirectory, runner.getLastOutputFileName(test.getBuilder()));
 					testResult = test.perform(logger, badResults, input);
 					MyFS.deleteFileSilent(workingDirectory);
 				} else {

@@ -574,6 +574,10 @@ public class StatelessTestClient extends StatelessPresenceClient {
 
 	private JsonObject execute_poll_feedback(ProcessState state, int lastReadID, JsonArray logins, JsonArray groups) {
 		JsonObject obj = new JsonObject();
+		JsonObject idata = new JsonObject();
+		idata.add("action", "poll");
+		idata.add("result", false);
+		state.setIntention(Intention.HISTORY_COMMAND_POLL, idata);
 		obj.add("code", 1);
 		try {
 			UsersPermission perms = state.getPermissions();
@@ -601,6 +605,7 @@ public class StatelessTestClient extends StatelessPresenceClient {
 			LiteStoredFeedbackData res = state.Data.RuntimeDB.getFeedbacksFor(state.Toolchain, loginsS, lastReadID, state.getPermissions().Login);
 			obj.add("code", 0);
 			obj.add("result", res);
+			idata.add("result", true);
 		} catch (DatabaseException e) {
 			e.printStackTrace();
 			obj.add("result", e.description);

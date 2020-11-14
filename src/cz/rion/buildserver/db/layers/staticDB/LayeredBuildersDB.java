@@ -1,6 +1,5 @@
 package cz.rion.buildserver.db.layers.staticDB;
 
-import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -15,7 +14,8 @@ import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.DatabaseInitData;
 import cz.rion.buildserver.db.RuntimeDB.BadResultType;
 import cz.rion.buildserver.db.RuntimeDB.BadResults;
-import cz.rion.buildserver.db.VirtualFileManager.ReadVirtualFile;
+import cz.rion.buildserver.db.VirtualFileManager.UserContext;
+import cz.rion.buildserver.db.VirtualFileManager.VirtualFile;
 import cz.rion.buildserver.exceptions.CommandLineExecutionException;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.exceptions.FileWriteException;
@@ -26,7 +26,6 @@ import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.json.JsonValue.JsonString;
 import cz.rion.buildserver.test.GenericTest;
-import cz.rion.buildserver.test.TestManager.RunnerLogger;
 import cz.rion.buildserver.wrappers.FileReadException;
 import cz.rion.buildserver.wrappers.MyExec;
 import cz.rion.buildserver.wrappers.MyExec.MyExecResult;
@@ -343,19 +342,86 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 
 	}
 
-	private static final Map<String, Integer> toolchainIndexMapping = new HashMap<>();
-
-	public final class Toolchain {
-		private final Tool[] tools;
+	public static final class Toolchain {
 		private final String name;
-		private final String pathPrefix;
-		public final String[] runnerParams;
+		private final ToolchainWrapperFile wrapperFile;
+		private final Map<String, ToolchainData> mapping = new HashMap<>();
 		private final int ToolchainIndex;
 		public final boolean IsRoot;
 		public final boolean IsShared;
 
-		public ExecutionResult run(ToolchainLogger errors, GenericTest test, String workingDirectory, String inputString, String stdin, String login) {
+		public ExecutionResult run(ToolchainLogger errors, GenericTest test, String workingDirectory, String inputString, String stdin, String login, String builderName) {
+			builderName = builderName == null ? name : builderName;
+			ToolchainData data = mapping.get(builderName);
+			if (data == null) {
+				errors.logError("No such builder is known in toolchain " + name + ": " + builderName);
+				return new ExecutionResult(new ToolExecutionResult[0], true, workingDirectory);
+			}
+			return data.run(errors, test, workingDirectory, inputString, stdin, login);
+		}
+
+		public String getName() {
+			return name;
+		}
+
+		private Toolchain(String name, List<ToolchainData> data) {
+			this.name = name;
+			this.wrapperFile = new ToolchainWrapperFile(name, this);
+			this.IsRoot = name.equals(Settings.getRootToolchain());
+			this.IsShared = name.equals("shared");
+
+			for (ToolchainData item : data) {
+				mapping.put(item.name, item);
+			}
+
+			synchronized (toolchainIndexMapping) {
+				Integer index = toolchainIndexMapping.get(name);
+				if (index == null) {
+					index = toolchainIndexMapping.size();
+					toolchainIndexMapping.put(name, index);
+				}
+				this.ToolchainIndex = index;
+			}
+		}
+
+		private static final Map<String, Integer> toolchainIndexMapping = new HashMap<>();
+
+		public String getLastOutputFileName(String builderName) {
+			String lastOutput = "";
+
+			ToolchainData tc = mapping.get(builderName);
+			if (tc != null) {
+				return tc.getLastOutputFileName();
+			}
+			return lastOutput;
+		}
+
+		@Override
+		public boolean equals(Object another) {
+			if (another instanceof Toolchain) {
+				return this.ToolchainIndex == ((Toolchain) another).ToolchainIndex;
+			}
+			return super.equals(another);
+		}
+
+		public String[] getRunnerParams(String builderName) {
+			ToolchainData tc = mapping.get(builderName);
+			if (tc != null) {
+				return tc.runnerParams;
+			}
+			return new String[0];
+		}
+	}
+
+	private static final class ToolchainData {
+		private final Tool[] tools;
+		private final String name;
+		private final String pathPrefix;
+		private final String[] runnerParams;
+
+		private ExecutionResult run(ToolchainLogger errors, GenericTest test, String workingDirectory, String inputString, String stdin, String login) {
 			MyFS.deleteFileSilent(workingDirectory);
+
 			boolean codeKnown = true;
 
 			ToolExecutionResult[] lst = new ToolExecutionResult[tools.length];
@@ -407,24 +473,14 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 			return new ExecutionResult(lst, workingDirectory);
 		}
 
-		public Toolchain(String name, String prefix, Tool[] tools, String runnerParams) throws DatabaseException {
+		private ToolchainData(String name, String prefix, Tool[] tools, String runnerParams) throws DatabaseException {
 			this.tools = tools;
 			this.name = name;
 			this.pathPrefix = prefix;
-			this.IsRoot = name.equals(Settings.getRootToolchain());
-			this.IsShared = name.equals("shared");
 			this.runnerParams = unserializeParams(runnerParams);
-			synchronized (toolchainIndexMapping) {
-				Integer index = toolchainIndexMapping.get(name);
-				if (index == null) {
-					index = toolchainIndexMapping.size();
-					toolchainIndexMapping.put(name, index);
-				}
-				this.ToolchainIndex = index;
-			}
 		}
 
-		public String getLastOutputFileName() {
+		private String getLastOutputFileName() {
 			String lastOutput = "";
 			for (Tool t : tools) {
 				if (t.providesCode()) {
@@ -434,17 +490,6 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 			return lastOutput;
 		}
 
-		public String getName() {
-			return name;
-		}
-
-		@Override
-		public boolean equals(Object another) {
-			if (another instanceof Toolchain) {
-				return this.ToolchainIndex == ((Toolchain) another).ToolchainIndex;
-			}
-			return super.equals(another);
-		}
 	}
 
 	private final ToolInputModifier getModifier(String name) throws DatabaseException {
@@ -539,7 +584,7 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 		}
 		if (create) {
 			try {
-				this.createToolchainIfItDoesntExist(name, "TOOLCHAIN_" + name, new String[0], new String[0]);
+				this.createToolchainIfItDoesntExist(name);
 				try {
 					loadToolchains();
 				} catch (NoSuchToolException | DatabaseException e) {
@@ -555,24 +600,39 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 		throw new NoSuchToolchainException(name);
 	}
 
+	private void createToolchainIfItDoesntExist(String name, String... dataNames) throws DatabaseException {
+		final String tableName2 = "toolchain_g";
+
+		final TableField fname2 = this.getField(tableName2, "name");
+		final TableField fdata2 = this.getField(tableName2, "data");
+		final TableField fvalid2 = this.getField(tableName2, "valid");
+
+		JsonArray res = this.select(tableName2, new TableField[] { fname2, fdata2 }, false, new ComparisionField(fname2, name), new ComparisionField(fvalid2, 1));
+		if (res.Value.isEmpty()) {
+			JsonArray emptyData = new JsonArray();
+			for (String dataName : dataNames) {
+				emptyData.add(dataName);
+			}
+			this.insert(tableName2, new ValuedField(fname2, name), new ValuedField(fvalid2, 1), new ValuedField(fdata2, JsonValue.getPrettyJsonString(emptyData)));
+		}
+
+	}
+
 	private Map<String, Toolchain> toolchains = new HashMap<>();
 	private final Toolchain rootToolchain;
 	private final Toolchain sharedToolchain;
 
-	public LayeredBuildersDB(DatabaseInitData dbName) throws DatabaseException {
-		super(dbName);
-		this.dropTable("builders");
-		this.dropTable("tools");
-		this.dropTable("toolchain");
+	public LayeredBuildersDB(DatabaseInitData dbData) throws DatabaseException {
+		super(dbData);
 
 		this.makeTable("builders", true, KEY("ID"), TEXT("name"), TEXT("builder_path"), TEXT("builder_executable"), TEXT("params"), TEXT("fail_if_file_exists"), TEXT("fail_if_file_doesnt_exist"), NUMBER("expected_result"), NUMBER("valid"), NUMBER("timeout"), TEXT("expected_outputFile"), TEXT("expected_inputFile"), TEXT("modifiers"), NUMBER("provide_stdin"), TEXT("stdout_output_handler"), TEXT("stderr_output_handler"));
 		this.makeTable("tools", true, KEY("ID"), TEXT("builder"), NUMBER("next"), NUMBER("valid"));
-		this.makeTable("toolchain", true, KEY("ID"), TEXT("name"), NUMBER("first_tool"), TEXT("target_path_prefix"), TEXT("runner_params"), NUMBER("valid"));
+		this.makeTable("toolchain", true, KEY("ID"), TEXT("name"), TEXT("first_tool"), TEXT("target_path_prefix"), TEXT("runner_params"), NUMBER("valid"));
+		this.makeTable("toolchain_g", true, KEY("ID"), TEXT("name"), BIGTEXT("data"), NUMBER("valid"));
+		this.rootToolchain = new Toolchain(Settings.getRootToolchain(), new ArrayList<>());
+		this.sharedToolchain = new Toolchain("shared", new ArrayList<>());
+		initDefaultToolchains(dbData);
 
-		this.rootToolchain = new Toolchain(Settings.getRootToolchain(), "", new Tool[0], "[]");
-		this.sharedToolchain = new Toolchain("shared", "", new Tool[0], "[]");
-
-		initDefaultToolchains();
 	}
 
 	@Override
@@ -711,6 +771,8 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 
 		JsonArray res = this.select(tableName, new TableField[] { fname, ffirst, fprefix, frunner_params }, false, new ComparisionField(fvalid, 1));
 
+		Map<String, ToolchainData> mapping = new HashMap<>();
+
 		for (JsonValue val : res.Value) {
 			if (val.isObject()) {
 				JsonObject obj = val.asObject();
@@ -720,7 +782,39 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 					int first_tool = obj.getNumber("first_tool").Value;
 					Tool[] ntools = getToolsByFirstID(tools, links, first_tool);
 					String runner_params = obj.getString("runner_params").Value;
-					result.put(name, new Toolchain(name, target_path_prefix, ntools, runner_params));
+					mapping.put(name, new ToolchainData(name, target_path_prefix, ntools, runner_params));
+				}
+			}
+		}
+
+		final String tableName2 = "toolchain_g";
+
+		final TableField fname2 = this.getField(tableName2, "name");
+		final TableField fdata2 = this.getField(tableName2, "data");
+		final TableField fvalid2 = this.getField(tableName2, "valid");
+
+		res = this.select(tableName2, new TableField[] { fname2, fdata2 }, true, new ComparisionField(fvalid2, 1));
+		for (JsonValue val : res.Value) {
+			if (val.isObject()) {
+				JsonObject obj = val.asObject();
+				if (obj.containsString("name") && obj.containsString("data")) {
+					String name = obj.getString("name").Value;
+					String data = obj.getString("data").Value;
+					JsonValue v = JsonValue.parse(data);
+					if (v != null) {
+						if (v.isArray()) {
+							List<ToolchainData> d = new ArrayList<>();
+							for (JsonValue vv : v.asArray().Value) {
+								if (vv.isString()) {
+									String tname = vv.asString().Value;
+									if (mapping.containsKey(tname)) {
+										d.add(mapping.get(tname));
+									}
+								}
+							}
+							result.put(name, new Toolchain(name, d));
+						}
+					}
 				}
 			}
 		}
@@ -860,7 +954,7 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 		}
 	}
 
-	private List<String> getToolChainNamesByFirstTool(int toolID) throws DatabaseException {
+	private List<String> getToolChainDataNamesByFirstTool(int toolID) throws DatabaseException {
 		List<String> lst = new ArrayList<>();
 		final String tableName = "toolchain";
 		final TableField ffirst = this.getField(tableName, "first_tool");
@@ -892,7 +986,7 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 				if (obj.containsNumber("ID") && obj.containsNumber("next")) {
 					int toolID = obj.getNumber("ID").Value;
 					int nextToolID = obj.getNumber("next").Value;
-					List<String> lst = getToolChainNamesByFirstTool(toolID);
+					List<String> lst = getToolChainDataNamesByFirstTool(toolID);
 					String name = lst.size() == 1 ? lst.get(0) : null;
 					return new FirstToolInfo(name, builder, toolID, nextToolID);
 				}
@@ -992,10 +1086,10 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 		this.insert(tableName, new ValuedField(fname, name), new ValuedField(ffirst, lnk.ID), new ValuedField(fprefix, prefix), new ValuedField(frunner_params, serializeParams(runnerParams)), new ValuedField(fvalid, 1));
 	}
 
-	private void createToolchainIfItDoesntExist(String name, String prefix, String[] runnerParams, String... builders) throws DatabaseException {
+	private void createToolchainDataIfItDoesntExist(String name, String prefix, String[] runnerParams, String... builders) throws DatabaseException {
 		UniqueToolLink lnk = uniqueToolLinkExistsForBuilders(name, builders);
 		if (lnk != null) { // Link exists -> it must belong to us
-			List<String> usedInChains = getToolChainNamesByFirstTool(lnk.ID);
+			List<String> usedInChains = getToolChainDataNamesByFirstTool(lnk.ID);
 			if (usedInChains.contains(name) && usedInChains.size() == 1) { // Links exist for us only
 				return;
 			} else { // Links exist but not for us
@@ -1035,7 +1129,9 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 			this.addBuilder(goLinkName, path, executable, "", "", params, 0, timeout, new String[0], Settings.getExecutableFileName(), "", 0, new String[0], new String[0]);
 		}
 		String[] nasmParams = Settings.getAsmExecutableRunnerParams();
-		createToolchainIfItDoesntExist("ISU", "nasm/", nasmParams, preprocessorName, nasmName, goLinkName);
+		createToolchainDataIfItDoesntExist("NASM", "nasm/", nasmParams, preprocessorName, nasmName, goLinkName);
+
+		createToolchainIfItDoesntExist("ISU", "NASM");
 	}
 
 	private void addGCCToolchain() throws DatabaseException {
@@ -1063,12 +1159,36 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 			this.addBuilder(GCCName, path, executable, "", "", params, 0, timeout, new String[0], finalExecutable, "preprocessed.c", 0, new String[0], new String[0]);
 		}
 		String[] runnerParams = Settings.getGccExecutableRunnerParams();
-		createToolchainIfItDoesntExist("IZP", "gcc/", runnerParams, GCCPreprocess, preprocessorName, GCCName);
+		createToolchainDataIfItDoesntExist("GCC", "gcc/", runnerParams, GCCPreprocess, preprocessorName, GCCName);
+
+		createToolchainIfItDoesntExist("IZP", "GCC");
 	}
 
-	private void initDefaultToolchains() throws DatabaseException {
-		addNasmToolchain();
-		addGCCToolchain();
+	private void initDefaultToolchains(DatabaseInitData dbData) throws DatabaseException {
+		if (Settings.GetUseSettingsBuilders()) {
+			this.execute_raw("DELETE FROM builders");
+			this.execute_raw("DELETE FROM tools");
+			this.execute_raw("DELETE FROM toolchain");
+			this.execute_raw("DELETE FROM toolchain_g");
+			addNasmToolchain();
+			addGCCToolchain();
+		} else {
+			if (!Settings.GetUseSettingsBuilders()) {
+				this.registerToolchainListener(new ToolchainCallback() {
+
+					@Override
+					public void toolchainAdded(Toolchain t) {
+						dbData.Files.registerVirtualFile(t.wrapperFile);
+					}
+
+					@Override
+					public void toolchainRemoved(Toolchain t) {
+						dbData.Files.unregisterVirtualFile(t.wrapperFile);
+					}
+
+				});
+			}
+		}
 	}
 
 	private void loadToolchains() throws NoSuchToolException, DatabaseException {
@@ -1091,5 +1211,141 @@ public abstract class LayeredBuildersDB extends LayeredSettingsDB {
 		} catch (NoSuchToolException | DatabaseException e) {
 			e.printStackTrace();
 		}
+	}
+
+	private static final class ToolchainWrapperFile extends VirtualFile {
+
+		private static final String folder = "toolchains/";
+		private static final String extension = ".ini";
+		private final Toolchain toolchain;
+
+		public ToolchainWrapperFile(String name, Toolchain toolchain) {
+			super(folder + name + extension, toolchain);
+			this.toolchain = toolchain;
+		}
+
+		private JsonArray getModifiers(Tool tool) {
+			JsonArray a = new JsonArray();
+			for (ToolInputModifier mod : tool.modifiers) {
+				a.add(mod.getName());
+			}
+			return a;
+		}
+
+		private JsonArray getStderrHandlers(Tool tool) {
+			JsonArray a = new JsonArray();
+			for (ToolInputModifier mod : tool.stdErrOutputputHandler) {
+				a.add(mod.getName());
+			}
+			return a;
+		}
+
+		private JsonArray getStdoutHandlers(Tool tool) {
+			JsonArray a = new JsonArray();
+			for (ToolInputModifier mod : tool.stdoutOutputHandler) {
+				a.add(mod.getName());
+			}
+			return a;
+		}
+
+		private JsonArray getParams(Tool tool) {
+			JsonArray a = new JsonArray();
+			for (String param : tool.toolParams) {
+				a.add(param);
+			}
+			return a;
+		}
+
+		private JsonArray getParams(String[] params) {
+			JsonArray a = new JsonArray();
+			for (String param : params) {
+				a.add(param);
+			}
+			return a;
+		}
+
+		private JsonArray getTools(Tool[] tools) {
+			JsonArray a = new JsonArray();
+
+			for (Tool tool : tools) {
+				JsonObject obj = new JsonObject();
+				obj.add("Name", tool.toolName);
+				if (!tool.toolExecutable.isEmpty()) {
+					obj.add("Executable", tool.toolExecutable);
+				}
+				if (!tool.toolPath.isEmpty()) {
+					obj.add("Path", tool.toolPath);
+				}
+				obj.add("Timeout", tool.timeout);
+				if (!tool.expectedInputFile.isEmpty()) {
+					obj.add("ExpectedInputFileName", tool.expectedInputFile);
+				}
+				if (!tool.expectedOutputFile.isEmpty()) {
+					obj.add("ExpectedOutputFileName", tool.expectedOutputFile);
+				}
+				obj.add("ExpectedResult", tool.expectedResult);
+				if (!tool.failIfDoesntExist.isEmpty()) {
+					obj.add("FailIfDoesntExist", tool.failIfDoesntExist);
+				}
+				if (!tool.failIfExists.isEmpty()) {
+					obj.add("FailIfExists", tool.failIfExists);
+				}
+				obj.add("ProvidedSTDIN", tool.provideStdin);
+				if (tool.modifiers.length > 0) {
+					obj.add("Modifiers", getModifiers(tool));
+				}
+				if (tool.stdErrOutputputHandler.length > 0) {
+					obj.add("STDErrHandlers", getStderrHandlers(tool));
+				}
+				if (tool.stdoutOutputHandler.length > 0) {
+					obj.add("STDOutHandlers", getStdoutHandlers(tool));
+				}
+				if (tool.toolParams.length > 0) {
+					obj.add("Params", getParams(tool));
+				}
+				a.add(obj);
+			}
+			return a;
+		}
+
+		private JsonObject getToolchain(ToolchainData data) {
+			JsonObject obj = new JsonObject();
+			obj.add("Name", data.name);
+			if (!data.pathPrefix.isEmpty()) {
+				obj.add("PathPrefix", data.pathPrefix);
+			}
+			if (data.runnerParams.length > 0) {
+				obj.add("Params", getParams(data.runnerParams));
+			}
+			if (data.tools.length > 0) {
+				obj.add("Tools", getTools(data.tools));
+			}
+			return obj;
+		}
+
+		@Override
+		public String read(UserContext context) throws VirtualFileException {
+			JsonObject obj = new JsonObject();
+			obj.add("Name", toolchain.name);
+			JsonObject tobj = new JsonObject();
+			boolean addTools = false;
+			for (Entry<String, ToolchainData> builder : toolchain.mapping.entrySet()) {
+				tobj.add(builder.getKey(), getToolchain(builder.getValue()));
+				addTools = true;
+			}
+			if (addTools) {
+				obj.add("Tools", tobj);
+			}
+			return JsonValue.getPrettyJsonString(obj);
+		}
+
+		@Override
+		public boolean write(UserContext context, String newName, String value) throws VirtualFileException {
+			if (context.getToolchain().IsRoot) {
+
+			}
+			return false;
+		}
+
 	}
 }

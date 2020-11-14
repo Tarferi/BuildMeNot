@@ -7,7 +7,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
-
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.exceptions.FileWriteException;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
@@ -53,6 +52,7 @@ public class Settings {
 	private final SettingsValue InitGroupsAndUsers = new SettingsValue(SettingsCategory.Server, "InitGroupsAndUsers", "Inicializovat skupiny (nevyužívat)", ValueType.BOOLEAN, 0);
 	private final SettingsValue nasmTimeout = new SettingsValue(SettingsCategory.NASM, "NasmTimeout", "Timeout pro nasm", ValueType.INTEGER, 5000);
 	private final SettingsValue linkTimeout = new SettingsValue(SettingsCategory.NASM, "LinkerTimeout", "Timeout pro linker", ValueType.INTEGER, 5000);
+	private final SettingsValue UseSettingsBuilders = new SettingsValue(SettingsCategory.Server, "UseSettingsBuilders", "Používat buildery pro IZP a ISU z nastavení. Pokud není nastaveno, jsou zavedeny wrappery nad databází", ValueType.BOOLEAN, 0);
 
 	private final SettingsValue forceTimeoutOnErrors = new SettingsValue(SettingsCategory.Server, "ForceTimeoutOnErrors", "Timeout pøi odevzdání špatného kódu", ValueType.BOOLEAN, 1);
 
@@ -532,5 +532,9 @@ public class Settings {
 
 	public static boolean DoJsRedirect() {
 		return instance.JSRedirect.asBoolean();
+	}
+
+	public static boolean GetUseSettingsBuilders() {
+		return instance.UseSettingsBuilders.asBoolean();
 	}
 }

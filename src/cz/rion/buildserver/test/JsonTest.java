@@ -29,8 +29,9 @@ public abstract class JsonTest implements GenericTest {
 		private final StaticDB sdb;
 		private VirtualFileManager files;
 		private final Set<String> priorTests;
+		private final String builder;
 
-		TestConfiguration(Toolchain toolchain, StaticDB sdb, List<TestVerificationData> tests, String id, VirtualFileManager files, String title, String description, String initialCode, boolean hidden, boolean secret, Set<String> priorTests) {
+		TestConfiguration(Toolchain toolchain, StaticDB sdb, List<TestVerificationData> tests, String id, VirtualFileManager files, String title, String description, String initialCode, boolean hidden, boolean secret, Set<String> priorTests, String builder) {
 			this.sdb = sdb;
 			this.files = files;
 			this.id = id;
@@ -42,6 +43,7 @@ public abstract class JsonTest implements GenericTest {
 			this.secret = secret;
 			this.toolchain = toolchain;
 			this.priorTests = priorTests;
+			this.builder = builder;
 		}
 	}
 
@@ -50,6 +52,11 @@ public abstract class JsonTest implements GenericTest {
 	@Override
 	public String getID() {
 		return config.id;
+	}
+
+	@Override
+	public String getBuilder() {
+		return config.builder;
 	}
 
 	@Override
@@ -72,7 +79,7 @@ public abstract class JsonTest implements GenericTest {
 		for (TestVerificationData test : config.tests) {
 			try {
 				logger.log("Begin test. Stdin [0], timeout [1], arguments [2]", test.stdin, test.timeout, test.arguments);
-				MyExecResult result = input.execute(test.stdin, test.arguments, test.timeout, config.toolchain);
+				MyExecResult result = input.execute(test.stdin, test.arguments, test.timeout, config.toolchain, config.builder);
 				SystemFailureMessage osError = new SystemFailureMessage(result);
 				if (osError.Type == SystemFailureMessageType.Segfault) {
 					logger.logError("Segfault");
@@ -263,5 +270,4 @@ public abstract class JsonTest implements GenericTest {
 			this.replacement = replacement;
 		}
 	}
-
 }

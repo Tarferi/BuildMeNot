@@ -46,7 +46,7 @@ public class AbstractStatelessClient {
 	}
 
 	public static enum Intention {
-		UNKNOWN, GET_RESOURCE, GET_INVALID_RESOURCE, PERFORM_TEST, COLLECT_TESTS, COLLECT_GRAPHS, ADMIN_COMMAND, TERM_COMMAND, EXAM_COMMAND, HISTORY_COMMAND
+		UNKNOWN, GET_RESOURCE, GET_INVALID_RESOURCE, PERFORM_TEST, COLLECT_TESTS, COLLECT_GRAPHS, ADMIN_COMMAND, TERM_COMMAND, EXAM_COMMAND, HISTORY_COMMAND, HISTORY_COMMAND_POLL
 	}
 
 	private static class IntentionData {
@@ -232,6 +232,9 @@ public class AbstractStatelessClient {
 	}
 
 	private void log(ProcessState state) {
+		if (state.Intention.Intention == Intention.HISTORY_COMMAND_POLL) { // No logging for polling
+			return;
+		}
 		if (state.Intention.Intention != Intention.ADMIN_COMMAND) { // TODO: remove current admin logs
 			state.Data.StaticDB.adminLog(state.Toolchain, state.Request.remoteAddress, state.getPermissions().Login, state.Intention.Intention.toString(), state.Intention.Data.getJsonString());
 		}

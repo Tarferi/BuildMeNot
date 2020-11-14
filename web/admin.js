@@ -1075,7 +1075,7 @@ var AdminEditor = function(adminer) {
 				var colType = columns[colI].type;
 				var colIndex = columns[colI].index;
 				var cellObj = rowObj[colIndex];
-				if (cellObj && (colType == "TEXT" || colType == "BIGTEXT" || colType == "LOGIN")) {
+				if (cellObj && (colType == "TEXT" || colType == "BIGTEXT" || colType == "LOGIN") && cellObj.split) {
 					cellObj = cellObj.split("<").join("&lt;").split(">").join("&gt;");
 				} else if (cellObj && colType == "DATE") {
 					cellObj = self.getTimeFromTimestamp(cellObj);

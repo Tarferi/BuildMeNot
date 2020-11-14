@@ -186,5 +186,4 @@ public class GCCTest extends JsonTest {
 		}
 		return sb.toString();
 	}
-
 }

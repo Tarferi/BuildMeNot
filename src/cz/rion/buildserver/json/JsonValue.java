@@ -2,6 +2,7 @@ package cz.rion.buildserver.json;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -631,7 +632,7 @@ public abstract class JsonValue {
 		}
 
 		public JsonObject() {
-			this(new HashMap<String, JsonValue>());
+			this(new LinkedHashMap<String, JsonValue>());
 		}
 
 		@Override
