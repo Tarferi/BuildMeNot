@@ -23,6 +23,7 @@ import cz.rion.buildserver.utils.CachedDataWrapper2;
 import cz.rion.buildserver.utils.CachedToolchainData2;
 import cz.rion.buildserver.utils.CachedToolchainDataGetter2;
 import cz.rion.buildserver.utils.CachedToolchainDataWrapper2;
+import cz.rion.buildserver.utils.Pair;
 
 public abstract class LayeredPermissionDB extends LayeredTestDB {
 
@@ -50,7 +51,7 @@ public abstract class LayeredPermissionDB extends LayeredTestDB {
 	public static final class UsersPermission {
 
 		private Permission permissions = null;
-		private List<String> primaries = null;
+		private List<Pair<Integer, String>> primaries = null;
 		private final LayeredPermissionDB db;
 		private final RuntimeDB rdb;
 		public final String Login;
@@ -78,7 +79,8 @@ public abstract class LayeredPermissionDB extends LayeredTestDB {
 			obj.add("login", new JsonString(Login));
 			obj.add("name", new JsonString(fullName));
 			obj.add("group", new JsonString(userGroup));
-			obj.add("primary", new JsonString(primaries.isEmpty() ? "" : primaries.get(0)));
+			obj.add("primary", new JsonString(primaries.isEmpty() ? "" : primaries.get(0).Value));
+			obj.add("primaryID", primaries.isEmpty() ? 0 : primaries.get(0).Key);
 			return obj;
 		}
 
@@ -128,8 +130,16 @@ public abstract class LayeredPermissionDB extends LayeredTestDB {
 				permissions = new Permission(Toolchain, "");
 				primaries = new ArrayList<>();
 				db.getPermissionsFor(Login, permissions, primaries, Toolchain);
-				if (primaries.size() > 1 && primaries.contains("Everyone")) {
-					primaries.remove("Everyone");
+				if (primaries.size() > 1) {
+					Pair<Integer, String> toRemove = null;
+					for (Pair<Integer, String> primary : primaries) {
+						if (primary.Value.equals("Everyone")) {
+							toRemove = primary;
+						}
+					}
+					if (toRemove != null) {
+						primaries.remove(toRemove);
+					}
 				}
 			}
 			if (fullName == null) {
@@ -154,7 +164,7 @@ public abstract class LayeredPermissionDB extends LayeredTestDB {
 		}
 
 		public String getPrimaryGroup() {
-			return primaries.get(0);
+			return primaries.get(0).Value;
 		}
 
 		public boolean can(PermissionBranch action) {
@@ -205,7 +215,7 @@ public abstract class LayeredPermissionDB extends LayeredTestDB {
 		return manager;
 	}
 
-	public void getPermissionsFor(String login, Permission permissions, List<String> primaries, Toolchain toolchain) {
+	public void getPermissionsFor(String login, Permission permissions, List<Pair<Integer, String>> primaries, Toolchain toolchain) {
 		List<InternalUserGroupMemberShip> groups = getUserGroups(login, toolchain);
 		if (groups != null) {
 			for (InternalUserGroupMemberShip group : groups) {
@@ -213,7 +223,7 @@ public abstract class LayeredPermissionDB extends LayeredTestDB {
 					permissions.add(new PermissionBranch(toolchain, perm));
 				}
 				if (group.isPrimary) {
-					primaries.add(group.Group.Name);
+					primaries.add(new Pair<Integer, String>(group.Group.ID, group.Group.Name));
 				}
 			}
 		}

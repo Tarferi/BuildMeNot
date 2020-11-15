@@ -759,6 +759,10 @@ public class StatelessTestClient extends StatelessPresenceClient {
 
 		JsonObject res = new JsonObject();
 		res.add("tests", new JsonArray(d));
+		String notification = data.StaticDB.getNotification(state.Toolchain, state.getPermissions());
+		if (notification != null) {
+			res.add("notification", notification);
+		}
 
 		returnValue.add("code", new JsonNumber(0));
 		returnValue.add("result", res.getJsonString());

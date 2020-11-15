@@ -52,6 +52,7 @@ public class Settings {
 	private final SettingsValue InitGroupsAndUsers = new SettingsValue(SettingsCategory.Server, "InitGroupsAndUsers", "Inicializovat skupiny (nevyužívat)", ValueType.BOOLEAN, 0);
 	private final SettingsValue nasmTimeout = new SettingsValue(SettingsCategory.NASM, "NasmTimeout", "Timeout pro nasm", ValueType.INTEGER, 5000);
 	private final SettingsValue linkTimeout = new SettingsValue(SettingsCategory.NASM, "LinkerTimeout", "Timeout pro linker", ValueType.INTEGER, 5000);
+	private final SettingsValue cryptoExpiration = new SettingsValue(SettingsCategory.NASM, "CryptoExpiration", "Èas v sekundách, za který expiruje crypto", ValueType.INTEGER, 5);
 	private final SettingsValue UseSettingsBuilders = new SettingsValue(SettingsCategory.Server, "UseSettingsBuilders", "Používat buildery pro IZP a ISU z nastavení. Pokud není nastaveno, jsou zavedeny wrappery nad databází", ValueType.BOOLEAN, 0);
 
 	private final SettingsValue forceTimeoutOnErrors = new SettingsValue(SettingsCategory.Server, "ForceTimeoutOnErrors", "Timeout pøi odevzdání špatného kódu", ValueType.BOOLEAN, 1);
@@ -536,5 +537,9 @@ public class Settings {
 
 	public static boolean GetUseSettingsBuilders() {
 		return instance.UseSettingsBuilders.asBoolean();
+	}
+
+	public static int GetCryptoExpiration() {
+		return instance.cryptoExpiration.asInt();
 	}
 }

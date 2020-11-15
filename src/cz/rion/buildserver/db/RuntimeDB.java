@@ -1133,9 +1133,10 @@ public class RuntimeDB extends LayeredMetaDB {
 				long time = (obj.getNumber("time").Value & 0xffffffff);
 				long now = new Date().getTime() / 1000;
 				long diff = now - time;
-				if (diff > 5 || diff < -5) { // Auth generated in the future or 15 seconds ago, too old
+				int exp = Settings.GetCryptoExpiration();
+				if (diff > exp || diff < -exp) { // Auth generated in the future or 15 seconds ago, too old
 					this.log_expired_crypto(address, authToken, "Too old - " + diff + " seconds", toolchain);
-					throw new Exception("Crypto auth too old (" + diff + " seconds)");
+					throw new Exception("Crypto auth too old (" + diff + " seconds, maximum allowed is " + exp + ")");
 				}
 
 				String login = obj.getString("login").Value;

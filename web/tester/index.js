@@ -11,6 +11,37 @@ window.Tester.Main = function() {
 	var self = this;
 	self.common = new Common();
 	
+	var originalSetLoginPanelVisible = self.common.setLoginPanelVisible;
+	
+	self.notifyPnl = undefined;
+	self.notifyText = undefined;
+	
+	self.common.setLoginPanelVisible = function(vis) {
+		var res = originalSetLoginPanelVisible(vis);
+		if(vis && self.notifyPnl === undefined && self.notifyText !== undefined) {
+			self.notifyPnl = document.createElement("div");
+			self.notifyPnl.style.display = "block";
+			self.notifyPnl.style.position = "fixed";
+			self.notifyPnl.style.borderRight = "2px solid black";
+			self.notifyPnl.style.borderBottom = "2px solid black";
+			self.notifyPnl.style.background = "#deaaaa";
+			self.notifyPnl.innerHTML = self.notifyText;
+			self.notifyPnl.style.top = "0px";
+			self.notifyPnl.style.left = "0px";
+			self.notifyPnl.style.lineHeight = "30px";
+			self.notifyPnl.style.padding = "5px";
+			self.notifyPnl.style.fontFamily = "verdana";
+			self.notifyPnl.style.fontSize = "13pt"
+			self.notifyPnl.style.zIndex = "5";
+			document.body.appendChild(self.notifyPnl);
+		} else if(!vis && self.notifyPnl !== undefined) {
+			document.body.removeChild(self.notifyPnl);
+			self.notifyPnl = undefined;
+		}
+		return res;
+	}
+	
+	
 	self.root = document.createElement("div");
 	document.body.appendChild(self.root);
 	
@@ -97,6 +128,10 @@ window.Tester.Main = function() {
 			self.common.showInitLoader("Nepodařilo se nahrát testy:<br />" + data);
 		};
 		var cbOk = function(data) {
+			if(data && data.notification) {
+				self.notifyText = data.notification;
+			}
+			
 			if(data && data.tests) {
 				self.materialize(data.tests, data.wait);
 				self.common.setLoginPanelVisible(true);
