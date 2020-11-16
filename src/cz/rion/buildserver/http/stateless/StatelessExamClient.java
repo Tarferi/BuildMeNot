@@ -79,7 +79,7 @@ public class StatelessExamClient extends StatelessGraphProviderClient {
 				JsonObject obj = new JsonObject();
 				obj.add("ID", gen.ID);
 				obj.add("Login", gen.Login);
-				LocalUser user = sdb.getUser(state.Toolchain.getName(), gen.Login);
+				LocalUser user = sdb.getUser(state.Toolchain, gen.Login);
 				if (user == null) { // Should never happen
 					continue;
 				}

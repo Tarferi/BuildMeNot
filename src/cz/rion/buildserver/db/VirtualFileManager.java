@@ -185,6 +185,10 @@ public class VirtualFileManager {
 			private VirtualFileException(DatabaseException e) {
 				super(e);
 			}
+
+			public VirtualFileException(String string) {
+				super(string);
+			}
 		}
 
 		public ReadVirtualFile getRead(UserContext context) {

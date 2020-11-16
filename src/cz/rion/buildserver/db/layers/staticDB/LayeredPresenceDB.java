@@ -595,7 +595,7 @@ public abstract class LayeredPresenceDB extends LayeredExamDB {
 		}
 
 		private PresentUserDetails get(LayeredPresenceDB db, PresenceUser details) {
-			LocalUser user = db.getUser(Toolchain.getName(), details.UserID);
+			LocalUser user = db.getUser(Toolchain, details.UserID);
 			if (user != null) {
 				return new PresentUserDetails(details.UserID, details.ID, details.SlotID, details.CreationTime, details.Type, user.FullName, user.Login);
 			}

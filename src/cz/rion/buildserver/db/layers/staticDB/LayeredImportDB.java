@@ -714,7 +714,7 @@ public abstract class LayeredImportDB extends LayeredFilesDB {
 
 	public abstract Integer getRootPermissionGroup(Toolchain toolchain, String name);
 
-	public abstract boolean createUser(Toolchain toolchain, String login, String origin, String fullName, List<String> permissionGroups, int rootPermissionGroupID);
+	public abstract boolean createUser(Toolchain toolchain, String login, String origin, String fullName, List<String> permissionGroups, int rootPermissionGroupID, String implicitPermission);
 
 	public abstract boolean addPermission(Toolchain toolchain, String group, String permission);
 
@@ -728,7 +728,7 @@ public abstract class LayeredImportDB extends LayeredFilesDB {
 		}
 
 		for (InternalResultUser user : users) {
-			if (!createUser(toolchain, user.login, user.origin, user.name, user.groups, rootGroup)) {
+			if (!createUser(toolchain, user.login, user.origin, user.name, user.groups, rootGroup, "[]")) {
 				return "Failed to create user(s)";
 			}
 		}

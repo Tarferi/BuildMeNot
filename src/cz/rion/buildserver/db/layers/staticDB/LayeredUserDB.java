@@ -1,14 +1,19 @@
 package cz.rion.buildserver.db.layers.staticDB;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 
 import cz.rion.buildserver.Settings;
 import cz.rion.buildserver.db.DatabaseInitData;
+import cz.rion.buildserver.db.StaticDB;
+import cz.rion.buildserver.db.VirtualFileManager.UserContext;
+import cz.rion.buildserver.db.VirtualFileManager.VirtualFile;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 import cz.rion.buildserver.exceptions.CompressionException;
 import cz.rion.buildserver.exceptions.DatabaseException;
@@ -26,10 +31,10 @@ public abstract class LayeredUserDB extends LayeredSSLDB {
 		public final Map<String, LocalUser> LoadedUsersByLogin = new HashMap<>();
 		public final Map<Integer, LocalUser> LoadedUsersByID = new HashMap<>();
 
-		public final String toolchain;
+		public final Toolchain toolchain;
 		private final LayeredUserDB sdb;
 
-		private PermissionContext(String toolchain, LayeredUserDB sdb) {
+		private PermissionContext(Toolchain toolchain, LayeredUserDB sdb) {
 			this.toolchain = toolchain;
 			this.sdb = sdb;
 			reload();
@@ -80,17 +85,17 @@ public abstract class LayeredUserDB extends LayeredSSLDB {
 
 	public Map<String, LocalUser> getLoadedUsersByLogin(Toolchain toolchain) {
 		if (!mappings.containsKey(toolchain.getName())) {
-			mappings.put(toolchain.getName(), new PermissionContext(toolchain.getName(), this));
+			mappings.put(toolchain.getName(), new PermissionContext(toolchain, this));
 		}
 		PermissionContext context = mappings.get(toolchain.getName());
 		return context.LoadedUsersByLogin;
 	}
 
-	public LocalUser getUser(String toolchain, String login) {
-		if (!mappings.containsKey(toolchain)) {
-			mappings.put(toolchain, new PermissionContext(toolchain, this));
+	public LocalUser getUser(Toolchain toolchain, String login) {
+		if (!mappings.containsKey(toolchain.getName())) {
+			mappings.put(toolchain.getName(), new PermissionContext(toolchain, this));
 		}
-		PermissionContext context = mappings.get(toolchain);
+		PermissionContext context = mappings.get(toolchain.getName());
 		if (context.LoadedUsersByLogin.containsKey(login)) {
 			return context.LoadedUsersByLogin.get(login);
 		} else {
@@ -98,11 +103,11 @@ public abstract class LayeredUserDB extends LayeredSSLDB {
 		}
 	}
 
-	public LocalUser getUser(String toolchain, int userID) {
-		if (!mappings.containsKey(toolchain)) {
-			mappings.put(toolchain, new PermissionContext(toolchain, this));
+	public LocalUser getUser(Toolchain toolchain, int userID) {
+		if (!mappings.containsKey(toolchain.getName())) {
+			mappings.put(toolchain.getName(), new PermissionContext(toolchain, this));
 		}
-		PermissionContext context = mappings.get(toolchain);
+		PermissionContext context = mappings.get(toolchain.getName());
 		if (context.LoadedUsersByID.containsKey(userID)) {
 			return context.LoadedUsersByID.get(userID);
 		} else {
@@ -111,10 +116,12 @@ public abstract class LayeredUserDB extends LayeredSSLDB {
 	}
 
 	private final Map<String, PermissionContext> mappings = new HashMap<>();
+	private final DatabaseInitData dbData;
 
-	public LayeredUserDB(DatabaseInitData dbName) throws DatabaseException {
-		super(dbName);
+	public LayeredUserDB(DatabaseInitData dbData) throws DatabaseException {
+		super(dbData);
 		this.makeTable("users", false, KEY("ID"), TEXT("name"), TEXT("usergroup"), TEXT("login"), BIGTEXT("permissions"), TEXT("toolchain"));
+		this.dbData = dbData;
 	}
 
 	public static class RemoteUser {
@@ -129,28 +136,47 @@ public abstract class LayeredUserDB extends LayeredSSLDB {
 		}
 	}
 
-	public class LocalUser extends RemoteUser {
-		public final int ID;
-		public final String PrimaryPermGroup;
-		public final int PrimaryPermGroupID;
+	public class LocalUserPermissionGroup {
+		public final String GroupName;
+		public final int GroupID;
+		public final boolean IsPrimary;
 
-		private LocalUser(int id, String login, String group, String fullName, String PrimaryPermGroup, int PrimaryPermGroupID) {
-			super(login, group, fullName);
-			this.ID = id;
-			this.PrimaryPermGroup = PrimaryPermGroup;
-			this.PrimaryPermGroupID = PrimaryPermGroupID;
+		private LocalUserPermissionGroup(int id, String name, boolean primary) {
+			this.GroupID = id;
+			this.GroupName = name;
+			this.IsPrimary = primary;
 		}
 	}
 
-	private final Map<String, Pair<String, Integer>> getPrimaryGroups(String toolchain) throws DatabaseException {
-		Map<String, Pair<String, Integer>> mp = new HashMap<>();
+	public class LocalUser extends RemoteUser {
+		public final int ID;
+		public final List<LocalUserPermissionGroup> PermissionGroups;
+
+		private LocalUser(int id, String login, String group, String fullName, List<LocalUserPermissionGroup> groups) {
+			super(login, group, fullName);
+			this.ID = id;
+			this.PermissionGroups = groups;
+			if (groups.isEmpty()) {
+				groups.add(new LocalUserPermissionGroup(-1, Settings.GetDefaultGroup(), true));
+			}
+		}
+
+		public LocalUser getCloned() {
+			List<LocalUserPermissionGroup> p = new ArrayList<>();
+			p.addAll(PermissionGroups);
+			return new LocalUser(ID, Login, Group, FullName, p);
+		}
+	}
+
+	private final Map<String, List<LocalUserPermissionGroup>> getPermissionGroups(Toolchain toolchain) throws DatabaseException {
+		Map<String, List<LocalUserPermissionGroup>> mp = new HashMap<>();
 
 		final String usersTableName = "users";
 		final String groupsTableName = "groups";
 		final String userGroupsTableName = "users_group";
 
-		TableField[] fields = new TableField[] { getField(groupsTableName, "name"), getField(groupsTableName, "ID").getRenamedInstance("GroupID"), getField(usersTableName, "login"), };
-		ComparisionField[] comparators = new ComparisionField[] { new ComparisionField(getField(userGroupsTableName, "primary_group"), 1) };
+		TableField[] fields = new TableField[] { getField(groupsTableName, "name"), getField(groupsTableName, "ID").getRenamedInstance("GroupID"), getField(usersTableName, "login"), getField(userGroupsTableName, "primary_group") };
+		ComparisionField[] comparators = new ComparisionField[] { new ComparisionField(getField(userGroupsTableName, "toolchain"), toolchain.getName()) };
 
 		TableJoin[] joins = new TableJoin[] { new TableJoin(getField(usersTableName, "ID"), getField(userGroupsTableName, "user_id")), new TableJoin(getField(groupsTableName, "ID"), getField(userGroupsTableName, "group_id")),
 
@@ -159,28 +185,35 @@ public abstract class LayeredUserDB extends LayeredSSLDB {
 		for (JsonValue item : data.Value) {
 			String name = item.asObject().getString("name").Value;
 			String login = item.asObject().getString("login").Value;
+			boolean primary = item.asObject().getNumber("primary_group").Value == 1;
 			int gid = item.asObject().getNumber("GroupID").Value;
-			mp.put(login.toLowerCase(), new Pair<>(name, gid));
+			if (!mp.containsKey(login.toLowerCase())) {
+				ArrayList<LocalUserPermissionGroup> itm = new ArrayList<LocalUserPermissionGroup>();
+				itm.add(new LocalUserPermissionGroup(gid, name, primary));
+				mp.put(login.toLowerCase(), itm);
+			} else {
+				mp.get(login.toLowerCase()).add(new LocalUserPermissionGroup(gid, name, primary));
+			}
 		}
 		return mp;
 	}
 
-	private final boolean loadLocalUsers(String toolchain, List<LocalUser> loadedUsers, Map<String, LocalUser> loadedUsersByLogin, Map<Integer, LocalUser> loadedUsersByID) {
+	private final boolean loadLocalUsers(Toolchain toolchain, List<LocalUser> loadedUsers, Map<String, LocalUser> loadedUsersByLogin, Map<Integer, LocalUser> loadedUsersByID) {
 		loadedUsers.clear();
 		loadedUsersByLogin.clear();
 
 		try {
-			Map<String, Pair<String, Integer>> primaryGroups = getPrimaryGroups(toolchain);
+			Map<String, List<LocalUserPermissionGroup>> groups = getPermissionGroups(toolchain);
 			final String tableName = "users";
-			JsonArray data = select(tableName, new TableField[] { getField(tableName, "ID"), getField(tableName, "name"), getField(tableName, "login"), getField(tableName, "usergroup") }, true, new ComparisionField(getField(tableName, "toolchain"), toolchain));
+			JsonArray data = select(tableName, new TableField[] { getField(tableName, "ID"), getField(tableName, "name"), getField(tableName, "login"), getField(tableName, "usergroup") }, true, new ComparisionField(getField(tableName, "toolchain"), toolchain.getName()));
 			for (JsonValue val : data.Value) {
 				JsonObject obj = val.asObject();
 				int id = obj.getNumber("ID").Value;
 				String name = obj.getString("name").Value;
 				String usergroup = obj.getString("usergroup").Value;
 				String login = obj.getString("login").Value;
-				Pair<String, Integer> permGroup = primaryGroups.containsKey(login.toLowerCase()) ? primaryGroups.get(login.toLowerCase()) : new Pair<>("", 0);
-				LocalUser user = new LocalUser(id, login, usergroup, name, permGroup.Key, permGroup.Value);
+				List<LocalUserPermissionGroup> permGroups = groups.containsKey(login.toLowerCase()) ? groups.get(login.toLowerCase()) : new ArrayList<>();
+				LocalUser user = new LocalUser(id, login, usergroup, name, permGroups);
 				loadedUsers.add(user);
 				loadedUsersByLogin.put(login, user);
 				loadedUsersByID.put(user.ID, user);
@@ -217,7 +250,7 @@ public abstract class LayeredUserDB extends LayeredSSLDB {
 		} catch (DatabaseException e) {
 			e.printStackTrace();
 		}
-		return new Object[] { login, Settings.GetDefaultGroup(), 0, "" };
+		return new Object[] { login, Settings.GetDefaultGroup(), -1, "" };
 	}
 
 	@SuppressWarnings("deprecation")
@@ -286,13 +319,13 @@ public abstract class LayeredUserDB extends LayeredSSLDB {
 	}
 
 	@Override
-	public boolean createUser(Toolchain toolchain, String login, String origin, String fullName, List<String> permissionGroups, int rootPermissionGroupID) {
+	public boolean createUser(Toolchain toolchain, String login, String origin, String fullName, List<String> permissionGroups, int rootPermissionGroupID, String implicitPermission) {
 		final String tableName = "users";
 		JsonArray res;
 		try {
 			res = this.select(tableName, new TableField[] { getField(tableName, "ID") }, false, new ComparisionField(getField(tableName, "toolchain"), toolchain.getName()), new ComparisionField(getField(tableName, "login"), login));
 			if (res.Value.size() == 0) {
-				return this.insert(tableName, new ValuedField(this.getField(tableName, "name"), fullName), new ValuedField(this.getField(tableName, "permissions"), "[]"), new ValuedField(this.getField(tableName, "usergroup"), origin), new ValuedField(this.getField(tableName, "login"), login), new ValuedField(this.getField(tableName, "toolchain"), toolchain.getName()));
+				return this.insert(tableName, new ValuedField(this.getField(tableName, "name"), fullName), new ValuedField(this.getField(tableName, "permissions"), implicitPermission), new ValuedField(this.getField(tableName, "usergroup"), origin), new ValuedField(this.getField(tableName, "login"), login), new ValuedField(this.getField(tableName, "toolchain"), toolchain.getName()));
 			} else if (res.Value.size() == 1) {
 				if (res.Value.get(0).isObject()) {
 					if (res.Value.get(0).asObject().containsNumber("ID")) {
@@ -309,4 +342,232 @@ public abstract class LayeredUserDB extends LayeredSSLDB {
 			return false;
 		}
 	}
+
+	@Override
+	public void clearCache() {
+		super.clearCache();
+		mappings.clear();
+	}
+
+	@Override
+	public void afterInit() {
+		final Map<String, UsersConfigFile> registeredFiles = new HashMap<>();
+		super.afterInit();
+		this.registerToolchainListener(new ToolchainCallback() {
+
+			@Override
+			public void toolchainAdded(Toolchain t) {
+				synchronized (registeredFiles) {
+					if (!registeredFiles.containsKey(t.getName())) {
+						UsersConfigFile f = new UsersConfigFile(t);
+						registeredFiles.put(t.getName(), f);
+						dbData.Files.registerVirtualFile(f);
+					}
+				}
+			}
+
+			@Override
+			public void toolchainRemoved(Toolchain t) {
+				synchronized (registeredFiles) {
+					if (registeredFiles.containsKey(t.getName())) {
+						UsersConfigFile f = registeredFiles.remove(t.getName());
+						dbData.Files.unregisterVirtualFile(f);
+					}
+				}
+			}
+
+		});
+	}
+
+	public abstract boolean assignGroup(Toolchain toolchain, String login, Collection<Pair<String, Boolean>> set, int rootPermissionGroupID);
+
+	public abstract boolean changePrimaryForGroup(Toolchain toolchain, String login, String group, boolean primary);
+
+	private final class UsersConfigFile extends VirtualFile {
+
+		private static final String prefix_users = "\t - ";
+		private static final String suffix_users = ":";
+		private static final String prefix_groups_primary = "\t\t + ";
+		private static final String suffix_groups_primary = "";
+		private static final String prefix_groups = "\t\t - ";
+		private static final String suffix_groups = "";
+
+		public UsersConfigFile(Toolchain toolchain) {
+			super("users_" + toolchain.getName() + ".ini", toolchain);
+		}
+
+		@Override
+		public String read(UserContext context) throws VirtualFileException {
+			Map<String, LocalUser> data = getLoadedUsersByLogin(Toolchain);
+			StringBuilder sb = new StringBuilder();
+			sb.append("# Formát: \n");
+			sb.append("#" + prefix_users + "xlogin00" + suffix_users + "\n");
+			sb.append("#" + prefix_groups + "Skupina 1" + suffix_groups + "\n");
+			sb.append("#" + prefix_groups + "Skupina 2" + suffix_groups + "\n");
+			sb.append("#" + prefix_groups_primary + "Skupina 3 (primární)" + suffix_groups_primary + "\n");
+
+			for (Entry<String, LocalUser> entry : data.entrySet()) {
+				boolean appended = false;
+				for (LocalUserPermissionGroup g : entry.getValue().PermissionGroups) {
+					if (!g.GroupName.equals(Settings.GetDefaultGroup())) {
+						if (!appended) {
+							sb.append(prefix_users + entry.getKey() + suffix_users + "\n");
+							appended = true;
+						}
+						if (g.IsPrimary) {
+							sb.append(prefix_groups_primary + g.GroupName + suffix_groups_primary + "\n");
+						} else {
+							sb.append(prefix_groups + g.GroupName + suffix_groups + "\n");
+						}
+					}
+				}
+			}
+			return sb.toString();
+		}
+
+		private Map<String, LocalUser> getLoadedUsersByLogin(Toolchain toolchain) {
+			Map<String, LocalUser> mp = new HashMap<>();
+			Map<String, LocalUser> original = LayeredUserDB.this.getLoadedUsersByLogin(toolchain);
+			for (Entry<String, LocalUser> entry : original.entrySet()) {
+				mp.put(entry.getKey(), entry.getValue().getCloned());
+			}
+			return mp;
+		}
+
+		@Override
+		public boolean write(UserContext context, String newName, String value) throws VirtualFileException {
+			try {
+				String lastLogin = null;
+				Map<String, Set<Pair<String, Boolean>>> data = new HashMap<>();
+				for (String line : value.split("\n")) {
+					if (line.startsWith("#") || line.trim().isEmpty()) {
+						continue;
+					}
+					if (line.startsWith(prefix_users) && line.endsWith(suffix_users)) {
+						lastLogin = line.substring(prefix_users.length()).trim();
+						lastLogin = lastLogin.substring(0, lastLogin.length() - suffix_users.length());
+					} else if (((line.startsWith(prefix_groups) && line.endsWith(suffix_groups)) || (line.startsWith(prefix_groups_primary) && line.endsWith(suffix_groups_primary))) && lastLogin != null) {
+						boolean primary = line.startsWith(prefix_groups_primary);
+						String group = line.substring(prefix_groups.length()).trim();
+						group = group.substring(0, group.length() - suffix_groups.length());
+						if (!data.containsKey(lastLogin)) {
+							data.put(lastLogin, new HashSet<>());
+						}
+						data.get(lastLogin).add(new Pair<>(group, primary));
+					} else {
+						throw new VirtualFileException("Invalid format");
+					}
+				}
+				Map<String, LocalUser> existing = getLoadedUsersByLogin(Toolchain);
+
+				Map<String, Set<Pair<String, Boolean>>> newUsersOrGroups = new HashMap<>();
+				Map<String, Set<String>> groupsToRemove = new HashMap<>();
+				Map<String, Set<Pair<String, Boolean>>> groupsToUpdate = new HashMap<>();
+
+				// Compare to existing data
+				for (Entry<String, Set<Pair<String, Boolean>>> entry : data.entrySet()) {
+					String login = entry.getKey().toLowerCase();
+					if (!existing.containsKey(login)) { // Brand new user, not supported
+						// newUsersOrGroups.put(login, entry.getValue());
+					} else { // Existing user -> check groups
+						Map<String, LocalUserPermissionGroup> existingGroups = new HashMap<>();
+						for (LocalUserPermissionGroup g : existing.get(login).PermissionGroups) {
+							if (!g.GroupName.equals(Settings.GetDefaultGroup())) {
+								existingGroups.put(g.GroupName, g);
+							}
+						}
+						for (Pair<String, Boolean> groupC : entry.getValue()) {
+							String group = groupC.Key;
+							boolean primary = groupC.Value;
+							if (existingGroups.containsKey(group)) { // Group still exists
+								if (existingGroups.get(group).IsPrimary != primary) { // Primary changed
+									if (!groupsToUpdate.containsKey(login)) {
+										groupsToUpdate.put(login, new HashSet<>());
+									}
+									groupsToUpdate.get(login).add(new Pair<>(group, primary));
+								} else { // No change, do nothing
+
+								}
+								existingGroups.remove(group);
+							} else { // Group to add
+								if (!newUsersOrGroups.containsKey(login)) {
+									newUsersOrGroups.put(login, new HashSet<>());
+								}
+								newUsersOrGroups.get(login).add(new Pair<>(group, primary));
+							}
+						}
+						for (Entry<String, LocalUserPermissionGroup> groupC : existingGroups.entrySet()) {
+							String group = groupC.getKey();
+							if (!groupsToRemove.containsKey(login)) {
+								groupsToRemove.put(login, new HashSet<>());
+							}
+							groupsToRemove.get(login).add(group);
+						}
+					}
+				}
+
+				boolean b = true;
+				// Project changes
+				JsonObject idata = new JsonObject();
+				idata.add("action", "change_users");
+				idata.add("toolchain", Toolchain.getName());
+				JsonObject added = new JsonObject();
+				JsonObject removed = new JsonObject();
+				JsonObject updated = new JsonObject();
+
+				for (Entry<String, Set<Pair<String, Boolean>>> entry : newUsersOrGroups.entrySet()) {
+					String login = entry.getKey();
+					b &= assignGroup(Toolchain, login, entry.getValue(), -1);
+					JsonObject ar = new JsonObject();
+					for (Pair<String, Boolean> s : entry.getValue()) {
+						ar.add(s.Key, s.Value);
+					}
+					added.add(login, ar);
+				}
+				for (Entry<String, Set<String>> entry : groupsToRemove.entrySet()) {
+					String login = entry.getKey();
+					for (String group : entry.getValue()) {
+						b &= unassignGroup(Toolchain, login, group);
+					}
+					JsonArray ar = new JsonArray();
+					for (String s : entry.getValue()) {
+						ar.add(s);
+					}
+					removed.add(login, ar);
+				}
+				for (Entry<String, Set<Pair<String, Boolean>>> entry : groupsToUpdate.entrySet()) {
+					String login = entry.getKey();
+					JsonArray arr = new JsonArray();
+					for (Pair<String, Boolean> g : entry.getValue()) {
+						String group = g.Key;
+						boolean primary = g.Value;
+						b &= changePrimaryForGroup(Toolchain, login, group, primary);
+						JsonObject o = new JsonObject();
+						o.add(group, primary);
+						arr.add(o);
+					}
+					if (!arr.Value.isEmpty()) {
+						updated.add("login", arr);
+					}
+				}
+
+				if (!added.getEntries().isEmpty()) {
+					idata.add("added", added);
+				}
+				if (!removed.getEntries().isEmpty()) {
+					idata.add("removed", removed);
+				}
+				if (!removed.getEntries().isEmpty()) {
+					idata.add("update", updated);
+				}
+				StaticDB sdb = (StaticDB) LayeredUserDB.this;
+				sdb.adminLog(context.getToolchain(), context.getAddress(), context.getLogin(), "CHANGE_USERS", idata.getJsonString());
+				return b;
+			} finally {
+				clearCache();
+			}
+		}
+	}
+
+	public abstract boolean unassignGroup(Toolchain toolchain, String login, String group);
 }

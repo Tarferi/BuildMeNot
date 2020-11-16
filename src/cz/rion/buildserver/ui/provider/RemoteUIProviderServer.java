@@ -314,7 +314,7 @@ public class RemoteUIProviderServer {
 					if (usr != null) {
 						fullName = usr.FullName;
 						group = usr.Group;
-						permGroup = usr.PrimaryPermGroup;
+						//permGroup = usr.PrimaryPermGroup;
 					}
 					outBuffer.writeInt(stat.UserID);
 					outBuffer.writeString(stat.Login);

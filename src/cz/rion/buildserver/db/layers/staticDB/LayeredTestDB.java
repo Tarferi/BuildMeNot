@@ -11,6 +11,7 @@ import cz.rion.buildserver.db.VirtualFileManager.ReadVirtualFile;
 import cz.rion.buildserver.db.VirtualFileManager.UserContext;
 import cz.rion.buildserver.db.VirtualFileManager.VirtualFile;
 import cz.rion.buildserver.db.layers.staticDB.LayeredPermissionDB.UsersPermission;
+import cz.rion.buildserver.db.layers.staticDB.LayeredPermissionDB.UsersPermissionGroup;
 import cz.rion.buildserver.exceptions.DatabaseException;
 import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
@@ -338,9 +339,9 @@ public abstract class LayeredTestDB extends LayeredCodeModifiersDB {
 	public String getNotification(Toolchain tc, UsersPermission perms) {
 		synchronized (cache) {
 			NotificationsData data = cache.get(tc);
-			String g = perms.getPrimaryGroup();
-			if (g != null) {
-				Notification n = data.notificationsByGroupName.get(g);
+			UsersPermissionGroup group = perms.getPrimaryGroup();
+			if (group != null) {
+				Notification n = data.notificationsByGroupName.get(group.Name);
 				if (n != null) {
 					if (n instanceof StoredNotification) {
 						return n.Notification;

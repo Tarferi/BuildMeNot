@@ -1,6 +1,7 @@
 package cz.rion.buildserver.db.layers.staticDB;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -48,10 +49,23 @@ public abstract class LayeredPermissionDB extends LayeredTestDB {
 		}
 	}
 
+	public static final class UsersPermissionGroup {
+		public final int ID;
+		public final String Name;
+		public final boolean Primary;
+
+		private UsersPermissionGroup(int id, String name, boolean pr) {
+			this.ID = id;
+			this.Name = name;
+			this.Primary = pr;
+		}
+	}
+
 	public static final class UsersPermission {
 
 		private Permission permissions = null;
-		private List<Pair<Integer, String>> primaries = null;
+		private List<UsersPermissionGroup> primaries = null;
+		private UsersPermissionGroup primary = null;
 		private final LayeredPermissionDB db;
 		private final RuntimeDB rdb;
 		public final String Login;
@@ -73,14 +87,28 @@ public abstract class LayeredPermissionDB extends LayeredTestDB {
 			return userID != -1 && fullName != null && userGroup != null && StaticUserID != -1 && permissions != null && email != null;
 		}
 
+		public UsersPermissionGroup getPrimaryGroup() {
+			if (primary == null) {
+				for (UsersPermissionGroup group : primaries) {
+					if (group.Primary) {
+						primary = group;
+						return primary;
+					}
+				}
+				primary = new UsersPermissionGroup(0, Settings.GetDefaultGroup(), true);
+			}
+			return primary;
+		}
+
 		public JsonObject getIdentity() {
 			handleInit();
 			JsonObject obj = new JsonObject();
 			obj.add("login", new JsonString(Login));
 			obj.add("name", new JsonString(fullName));
 			obj.add("group", new JsonString(userGroup));
-			obj.add("primary", new JsonString(primaries.isEmpty() ? "" : primaries.get(0).Value));
-			obj.add("primaryID", primaries.isEmpty() ? 0 : primaries.get(0).Key);
+			UsersPermissionGroup pg = getPrimaryGroup();
+			obj.add("primary", pg.Name);
+			obj.add("primaryID", pg.ID);
 			return obj;
 		}
 
@@ -131,10 +159,10 @@ public abstract class LayeredPermissionDB extends LayeredTestDB {
 				primaries = new ArrayList<>();
 				db.getPermissionsFor(Login, permissions, primaries, Toolchain);
 				if (primaries.size() > 1) {
-					Pair<Integer, String> toRemove = null;
-					for (Pair<Integer, String> primary : primaries) {
-						if (primary.Value.equals("Everyone")) {
-							toRemove = primary;
+					UsersPermissionGroup toRemove = null;
+					for (UsersPermissionGroup group : primaries) {
+						if (group.Name.equals("Everyone")) {
+							toRemove = group;
 						}
 					}
 					if (toRemove != null) {
@@ -161,10 +189,6 @@ public abstract class LayeredPermissionDB extends LayeredTestDB {
 		public boolean hasKnownPrimaryGroup() {
 			handleInit();
 			return !primaries.isEmpty();
-		}
-
-		public String getPrimaryGroup() {
-			return primaries.get(0).Value;
 		}
 
 		public boolean can(PermissionBranch action) {
@@ -215,16 +239,14 @@ public abstract class LayeredPermissionDB extends LayeredTestDB {
 		return manager;
 	}
 
-	public void getPermissionsFor(String login, Permission permissions, List<Pair<Integer, String>> primaries, Toolchain toolchain) {
+	public void getPermissionsFor(String login, Permission permissions, List<UsersPermissionGroup> primaries, Toolchain toolchain) {
 		List<InternalUserGroupMemberShip> groups = getUserGroups(login, toolchain);
 		if (groups != null) {
 			for (InternalUserGroupMemberShip group : groups) {
 				for (String perm : group.Group.getPermissions(true)) {
 					permissions.add(new PermissionBranch(toolchain, perm));
 				}
-				if (group.isPrimary) {
-					primaries.add(new Pair<Integer, String>(group.Group.ID, group.Group.Name));
-				}
+				primaries.add(new UsersPermissionGroup(group.Group.ID, group.Group.Name, group.isPrimary));
 			}
 		}
 	}
@@ -493,6 +515,25 @@ public abstract class LayeredPermissionDB extends LayeredTestDB {
 		return null;
 	}
 
+	private boolean unassignGroup(Toolchain toolchain, int userID, int groupID) {
+		final String tableName = "users_group";
+		try {
+			JsonArray res = this.select(tableName, new TableField[] { getField(tableName, "ID") }, false, new ComparisionField(getField(tableName, "user_id"), userID), new ComparisionField(getField(tableName, "group_id"), groupID), new ComparisionField(getField(tableName, "toolchain"), toolchain.getName()));
+			for (JsonValue val : res.Value) {
+				if (val.isObject()) {
+					JsonObject obj = val.asObject();
+					if (obj.containsNumber("ID")) {
+						int id = obj.getNumber("ID").Value;
+						return this.execute_raw("DELETE FROM users_group WHERE ID = ?", id);
+					}
+				}
+			}
+		} catch (DatabaseException e) {
+			e.printStackTrace();
+		}
+		return false;
+	}
+
 	private boolean assignGroup(Toolchain toolchain, int groupID, int userID, boolean primary) {
 		final String tableName = "users_group";
 		int newPrimary = primary ? 1 : 0;
@@ -576,26 +617,76 @@ public abstract class LayeredPermissionDB extends LayeredTestDB {
 	}
 
 	@Override
-	public boolean createUser(Toolchain toolchain, String login, String origin, String fullName, List<String> permissionGroups, int rootPermissionGroupID) {
-		if (super.createUser(toolchain, login, origin, fullName, permissionGroups, rootPermissionGroupID)) { // Create row in "users" table
+	public final boolean unassignGroup(Toolchain toolchain, String login, String group) {
+		Integer userID = getUserIDByLogin(login, toolchain);
+		if (userID != null) {
+			Integer groupID = getGroupIDByName(toolchain, group, 0);
+			if (groupID != null) {
+				return unassignGroup(toolchain, userID, groupID);
+			}
+		}
+		return false;
+	}
 
-			// Get the user ID and verify that it has all the groups
-			Integer userID = getUserIDByLogin(login, toolchain);
-
-			for (String group : permissionGroups) {
-				Integer groupID = getGroupIDByName(toolchain, group, rootPermissionGroupID);
-				if (groupID == null) {
-					return false;
-				}
-				if (!assignGroup(toolchain, groupID, userID, true)) {
-					return false;
+	@Override
+	public boolean changePrimaryForGroup(Toolchain toolchain, String login, String group, boolean primary) {
+		Integer userID = getUserIDByLogin(login, toolchain);
+		if (userID != null) {
+			Integer groupID = getGroupIDByName(toolchain, group, 0);
+			if (groupID != null) {
+				final String tableName = "users_group";
+				try {
+					JsonArray res = this.select(tableName, new TableField[] { getField(tableName, "ID") }, false, new ComparisionField(getField(tableName, "user_id"), userID), new ComparisionField(getField(tableName, "group_id"), groupID));
+					for (JsonValue val : res.Value) {
+						if (val.isObject()) {
+							JsonObject obj = val.asObject();
+							if (obj.containsNumber("ID")) {
+								int id = obj.getNumber("ID").Value;
+								return this.update(tableName, id, new ValuedField(getField(tableName, "primary_group"), primary ? 1 : 0));
+							}
+						}
+					}
+				} catch (DatabaseException e) {
+					e.printStackTrace();
 				}
 			}
+		}
+		return false;
+	}
 
-			if (userID == null) {
+	@Override
+	public boolean assignGroup(Toolchain toolchain, String login, Collection<Pair<String, Boolean>> permissionGroups, int rootPermissionGroupID) {
+		// Get the user ID and verify that it has all the groups
+		Integer userID = getUserIDByLogin(login, toolchain);
+
+		for (Pair<String, Boolean> groupC : permissionGroups) {
+			String group = groupC.Key;
+			boolean primary = groupC.Value;
+			Integer groupID = getGroupIDByName(toolchain, group, rootPermissionGroupID);
+			if (groupID == null) {
 				return false;
 			}
-			return true;
+			if (!assignGroup(toolchain, groupID, userID, primary)) {
+				return false;
+			}
+		}
+
+		if (userID == null) {
+			return false;
+		}
+		return true;
+	}
+
+	@Override
+	public boolean createUser(Toolchain toolchain, String login, String origin, String fullName, List<String> permissionGroups, int rootPermissionGroupID, String implicitPermission) {
+		if (super.createUser(toolchain, login, origin, fullName, permissionGroups, rootPermissionGroupID, implicitPermission)) { // Create row in "users" table
+			List<Pair<String, Boolean>> groups = new ArrayList<>();
+			boolean first = true;
+			for (String g : permissionGroups) {
+				groups.add(new Pair<>(g, first));
+				first = false;
+			}
+			return assignGroup(toolchain, login, groups, rootPermissionGroupID);
 		}
 		return false;
 	}
