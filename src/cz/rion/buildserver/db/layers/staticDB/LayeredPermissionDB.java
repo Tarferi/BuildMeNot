@@ -661,6 +661,9 @@ public abstract class LayeredPermissionDB extends LayeredTestDB {
 
 		for (Pair<String, Boolean> groupC : permissionGroups) {
 			String group = groupC.Key;
+			if (!group.startsWith(Settings.GetDefaultGroup())) {
+				group = Settings.GetDefaultGroup() + "." + group;
+			}
 			boolean primary = groupC.Value;
 			Integer groupID = getGroupIDByName(toolchain, group, rootPermissionGroupID);
 			if (groupID == null) {

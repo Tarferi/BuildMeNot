@@ -10,13 +10,15 @@ window.mobileAndTabletCheck = function() {
 };
 
 var Admin = function(givenCommon) {
-
 	var self = this;
+
 	if(givenCommon) {
 		self.common = givenCommon;
 	} else {
 		self.common = new Common();
 	}
+	
+	self.templates = new window.Adminer.Templates()
 
 	self.originalUIVisibilities = {};
 
@@ -56,7 +58,7 @@ var Admin = function(givenCommon) {
 		}
 	}
 
-	self.UI = {
+	self.oldUI = {
 	  "type": "table",
 	  "class": "adm_table_main",
 	  "contents": [
@@ -223,14 +225,22 @@ var Admin = function(givenCommon) {
 	    }
 	  ]
 	};
+	
+	
+	self.newUI = self.templates.mainUI;
+	
+	self.UI = window.old_admin_ui ? self.oldUI : self.newUI;
 
 
 	self.createUI = function() {
 		var struct = self.common.reconstructUI(self.UI);
 		var el = struct[0];
 		var ids = struct[1];
-
+		
 		self.mainUI = el;
+		self.closeBtn = ids.btnCloseAdmin;
+		document.body.appendChild(self.mainUI);
+
 		self.closeBtn = ids["btnCloseAdmin"];
 		self.btnReload = ids["btnReload"];
 		self.filesPnl = ids["filesPnl"];
@@ -248,9 +258,8 @@ var Admin = function(givenCommon) {
 		self.btnSaveClose = ids["btnSaveClose"];
 		self.fileLbl = ids["adm_right_top_lbl"];
 		self.pnlDetails = ids["adm_content_details"];
-		self.waiterObj = ids["waiter"];
 
-		document.body.appendChild(self.mainUI);
+		
 		self.closeBtn.addEventListener("click", self.closeUI);
 		self.btnReload.addEventListener("click", self.navigator.reloadFiles);
 
@@ -264,9 +273,9 @@ var Admin = function(givenCommon) {
 
 	self.setWaiterVisible = function(visible) {
 		if (visible) {
-			self.waiterObj.style.display = "block";
+			self.common.showLoader();
 		} else {
-			self.waiterObj.style.display = "none";
+			self.common.hideLoader();
 		}
 	}
 
@@ -294,27 +303,40 @@ var Admin = function(givenCommon) {
 		// Clear current files
 		self.filesPnl.innerHTML = "";
 
-		var constr = function(nf) {
-			var newFile = newFiles[i];
-			var el = document.createElement("div");
-			el.style.display = "block";
-			if (i > 0) {
+		var constr = function(i, nf) {
+			var originalUI = {
+				"type": "div",
+				"class": "adm_file_wrapper",
+				"style": "display: block",
+				"contents": [
+					{
+						"type": "img",
+						"id": "img"
+					},
+					{
+						"type": "span",
+						"id": "lbl"
+					}
+				]
+			}
+			var newUI = self.templates.nagivationItemUI;
+			
+			var ui = window.old_admin_ui ? originalUI : newUI;
+			
+			var d = self.common.reconstructUI(ui);
+			var el  = d[0];
+			var ids = d[1];
+	
+			if(i > 0) {
 				el.style.borderTop = "1px solid black";
 			}
-			el.classList.add("adm_file_wrapper");
-
+	
 			var icon = nf["isDir"] ? "folder" : nf["name"].split("/").reverse()[0].split(".").reverse()[0];
 			var iconURI = "https://rion.cz/icons/" + self.getIcoForExtension(icon) + ".png";
 
-			var ico = document.createElement("img");
-			ico.src = iconURI;
-
-			el.appendChild(ico);
-
-			var els = document.createElement("span");
-			els.innerHTML = newFiles[i]["name"];
-			el.appendChild(els);
-
+			ids.img.src = iconURI
+			ids.lbl.innerHTML = nf["name"];
+			
 			el.addEventListener("dblclick", function() {
 				self.navigator.doubleClickOnFileOrFolder(nf);
 			});
@@ -324,12 +346,12 @@ var Admin = function(givenCommon) {
 					self.navigator.doubleClickOnFileOrFolder(nf);
 				});
 			}
-
+			
 			self.filesPnl.appendChild(el);
 		}
 
 		for (var i = 0; i < newFiles.length; i++) {
-			constr(newFiles[i]);
+			constr(i, newFiles[i]);
 		}
 	}
 
@@ -342,22 +364,6 @@ var Admin = function(givenCommon) {
 				child.style.display = "none";
 			}
 		}
-		/*
-		self.originalUIVisibilities["txtHeader"] = txtHeader.style.display;
-		self.originalUIVisibilities["pnlWarnID"] = pnlWarnID.style.display;
-		self.originalUIVisibilities["id_indiv"] = id_indiv.style.display;
-		if(document.getElementById("id_stats")) {
-		    self.originalUIVisibilities["id_stats"] = id_stats.style.display;
-			id_stats.style.display = "none";
-		}
-		if(document.getElementById("id_faq")) {
-			self.originalUIVisibilities["id_faq"] = id_faq.style.display;
-			id_faq.style.display = "none";
-		}
-		txtHeader.style.display = "none";
-		pnlWarnID.style.display = "none";
-		id_indiv.style.display = "none";
-		*/
 		
 		self.mainUI.style.display = "";
 		self.editor.hideEditors();
@@ -376,17 +382,6 @@ var Admin = function(givenCommon) {
 			}
 		}
 		self.originalUIVisibilities = undefined;
-		/*
-		txtHeader.style.display = self.originalUIVisibilities["txtHeader"];
-		pnlWarnID.style.display = self.originalUIVisibilities["pnlWarnID"];
-		id_indiv.style.display = self.originalUIVisibilities["id_indiv"];
-		if("id_stats" in self.originalUIVisibilities) {
-			id_stats.style.display = self.originalUIVisibilities["id_stats"];
-		}
-		if("id_faq" in self.originalUIVisibilities) {
-			id_faq.style.display = self.originalUIVisibilities["id_faq"];
-		}
-		*/
 		self.mainUI.style.display = "none";
 	}
 
@@ -1206,3 +1201,5 @@ var AdminEditor = function(adminer) {
 window.pastAload = function() {
 	var admin = new Admin();
 }
+
+window.inject("admin_templates.js");

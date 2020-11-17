@@ -4,7 +4,7 @@ function ExamNoAccess() {
 	self.common.showError("Chyba", "Nemáte dostatečná práva k přístupu k tomuto dokumentu", false);
 }
 
-window.inject_code_noperms("WEB.EXAMS.ADMIN", "window.exam_load = ExamNoAccess;");
+window.inject_code_noperms("WEB.EXAMS.ADMIN", "window.adm_load = ExamNoAccess;");
 
 
 var ExamAdminEditableField = function(data, id, viewNode, editableNode, fmt) {
