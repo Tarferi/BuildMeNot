@@ -118,7 +118,7 @@ window.Adminer.Templates = function() {
 																			{
 																				"type": "input",
 																				"style": "padding-left: 5px; display: inline-block; width: calc(100% - 100px); margin-right: 8px; margin-left: 5px; height: 23px",
-																				"id": "txtNewFile"
+																				"id": "adm_td_main_left_bottom_nf_name"
 																			},
 																			{
 																				"type": "button",
@@ -164,15 +164,16 @@ window.Adminer.Templates = function() {
 																"contents": [
 																	{
 																		"type": "td",
-																		"style": "text-align: center; line-height: 35px;",
+																		"style": "text-align: center; padding: 0px; margin: 0px;",
 																		"contents": [
 																			{
 																				"type":"div",
-																				"style": "position: absolute; top: 75px; width: calc(100% - 402px); bottom: 50px; overflow-y: auto",
+																				"style": "position: absolute; top: 73px; width: calc(100% - 402px); bottom: 50px; overflow-y: auto",
 																				"id": "pnlContents",
 																				"contents": [
 																		             {
 																	                  "type": "table",
+																					  "style": "padding: 0px; margin: 0px;",
 																	                  "class": "adm_content_table",
 																	                  "id": "adm_content_table"
 																	                },
