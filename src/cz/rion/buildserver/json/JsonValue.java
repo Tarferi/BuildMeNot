@@ -1,7 +1,6 @@
 package cz.rion.buildserver.json;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -243,7 +242,7 @@ public abstract class JsonValue {
 				if (inst.isCurrentWhiteSpace()) {
 					inst.nextChar(true);
 				}
-				Map<String, JsonValue> data = new HashMap<>();
+				Map<String, JsonValue> data = new LinkedHashMap<>();
 				if (inst.getCurrentChar() != '}') { // At least 1 element
 					while (!inst.isDone()) {
 						JsonValue key = parse(inst);

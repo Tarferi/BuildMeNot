@@ -798,6 +798,11 @@ public class StatelessTestClient extends StatelessPresenceClient {
 		return handleExamsEvent(state, data);
 	}
 
+	private JsonObject execute_projects(ProcessState state, JsonObject data) {
+		state.setIntention(Intention.PROJECT_COMMAND, new JsonObject());
+		return handleProjectsEvent(state, data);
+	}
+
 	private JsonObject execute(ProcessState state, JsonObject input) {
 		state.setIntention(Intention.UNKNOWN, input);
 		if (!state.IsLoggedIn()) {
@@ -826,6 +831,8 @@ public class StatelessTestClient extends StatelessPresenceClient {
 				return execute_terms(state, input);
 			} else if (act.equals("HANDLE_EXAMS")) {
 				return execute_exams(state, input);
+			} else if (act.equals("HANDLE_PROJECTS")) {
+				return execute_projects(state, input);
 			} else if (act.equals("COLLECT_HISTORY") && input.containsString("testID")) {
 				return execute_getHistory(state, input.getString("testID").Value, input);
 			} else if (act.equals("COLLECT_FEEDBACK") && input.containsNumber("compilationID")) {

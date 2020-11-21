@@ -28,7 +28,7 @@ import cz.rion.buildserver.db.VirtualFileManager.UserContext;
 import cz.rion.buildserver.db.VirtualFileManager.VirtualFile;
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
 
-public abstract class LayeredPresenceDB extends LayeredExamDB {
+public abstract class LayeredPresenceDB extends LayeredProjectDB {
 
 	public static class PresenceLimits {
 

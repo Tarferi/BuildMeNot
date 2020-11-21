@@ -25,7 +25,7 @@ import cz.rion.buildserver.json.JsonValue.JsonString;
 import cz.rion.buildserver.permissions.PermissionBranch;
 import cz.rion.buildserver.utils.ToolchainedPermissionCache;
 
-public class StatelessExamClient extends StatelessGraphProviderClient {
+public class StatelessExamClient extends StatelessProjectClient {
 
 	protected StatelessExamClient(StatelessInitData data) {
 		super(data);
