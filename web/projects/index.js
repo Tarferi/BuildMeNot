@@ -86,6 +86,9 @@ window.Projecter.ProjectSettings = function(data, reloadCB, noAdminCB) {
 	var notEmpty = function(line) {
 		return line.trim().length > 0;
 	}
+	var trimmed = function(line) {
+		return line.trim();
+	}
 	
 	self.init = function() {
 		var d = self.common.reconstructUI(self.templates.cardSettings);
@@ -102,7 +105,14 @@ window.Projecter.ProjectSettings = function(data, reloadCB, noAdminCB) {
 			ids.txtVisibleFiles.value = data.config.visible_files.join("\n");
 			ids.txtPrefix.value = data.config.prefix;
 			ids.btnSave.addEventListener("click", function(){
-				save(ids.txtName.value, ids.txtDescr.value, unreduceFileList(ids.txtFiles.value), unreduceFileList(ids.txtEditors.value), ids.txtCommentFiles.value.split("\n").filter(notEmpty),  ids.txtVisibleFiles.value.split("\n").filter(notEmpty), ids.txtPrefix.value);
+				var newName = ids.txtName.value.trim();
+				var newDescription = ids.txtDescr.value.trim();
+				var newFiles = unreduceFileList(ids.txtFiles.value);
+				var newEditors = unreduceFileList(ids.txtEditors.value);
+				var newCommentFiles = ids.txtCommentFiles.value.split("\n").map(trimmed).filter(notEmpty);
+				var newVisibleFiles =  ids.txtVisibleFiles.value.split("\n").map(trimmed).filter(notEmpty);
+				var newPrefix =  ids.txtPrefix.value.trim();
+				save(newName, newDescription, newFiles, newEditors, newCommentFiles, newVisibleFiles, newPrefix);
 			});
 		} else {
 			noAdminCB();
@@ -894,7 +904,29 @@ window.Projecter.ProjectOpenedFile = function(data, fileData, closeCB, reloadCB)
 		return [0, 0];
 	}
 	
-	var editor = data.config.editor_files ? fileData.file.name in data.config.editor_files ? data.config.editor_files[fileData.file.name] : "none" : "none";
+	var getEditor = function(fileName, editors) {
+		if(fileName && editors) {
+			if (fileName in editors) {
+				return editors[fileName];
+			} else { // Could be regex
+				for(var editorFile in editors) {
+					if(editors.hasOwnProperty(editorFile)) {
+						var editor = editors[editorFile];
+						if(editorFile.length > 2 && editorFile.substr(0, 1) =="/" && editorFile.substr(-1, 1) == "/") { // Regex
+							var re = editorFile.substr(1, editorFile.length - 2);
+							re = new RegExp(re);
+							if(fileName.match(re)) {
+								return editor;	
+							}
+						}
+					}
+				}
+			}
+		}
+		return "none";
+	}
+	
+	var editor = getEditor(fileData.file.name, data.config.editor_files);
 	var commentable = data.config.comment_files.reduce(function(total, item) {return total || fileData.file.name == item}, false);
 	
 	if(editor == "common_write") {
@@ -1072,6 +1104,7 @@ window.Projecter.ProjectResults = function(data) {
 		
 		
 		self.pnlTabs.appendChild(el);
+		var isActive = false;
 		
 		el.addEventListener("click", function(){
 			if(el.parentElement) {
@@ -1086,11 +1119,13 @@ window.Projecter.ProjectResults = function(data) {
 		}
 		
 		clsBtn.addEventListener("click", function(){
+			var wasActive = isActive;
 			closer();			
-			closeCB();
+			closeCB(wasActive);
 		})
 		
 		var selector = function(selected) {
+			isActive = selected;
 			el.style.background = selected ? "#aaffff" : defColor
 		}
 		
@@ -1168,7 +1203,7 @@ window.Projecter.ProjectResults = function(data) {
 					tabData.file = file;
 					tabData.contents = data.data;
 					tabData.comments = data.comments;
-					tabData.editor = new window.Projecter.ProjectOpenedFile(self.data, {"file": file, "contents": data.data, "comments": data.comments}, function(){
+					tabData.editor = new window.Projecter.ProjectOpenedFile(self.data, {"file": file, "contents": data.data, "comments": data.comments}, function() {
 						if(tabData.tabRemover) {
 							tabData.tabRemover();
 						}
@@ -1200,11 +1235,13 @@ window.Projecter.ProjectResults = function(data) {
 						self.common.async(asyncData, cbOK, cbFail, true);
 						
 					});
-					var tabbers = addOpenedFileTab(file, openOurEditor, function(){
+					var tabbers = addOpenedFileTab(file, openOurEditor, function(wasActive) {
 						tabData.editor.close();
 						var fn = openNextEditor();
 						openedFiles = removeKey(openedFiles, fileKey);
-						fn();
+						if(wasActive) {
+							fn();
+						}
 					});
 					tabData.tabRemover = tabbers[0];
 					tabData.tabSetSetSelected = tabbers[1];
