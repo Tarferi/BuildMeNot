@@ -681,8 +681,6 @@ window.Projecter.ProjectOpenedFile = function(data, fileData, closeCB, reloadCB)
 	
 	root.style.padding= "5px"
 	
-	window.of = this;
-	
 	var selections = {"begin": 0, "end": 0}
 	var selectionUndoers = [];
 	
@@ -929,14 +927,60 @@ window.Projecter.ProjectOpenedFile = function(data, fileData, closeCB, reloadCB)
 	var editor = getEditor(fileData.file.name, data.config.editor_files);
 	var commentable = data.config.comment_files.reduce(function(total, item) {return total || fileData.file.name == item}, false);
 	
-	if(editor == "common_write") {
-		
-	}
-	
 	var fmt = function (code) {
-		var el = document.createElement("span");
-		el.innerHTML = code;
-		return el;
+		if(editor == "common_hex") {
+			var el = document.createElement("span");
+			var forLine = function(line) {
+				var mp = [];
+				line.split("").map(function(c) {
+					if(c == '\r') {
+						c = "\\r";
+					} else if(c == '\t'){
+						c = "\\t";
+					}
+					var x = document.createElement("span");
+					x.style.display = "inline-block";
+					x.style.borderLeft = "1px solid black";
+					x.style.borderRight = "1px solid black";
+					x.style.borderTop = "1px solid black";
+					x.style.borderBottom = "1px solid black";
+					x.style.padding = "2px";
+					x.innerHTML = c;
+					x.style.fontFamily = "Courier";
+					mp.push(x);
+				});
+				return mp;
+			}
+			var reducer = function(all, item) {
+				all.push(item);
+				return all;
+			}
+			
+			var data = code.split("\n").map(forLine).reduce(reducer, []);
+			
+			for(var y = 0; y < data.length; y++) {
+				var line = data[y];
+				for(var x = 0; x < line.length; x++) {
+					var cellAbove = y > 0 && data[y - 1].length >= x;
+					var cellBelow = y + 1 < data.length && data[y + 1].length >= x;
+					var bl = x == 0;
+					var br = true;
+					var bt = (y == 0) || !cellAbove
+					var bb = true;
+					data[y][x].style.borderLeft = bl ? "1px solid black": "";
+					data[y][x].style.borderRight = br ? "1px solid black": "";
+					data[y][x].style.borderTop = bt ? "1px solid black": "";
+					data[y][x].style.borderBottom = bb ? "1px solid black": "";
+					el.appendChild(data[y][x]);
+				}
+				el.appendChild(document.createElement("br"));
+			}
+			return el;
+		} else {
+			var el = document.createElement("span");
+			el.innerHTML = code;
+			return el;
+		}
 	}
 	
 	if(editor == "common_c") {
