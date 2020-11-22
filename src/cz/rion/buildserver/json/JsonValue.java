@@ -374,16 +374,19 @@ public abstract class JsonValue {
 			this.Value = value;
 		}
 
-		private String getHexEscape(int codePoint) {
+		private static String getHexEscape(int codePoint) {
 			String s = "0000" + Integer.toHexString(codePoint);
 			return s.substring(s.length() - 4, s.length());
 		}
 
 		@Override
 		public String getJsonString() {
+			return getJsonString(Value == null ? "null" : Value);
+		}
+
+		private static String getJsonString(String newValue) {
 			StringBuilder nsb = new StringBuilder();
 			nsb.append('"');
-			String newValue = Value == null ? "null" : Value;
 			char[] chars = newValue.toCharArray();
 			for (int i = 0; i < chars.length; i++) {
 				int cp = Character.codePointAt(chars, i);
@@ -642,7 +645,7 @@ public abstract class JsonValue {
 			} else {
 				sb.append("{");
 				for (Entry<String, JsonValue> entry : Value.entrySet()) {
-					sb.append("\"" + entry.getKey() + "\":");
+					sb.append(JsonString.getJsonString(entry.getKey()) + ":");
 					sb.append(entry.getValue().getJsonString());
 					sb.append(",");
 				}

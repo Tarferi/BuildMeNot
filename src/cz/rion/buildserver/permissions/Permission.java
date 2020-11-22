@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.Map;
 
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
-import cz.rion.buildserver.json.PermissionNode;
 
 public final class Permission {
 

@@ -1,12 +1,10 @@
-package cz.rion.buildserver.json;
+package cz.rion.buildserver.permissions;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map.Entry;
 
 import cz.rion.buildserver.db.layers.staticDB.LayeredBuildersDB.Toolchain;
-import cz.rion.buildserver.permissions.Permission;
-import cz.rion.buildserver.permissions.PermissionBranch;
 
 public class PermissionNode {
 	private final int perm;
