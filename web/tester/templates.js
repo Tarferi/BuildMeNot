@@ -93,11 +93,12 @@ window.Tester.Templates = function() {
 														"contents": [
 															{
 																"type": "td",
+																"style": "vertical-align: top",
 																"contents": [
 																	{
 																		"type": "textarea",
 																		"id": "txtArea",
-																		"style": "width: calc(100% - 5px); min-height: 230px; padding-left: 5px; padding-right: 0px; outline: none; border-left: none; border-right: none; border-top: none; border-bottom: 1px solid black; background: #fafafa; font-family: courier; resize: vertical;",
+																		"style": "width: calc(100% - 5px); min-height: 230px; height: 100%; padding-left: 5px; padding-right: 0px; outline: none; border-left: none; border-right: none; border-top: none; border-bottom: 1px solid black; background: #fafafa; font-family: courier; resize: vertical;",
 																	}
 																]
 															},

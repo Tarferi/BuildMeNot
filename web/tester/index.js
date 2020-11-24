@@ -1672,6 +1672,16 @@ window.Tester.TestPanel = function(data, forEveryOtherPanelCB, getFilterDataCB, 
 	self.node = null;
 	self.btnRun = null;
 	self.resultArea = null;
+	
+	var commonFormats = new CommonFormats();
+	
+	var replaceDescriptionData = function(data) {
+		var txt = "";
+		if(data && data.length) {
+			txt = data;
+		}
+		return commonFormats.format(txt);
+	}
 
 	self.setUnreadCount = function(cnt) {
 		if(cnt == 0) {
@@ -1714,8 +1724,8 @@ window.Tester.TestPanel = function(data, forEveryOtherPanelCB, getFilterDataCB, 
 				if(pnl.data.id == test.id) {
 					found = true;
 					pnl.codeArea.innerHTML = test.init;
-					pnl.txtBrief.innerHTML = test.title
-					pnl.txtDescr.innerHTML = test.zadani
+					pnl.txtBrief.innerHTML = replaceDescriptionData(test.title);
+					pnl.txtDescr.innerHTML = replaceDescriptionData(test.zadani);
 					pnl.btnHide.style.visibility = "";
 					pnl.nwBorder.style.textAlign = "left";
 					pnl.nwBorder.style.background = "#eeeeee";
@@ -1811,8 +1821,8 @@ window.Tester.TestPanel = function(data, forEveryOtherPanelCB, getFilterDataCB, 
 		var solvStr = data.finished_date ? " (vyřešeno "+data.finished_date+")" : "";
 		
 		ids.txtArea.innerHTML = data.finished_code ? data.finished_code :  data.init;
-		ids.txtBrief.innerHTML = data.title ? data.title + solvStr : "";
-		ids.txtDescr.innerHTML = data.zadani ? data.zadani : "";
+		ids.txtBrief.innerHTML = replaceDescriptionData(data.title ? data.title + solvStr : "");
+		ids.txtDescr.innerHTML = replaceDescriptionData(data.zadani ? data.zadani : "");
 		
 		self.txtBrief = ids.txtBrief;
 		self.txtDescr = ids.txtDescr;
@@ -1873,7 +1883,7 @@ window.Tester.TestPanel = function(data, forEveryOtherPanelCB, getFilterDataCB, 
 			self.setCollapsed(true);
 		}
 		if(!data.title) {
-			ids.txtBrief.innerHTML = data.id;
+			ids.txtBrief.innerHTML = replaceDescriptionData(data.id);
 			ids.nwBorder.style.background = "#999999"
 			ids.nwBorder.style.textAlign = "center";
 			self.setCollapsed(true);
@@ -1933,4 +1943,5 @@ function aload() {
 
 window.inject("tester/templates.js");
 window.inject("common.js");
+window.inject("formats.js");
 window.inject("WEB.ADMIN", "admin.js");

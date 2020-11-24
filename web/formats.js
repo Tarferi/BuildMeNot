@@ -1,7 +1,7 @@
 var CommonFormats = function() {
 	var self = this;
 	
-	self.supportedTags = ["math", "code"];
+	self.supportedTags = ["math", "code", "code_line"];
 	
 	var formatMath = function(text) {
 		var data = {"throwOnError": false};
@@ -11,12 +11,29 @@ var CommonFormats = function() {
 	
 	var formatCode = function(text) {
 		var el = document.createElement("span");
+		el.style.display = "inline-block";
+		el.style.marginTop = "8px";
 		el.style.paddingLeft = "5px";
 		el.style.paddingRight = "5px";
-		el.style.marginTop = "5px";
 		el.style.background = "#eeeeee";
 		el.style.border = "1px solid #cccccc";
 		el.style.fontFamily = "Courier, \"Lucida Console\", monospace";
+		el.innerHTML = text;
+		return el.outerHTML;
+	}
+	
+	var formatCodeLine = function(text) {
+		var el = document.createElement("span");
+		el.style.display = "block";
+		el.style.marginTop = "8px";
+		el.style.marginBottom = "8px";
+		el.style.marginRight = "5px";
+		el.style.paddingTop = "5px";
+		el.style.paddingLeft = "5px";
+		el.style.paddingBottom = "5px";
+		el.style.background = "#eeeeee";
+		el.style.border = "1px solid #cccccc";
+		el.style.fontFamily = "Courier";
 		el.innerHTML = text;
 		return el.outerHTML;
 	}
@@ -26,6 +43,8 @@ var CommonFormats = function() {
 			return formatMath(text);
 		} else if(tag == "code") {
 			return formatCode(text);
+		} else if(tag == "code_line") {
+			return formatCodeLine(text);
 		}
 		return text;
 	}
@@ -38,6 +57,7 @@ var CommonFormats = function() {
 			var tag = self.supportedTags[tagI];
 			var btag = "<" + tag + ">";
 			var etag = "</" + tag + ">";
+			lastPos = 0;
 			while(true) {
 				var pos = data.indexOf(btag, lastPos);
 				if(pos == -1) {
@@ -54,7 +74,12 @@ var CommonFormats = function() {
 				}
 			}
 		}
-		for(var i = indexes.length - 1; i >= 0; i--) {
+		indexes = indexes.sort(function(aa, bb){
+			var a = aa[0];
+			var b = bb[0];
+			return a < b ? 1 : a > b ? -1 : 0;
+		});
+		for(var i = 0; i < indexes.length; i++) {
 			var posData = indexes[i];
 			var begin = posData[0];
 			var end = posData[1];

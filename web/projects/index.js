@@ -961,8 +961,7 @@ window.Projecter.ProjectOpenedFile = function(data, fileData, closeCB, reloadCB)
 			for(var y = 0; y < data.length; y++) {
 				var line = data[y];
 				for(var x = 0; x < line.length; x++) {
-					var cellAbove = y > 0 && data[y - 1].length >= x;
-					var cellBelow = y + 1 < data.length && data[y + 1].length >= x;
+					var cellAbove = y > 0 && data[y - 1].length - 1 >= x;
 					var bl = x == 0;
 					var br = true;
 					var bt = (y == 0) || !cellAbove
