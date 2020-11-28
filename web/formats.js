@@ -33,7 +33,7 @@ var CommonFormats = function() {
 	}
 	
 	var formatCodeLine = function(text) {
-		var el = document.createElement("span");
+		var el = document.createElement("pre");
 		el.style.display = "block";
 		el.style.marginTop = "8px";
 		el.style.marginBottom = "8px";
