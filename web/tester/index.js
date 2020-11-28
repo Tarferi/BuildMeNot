@@ -938,6 +938,7 @@ window.Tester.FeedbackPanel = function(data, showLoginColumn, readCommentCB) {
 	var self = this;
 	self.data = data;
 	self.common = new Common();
+	self.formats = new CommonFormats();
 	self.templates = new window.Tester.Templates();
 	self.showLbl = "Skrýt komentáře";
 	
@@ -947,17 +948,7 @@ window.Tester.FeedbackPanel = function(data, showLoginColumn, readCommentCB) {
 	}
 
 	self.codeFmt = function(code) {
-		var repl = [
-			["&", "&amp;"],
-			["<", "&lt;"],
-			[">", "&gt;"]
-		]
-
-		var splitter = function(item) {
-			code = code.split(item[0]).join(item[1]);
-		}
-		repl.map(splitter);
-		return code;
+		return self.formats.format(code);
 	}
 	
 	self.getNodes = function() {

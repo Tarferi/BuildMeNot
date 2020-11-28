@@ -312,13 +312,24 @@ window.Projecter.FeedbackCommentPanel = function(comment, codeFmt, projectSelect
 
 		var appendRaw = function(txt) {
 			var span = document.createElement("span");
-			span.innerHTML = self.codeFmt(txt).split("\n").join("<br />");
+			var el = self.codeFmt(txt.split("\n").join("<br />"));
+			if(el.tagName) {
+				span.appendChild(el);
+			} else {
+				span.innerHTML = el;
+			}
 			root.appendChild(span);
 		};
 
 		var appendSel = function(txt, begin, end) {
 			var span = document.createElement("span");
-			span.innerHTML = self.codeFmt(txt).split("\n").join("<br />");
+			
+			var el = self.codeFmt(txt.split("\n").join("<br />"));
+			if(el.tagName) {
+				span.appendChild(el);
+			} else {
+				span.innerHTML = el;
+			}
 			span.style.cursor = "pointer";
 			span.style.textDecoration = "underline";
 			span.addEventListener("mouseenter", function() {
@@ -673,6 +684,7 @@ window.Projecter.ProjectOpenedFile = function(data, fileData, closeCB, reloadCB)
 	var code = document.createElement("code");
 	self.data = data;
 	self.fileData = fileData;
+	self.formats = new CommonFormats();
 	
 	var commentPanelWidth = 400;
 	
@@ -1016,7 +1028,11 @@ window.Projecter.ProjectOpenedFile = function(data, fileData, closeCB, reloadCB)
 	var originalScrollLeft = 0;
 	var originalScrollTop = 0;
 	
-	var commenter = new window.Projecter.LoadedFeedbackPanel(self.fileData, data.ID, function(x){return x;}, reloadCB, self.setHighlightedSelection, self.getSelection);
+	var codeFmt = function(x) {
+		return self.formats.format(x);
+	}
+	
+	var commenter = new window.Projecter.LoadedFeedbackPanel(self.fileData, data.ID, codeFmt, reloadCB, self.setHighlightedSelection, self.getSelection);
 	var commenterNode = commenter.getNode();
 	
 	
@@ -1057,7 +1073,7 @@ window.Projecter.ProjectOpenedFile = function(data, fileData, closeCB, reloadCB)
 			if(commenterNode && commenterNode.parentElement) {
 				commenterNode.parentElement.removeChild(commenterNode);
 			}
-			commenter = new window.Projecter.LoadedFeedbackPanel(self.fileData, data.ID, function(x){return x;}, reloadCB, self.setHighlightedSelection, self.getSelection);
+			commenter = new window.Projecter.LoadedFeedbackPanel(self.fileData, data.ID, codeFmt, reloadCB, self.setHighlightedSelection, self.getSelection);
 			commenterNode = commenter.getNode();
 			root.parentElement.parentElement.appendChild(commenterNode);
 		}
@@ -1798,5 +1814,6 @@ function aload() {
 	new window.Projecter.Main();
 }
 
+window.inject("formats.js");
 window.inject("projects/templates.js");
 window.inject("WEB.ADMIN", "admin.js");
