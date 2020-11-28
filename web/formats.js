@@ -175,6 +175,7 @@ var CommonFormats = function() {
 
 		appendSpecialChars("<", "&lt;", allowedLts);
 		appendSpecialChars(">", "&gt;", allowedGts);
+		appendSpecialChars("\n", "<br />", allowedGts);
 		
 		data = replaceIndexes(data, indexes, false);
 		

@@ -312,7 +312,7 @@ window.Projecter.FeedbackCommentPanel = function(comment, codeFmt, projectSelect
 
 		var appendRaw = function(txt) {
 			var span = document.createElement("span");
-			var el = self.codeFmt(txt.split("\n").join("<br />"));
+			var el = self.codeFmt(txt);
 			if(el.tagName) {
 				span.appendChild(el);
 			} else {
@@ -324,7 +324,7 @@ window.Projecter.FeedbackCommentPanel = function(comment, codeFmt, projectSelect
 		var appendSel = function(txt, begin, end) {
 			var span = document.createElement("span");
 			
-			var el = self.codeFmt(txt.split("\n").join("<br />"));
+			var el = self.codeFmt(txt);
 			if(el.tagName) {
 				span.appendChild(el);
 			} else {

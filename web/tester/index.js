@@ -367,13 +367,13 @@ window.Tester.FeedbackCommentPanel = function(comment, codeFmt, projectSelection
 
 		var appendRaw = function(txt) {
 			var span = document.createElement("span");
-			span.innerHTML = self.codeFmt(txt).split("\n").join("<br />");
+			span.innerHTML = self.codeFmt(txt);
 			root.appendChild(span);
 		};
 
 		var appendSel = function(txt, begin, end) {
 			var span = document.createElement("span");
-			span.innerHTML = self.codeFmt(txt).split("\n").join("<br />");
+			span.innerHTML = self.codeFmt(txt);
 			span.style.cursor = "pointer";
 			span.style.textDecoration = "underline";
 			span.addEventListener("mouseenter", function() {
