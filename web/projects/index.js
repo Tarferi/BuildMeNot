@@ -939,6 +939,11 @@ window.Projecter.ProjectOpenedFile = function(data, fileData, closeCB, reloadCB)
 	var editor = getEditor(fileData.file.name, data.config.editor_files);
 	var commentable = data.config.comment_files.reduce(function(total, item) {return total || fileData.file.name == item}, false);
 	
+	var isPrintable = function(char) {
+		var code = char.charCodeAt(0);
+		return code >= 32 && code < 127;
+	}
+	
 	var fmt = function (code) {
 		if(editor == "common_hex") {
 			var el = document.createElement("span");
@@ -949,6 +954,12 @@ window.Projecter.ProjectOpenedFile = function(data, fileData, closeCB, reloadCB)
 						c = "\\r";
 					} else if(c == '\t'){
 						c = "\\t";
+					} else if(!isPrintable(c)) {
+						c = c.charCodeAt(0).toString(16);
+						if(c.length == 1) {
+							c = "0" + c;
+						}
+						c = "\\x" + c;
 					}
 					var x = document.createElement("span");
 					x.style.display = "inline-block";
