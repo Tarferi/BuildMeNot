@@ -111,11 +111,11 @@ var RadioRespose = function(data, permutation, readOnly) {
 		var outFormat = new CommonFormats();
 		
 		for(var i = 0; i < data.options.length; i++) {
-			var opt = outFormat.format(data.options[self.mapping[i]]);
+			var opt = outFormat.format(data.options[self.mapping[i]], true);
 			var optDescr = document.createElement("span");
 			optDescr.innerHTML = opt;
 			var getLabelCB = function(labelObj) {return labelObj.innerHTML;};
-			var setLabelCB = function(labelObj, label) {labelObj.innerHTML = outFormat.format(label);};
+			var setLabelCB = function(labelObj, label) {labelObj.innerHTML = outFormat.format(label, true);};
 			self.appendOption(self.mapping[i], optDescr, getLabelCB, setLabelCB);
 		}
 	}
@@ -247,8 +247,8 @@ var ExamQuestion = function(data, index, readOnly, fromAdmin) {
 		
 		var ids = d[1];
 		
-		ids.question_id.innerHTML = outFormat.format("Otázka " + (index + 1));
-		ids.question_contents.innerHTML = outFormat.format(data.Config.description);
+		ids.question_id.innerHTML = outFormat.format("Otázka " + (index + 1), true);
+		ids.question_contents.innerHTML = outFormat.format(data.Config.description, true);
 		
 		if(data.Config.type >= 0 && data.Config.type < responseTemplates.length) {
 			self.responder = new responseTemplates[data.Config.type](data.Config, data.Permutations, readOnly);
@@ -259,7 +259,7 @@ var ExamQuestion = function(data, index, readOnly, fromAdmin) {
 		self.evalPoints = ids.pln_eval_pints_edit;
 		self.evalComment = ids.pln_comment_edit;
 		
-		ids.qb_points.innerHTML = outFormat.format(self.pointsFmt(data.Evaluation));
+		ids.qb_points.innerHTML = outFormat.format(self.pointsFmt(data.Evaluation), true);
 		ids.pnl_eval_row.style.display = "none";
 		ids.pnl_eval_commentrow.style.display = "none";
 		ids.pln_eval_pints_view.style.display = "none";
@@ -348,7 +348,7 @@ var ExamMainHeader = function(data, startCB, turnCB, saveCB, fromAdmin) {
 		self.node = d[0];
 		var ids = d[1];
 		
-		ids.pnl_ex_name.innerHTML = outFormat.format(data.ExamName);
+		ids.pnl_ex_name.innerHTML = outFormat.format(data.ExamName, true);
 		if(fromAdmin) {
 			ids.pnl_name.innerHTML = fromAdmin.name;
 		} else {

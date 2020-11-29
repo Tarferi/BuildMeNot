@@ -61,7 +61,7 @@ var CommonFormats = function() {
 		return text;
 	}
 	
-	self.format = function(data) {
+	self.format = function(data, doNotEscape) {
 		data = data + "";
 		var allowedLts = [];
 		var allowedGts = [];
@@ -174,9 +174,11 @@ var CommonFormats = function() {
 		var allowedLts = d[1];
 		var allowedGts = d[2]; 
 
-		appendSpecialChars("<", "&lt;", allowedLts);
-		appendSpecialChars(">", "&gt;", allowedGts);
-		appendSpecialChars("\n", "<br />", allowedGts);
+		if(!doNotEscape) {
+			appendSpecialChars("<", "&lt;", allowedLts);
+			appendSpecialChars(">", "&gt;", allowedGts);
+			appendSpecialChars("\n", "<br />", allowedGts);
+		}
 		
 		data = replaceIndexes(data, indexes, false);
 		
