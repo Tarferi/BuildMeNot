@@ -62,6 +62,7 @@ var CommonFormats = function() {
 	}
 	
 	self.format = function(data) {
+		data = data + "";
 		var allowedLts = [];
 		var allowedGts = [];
 		var getIndexes = function(data) {
