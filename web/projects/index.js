@@ -1009,7 +1009,7 @@ window.Projecter.ProjectOpenedFile = function(data, fileData, closeCB, reloadCB)
 		code.classList.add("language-c");
 		var wrapFmt = fmt;
 		fmt = function (code) {
-			return wrapFmt(Prism.highlight(code, Prism.languages.clike, 'javascript'));
+			return wrapFmt(Prism.highlight(code, Prism.languages.clike, 'clike'));
 		}
 	}
 	

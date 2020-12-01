@@ -662,7 +662,163 @@ window.Tester.FeedbackCodePanel = function(node, codeFmt, originalCode, selectio
 	self.originalCode = originalCode;
 	self.selections = [];
 
+	var selectionUndoers = [];
+	self.undoSel = function() {
+		selectionUndoers.map(function(undoer){
+			undoer();
+		})
+		selectionUndoers = [];
+	}
+	
+	var pr = node.parentElement;
+	var code = node;
+
 	self.setSelectionRange = function(begin, end, focus) {
+		var length = end-begin;
+		var selectionsBegin = 0;
+		var selectionsEnd = 0; 
+		if(length > 0) {
+			selectionsBegin = begin;
+			selectionsEnd = end;
+		} else {
+			// Clear selection
+			selectionsBegin = 0;
+			selectionsEnd = 0;
+		}
+		self.undoSel(); // Remove everything that could still be there
+		
+		// Find nodes that cover
+		
+		var getAllTexted = function(root, res) {
+			if(root && root.childNodes && root.childNodes.length > 0) {
+				for(var i = 0, o = root.childNodes.length; i < o; i++) {
+					var child = root.childNodes[i];
+					res = getAllTexted(child, res);
+				}
+			} else if(root.textContent) {
+				res.push({"length": root.textContent.length, "text": root.textContent, "node": root});				
+			} else if(root.innerText) {
+				res.push({"length": root.innerText.length, "text": root.innerText, "node": root});
+			}  
+			return res;
+		}
+		
+		var getCovered = function(root, index, length) {
+			var texted = getAllTexted(root, []);
+			
+			var cumSum = 0;
+			return texted.map(function(item) {
+				item.begin = cumSum;
+				cumSum += item.length
+				return item;
+			}).filter(function(item) {
+				return item.begin + item.length >= index && item.begin < index + length;
+			}).map(function(item){
+				var node = item.node;
+				if(node.style === undefined) { // Text node ?
+					var subParent = document.createElement("span");
+					var originalNode = item.node;
+					subParent.innerHTML = item.text
+					item.node.parentElement.insertBefore(subParent, item.node);
+					item.node.parentElement.removeChild(item.node);
+					item.node = subParent;
+					selectionUndoers.push(function(){
+						subParent.parentElement.insertBefore(originalNode, subParent);
+						subParent.parentElement.removeChild(subParent);
+					});
+				}
+				return item;
+			});
+		}
+		
+	
+		var splitNode = function(item, splitLength) {
+			var first = document.createElement("span");
+			var second = document.createElement("span");
+			var txt = item.text;
+			var firstText = txt.substr(0, splitLength);
+			var secondText = txt.substr(splitLength);
+			first.innerHTML = firstText;
+			second.innerHTML = secondText;
+			var originalInnerHTML = item.node.innerHTML;
+			item.node.innerHTML = "";
+			item.node.appendChild(first);
+			item.node.appendChild(second);
+			selectionUndoers.push(function(){
+				item.node.innerHTML = "";
+				item.node.innerHTML = originalInnerHTML;
+			});
+			
+			return [first, second, firstText, secondText];
+		}
+		
+		var getAffected = function() {
+			var covered = getCovered(pr, selectionsBegin, selectionsEnd - selectionsBegin);
+			if(covered.length >= 1) {
+				var item = covered[0];
+				
+				if(item.begin < begin) {
+					var nd = splitNode(item, begin - item.begin);
+					item.node = nd[1];
+					item.length = item.length - (begin - item.begin);
+					item.begin = begin;
+					item.text = nd[3];
+				}
+				
+				covered[0] = item;
+				
+				item = covered[covered.length - 1];
+				
+				// Starts at begin, cut to length
+				if(item.begin + item.length > end) {
+					
+					var nd = splitNode(item, item.length - ((item.length - end) + item.begin));
+					item.node = nd[0];
+					item.length = item.length - ((item.length - end) + item.begin);
+					item.text = nd[2];
+				}
+				covered[covered.length - 1] = item;
+			}	
+			return covered;
+		}
+		focus=true;
+		
+		var affected = getAffected();
+		for(var i = 0; i < affected.length; i++) {
+			var first = i == 0;
+			var last = i == affected.length - 1;
+			var item = affected[i].node;
+			
+			var savedProperties = ["background", "borderTop", "borderBottom", "borderLeft", "borderRight"];
+			var savedValues = savedProperties.map(function(prop){
+				return [prop, item.style[prop]];
+			})
+			selectionUndoers.push(function(){
+				savedValues.map(function(entry){
+					var prop = entry[0];
+					var val = entry[1];
+					item.style[prop] = val;
+				})
+			});
+			
+			item.style.background = "#aaffee";
+			item.style.borderTop = "1px solid black";
+			item.style.borderBottom = "1px solid black";
+			if(first) {
+				item.style.borderLeft = "1px solid black";
+			}
+			if(last) {
+				item.style.borderRight = "1px solid black";
+			}
+			if(focus) {
+				item.scrollIntoView({"behavior": "smooth", "block": "nearest" });
+				item.focus();
+			}
+		}
+	}
+	
+
+	self.setSelectionRangeOld = function(begin, end, focus) {
 		node.innerHTML = "";
 		var newCode = self.codeFmt(self.originalCode);
 		var getSpan = function(text) {
@@ -690,6 +846,75 @@ window.Tester.FeedbackCodePanel = function(node, codeFmt, originalCode, selectio
 	};
 
 	self.getSelectionRange = function() {
+		var sel = document.getSelection();
+		var isOur = function(node) {
+			if(node == code) {
+				return true;
+			} else if (node && node.parentElement) {
+				return isOur(node.parentElement);
+			} else {
+				return false;
+			}
+		}
+		
+		var getLengthOfPreviousSiblings = function(node) {
+			var res = "";
+			while(node && node.previousSibling) {
+				node = node.previousSibling;
+				res = (node.innerText ? node.innerText : node.textContent ? node.textContent : "") + res ;
+			}
+			return res;
+		}
+		
+		var getPriorOffset = function(node) {
+			if(node == code) {
+				return "";
+			} else {
+				return getPriorOffset(node.parentElement) + getLengthOfPreviousSiblings(node);
+			}
+		}
+		
+		var toOffset = function(text) {
+			var originalText = originalCode;
+			var textOffset = 0;
+			var maxOffset = text.length
+			for(var i = 0, o = originalText.length; i < o; i++) {
+			    var chr = originalText.charAt(i);
+				var tchr = text.charAt(textOffset);
+				if(chr == tchr) {
+					textOffset++;
+					if(textOffset == maxOffset) {
+						return textOffset;
+					}
+				} else if(chr == ' ' || chr == '\t' || chr == '\n' || chr == '\r') {
+					continue;
+				} else {
+					break;
+				}
+			}
+			console.error("Failed to get selection");
+			return 0;
+		}
+		
+		if(sel && isOur(sel.anchorNode) && isOur(sel.extentNode) && sel.rangeCount == 1) {
+			var range = sel.getRangeAt(0);
+			var preText = getPriorOffset(range.startContainer);
+			var postText = getPriorOffset(range.endContainer);
+			
+			var preOffset = toOffset(preText);
+			var postOffset = toOffset(postText);
+			
+			
+			var begin = preOffset + range.startOffset
+			var end = postOffset + range.endOffset
+			
+			self.setSelectionRange(begin, end);
+			return [begin, end]
+		}
+		return [0, 0];
+	}
+
+	self.getSelectionRangeOld = function() {
 		var sel = document.getSelection();
 		if (sel.anchorNode && sel.anchorNode) {
 			if (sel.anchorNode.parentNode == node && sel.rangeCount == 1) {
@@ -895,7 +1120,12 @@ window.Tester.LoadedFeedbackPanel = function(data, compilationID, codeFmt, reloa
 
 		// Create table for comments
 
-		ids.codecontents.innerHTML = self.codeFmt(data.data.Code);
+		var safeCode = data.data.Code;
+		safeCode = Prism.highlight(safeCode, Prism.languages.clike, 'clike');
+		//safeCode = safeCode.split("<").join("&lt;").split(">").join("&gt;");
+		//safeCode = self.codeFmt(data.data.Code)
+		//safeCode = safeCode.split("<br />").join("\n").split("&nbsp;").join(" ").split("<br>").join("\n");
+		ids.codecontents.innerHTML = safeCode;
 		ids.codecontents.addEventListener("mousedown", function() {self.editor.setSelectionRange(0, 0); });
 		ids.btnAddSel.addEventListener("click", function() { self.editor.addCurentSelection(); })
 		ids.btnComment.addEventListener("click", function() {
@@ -1671,7 +1901,7 @@ window.Tester.TestPanel = function(data, forEveryOtherPanelCB, getFilterDataCB, 
 		if(data && data.length) {
 			txt = data;
 		}
-		return commonFormats.format(txt);
+		return commonFormats.format(txt, true);
 	}
 
 	self.setUnreadCount = function(cnt) {

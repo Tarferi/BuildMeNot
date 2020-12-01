@@ -660,7 +660,13 @@ window.Tester.Templates = function() {
 									{
 										"type": "pre",
 										"style": "min-height: 150px; padding: 5x; font-family: Courier; font-size: 12pt; border-right: 1px solid black;outline: none; width: calc(100% - 10px); height: calc(100% - 10px); resize: vertical;border: 0px",
-										"id": "codecontents"
+										"contents": [
+											{
+												"type": "code",
+												"class": "language-c",
+												"id": "codecontents"
+											}
+										]
 									}
 								]
 							},
