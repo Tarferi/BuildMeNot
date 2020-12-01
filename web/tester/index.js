@@ -1946,7 +1946,8 @@ window.Tester.TestPanel = function(data, forEveryOtherPanelCB, getFilterDataCB, 
 					found = true;
 					pnl.codeArea.innerHTML = test.init;
 					pnl.txtBrief.innerHTML = replaceDescriptionData(test.title);
-					pnl.txtDescr.innerHTML = replaceDescriptionData(test.zadani);
+					pnl.txtDescr.innerHTML = ""; 
+					pnl.txtDescr.appendChild(handleDescription(test.zadani));
 					pnl.btnHide.style.visibility = "";
 					pnl.nwBorder.style.textAlign = "left";
 					pnl.nwBorder.style.background = "#eeeeee";
@@ -2033,6 +2034,106 @@ window.Tester.TestPanel = function(data, forEveryOtherPanelCB, getFilterDataCB, 
 		self.codeArea.value = data;
 	}
 	
+	var handleDescription = function(text) {
+		// Deal with windows. First replace identifiers with randomness
+		var toReplace = [];
+		var lastIndex = 0;
+		while(true) {
+			var index1 = text.indexOf("<window>", lastIndex);
+			if(index1 == -1) {
+				break;
+			} else {
+				var index2 = text.indexOf("</window>", index1);
+				if(index2 == -1) {
+					break;
+				} else {
+					lastIndex = index2;
+					toReplace.push([index1, index2]);
+				}
+			}
+		}
+		var randomness = {};
+		var randomData = [];
+		var getRandomString = function(length) {
+			while(true) {
+				var result = "";
+				var characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+				var charactersLength = characters.length;
+				for ( var i = 0; i < length; i++ ) {
+					result += characters.charAt(Math.floor(Math.random() * charactersLength));
+				}
+				if(text.indexOf(result) == -1 && !randomness.hasOwnProperty(result)) {
+					break;
+				}
+			}
+			return result;
+		}
+		for(var i = toReplace.length - 1; i >= 0; i--) {
+			var beginTag = toReplace[i][0];
+			var endTag = toReplace[i][1];
+			
+			var afterEndTag = endTag + "</window>".length;
+			var afterBeginTag = beginTag + "<window>".length
+			
+			var pre = text.substr(0, beginTag);
+			var post = text.substr(afterEndTag);
+			var contents = text.substr(afterBeginTag, endTag - afterBeginTag)
+			
+			if(self.data && self.data.windows && self.data.windows.hasOwnProperty && self.data.windows.hasOwnProperty(contents)) {
+				var wnd = self.data.windows[contents];
+				var r = getRandomString(20);
+				randomness[r] = wnd;
+				randomData.push(r);
+				contents = r;
+			} else {
+				contents = "<window>" + contents + "</window>";
+			}
+			text = pre + contents + post;
+		}
+		var data = replaceDescriptionData(text);
+		var result = document.createElement("span");
+		
+		var attachCB = function(wnd, el) {
+			el.addEventListener("click", function(){
+				var win = window.open("", wnd.title, "toolbar=no,location=no,directories=no,status=no,menubar=no,scrollbars=yes,resizable=yes");
+				win.document.body.innerHTML = wnd.contents;
+				win.document.title = wnd.title;
+			});
+		}
+		
+		for(var i = 0; i < randomData.length; i++) {
+			var r = randomData[i];
+			var wnd = randomness[r];
+			
+			var pos = data.indexOf(r);
+			if(pos == -1) { // Should never happen
+				break;
+			}
+			var pre = data.substr(0, pos);
+			
+			data = data.substr(pos + r.length);
+			
+			if(pre && pre.length > 0) { // Text before
+				var el = document.createElement("span");
+				el.innerHTML = pre;
+				result.appendChild(el);
+			}
+			
+			var el = document.createElement("span");
+			el.style.textDecoration = "underline";
+			el.innerHTML = wnd.label;
+			el.style.cursor = "pointer";
+			attachCB(wnd, el);
+			result.appendChild(el);
+		}
+		if(data && data.length > 0) {
+			var el = document.createElement("span");
+			el.innerHTML = data;
+			result.appendChild(el);
+		}
+		return result;
+	}
+	
 	self.init = function() {
 
 		// Materialize
@@ -2043,7 +2144,8 @@ window.Tester.TestPanel = function(data, forEveryOtherPanelCB, getFilterDataCB, 
 		
 		ids.txtArea.innerHTML = data.finished_code ? data.finished_code :  data.init;
 		ids.txtBrief.innerHTML = replaceDescriptionData(data.title ? data.title + solvStr : "");
-		ids.txtDescr.innerHTML = replaceDescriptionData(data.zadani ? data.zadani : "");
+		ids.txtDescr.innerHTML = ""; 
+		ids.txtDescr.appendChild(handleDescription(data.zadani ? data.zadani : ""));
 		
 		self.txtBrief = ids.txtBrief;
 		self.txtDescr = ids.txtDescr;

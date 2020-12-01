@@ -30,8 +30,9 @@ public abstract class JsonTest implements GenericTest {
 		private VirtualFileManager files;
 		private final Set<String> priorTests;
 		private final String builder;
+		private final List<GenericTestWindow> windowData;
 
-		TestConfiguration(Toolchain toolchain, StaticDB sdb, List<TestVerificationData> tests, String id, VirtualFileManager files, String title, String description, String initialCode, boolean hidden, boolean secret, Set<String> priorTests, String builder) {
+		TestConfiguration(Toolchain toolchain, StaticDB sdb, List<TestVerificationData> tests, String id, VirtualFileManager files, String title, String description, String initialCode, boolean hidden, boolean secret, Set<String> priorTests, String builder, List<GenericTestWindow> windowData) {
 			this.sdb = sdb;
 			this.files = files;
 			this.id = id;
@@ -44,6 +45,7 @@ public abstract class JsonTest implements GenericTest {
 			this.toolchain = toolchain;
 			this.priorTests = priorTests;
 			this.builder = builder;
+			this.windowData = windowData;
 		}
 	}
 
@@ -270,4 +272,10 @@ public abstract class JsonTest implements GenericTest {
 			this.replacement = replacement;
 		}
 	}
+
+	@Override
+	public List<GenericTestWindow> getWindowData() {
+		return config.windowData;
+	}
+
 }

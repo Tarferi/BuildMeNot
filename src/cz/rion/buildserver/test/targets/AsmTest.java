@@ -1,6 +1,7 @@
 package cz.rion.buildserver.test.targets;
 
 import java.io.File;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -10,6 +11,7 @@ import cz.rion.buildserver.json.JsonValue;
 import cz.rion.buildserver.json.JsonValue.JsonArray;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.test.JsonTest;
+import cz.rion.buildserver.utils.Pair;
 
 public class AsmTest extends JsonTest {
 
@@ -170,5 +172,4 @@ public class AsmTest extends JsonTest {
 
 		return asm;
 	}
-
 }

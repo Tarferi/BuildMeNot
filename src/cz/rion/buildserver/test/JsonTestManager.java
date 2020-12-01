@@ -3,8 +3,11 @@ package cz.rion.buildserver.test;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 
 import cz.rion.buildserver.db.StaticDB;
@@ -168,7 +171,24 @@ public class JsonTestManager {
 
 					String builder = obj.containsString("builder") ? obj.getString("builder").Value : tc.getName();
 
-					TestConfiguration config = new TestConfiguration(tc, sdb, tvd, id, files, title, descr, initial, hidden, secret, priorTests, builder);
+					List<GenericTestWindow> windowData = new ArrayList<>();
+					if (obj.containsObject("windows")) {
+						for (Entry<String, JsonValue> entry : obj.getObject("windows").getEntries()) {
+							JsonValue val = entry.getValue();
+							if (val.isObject()) {
+								JsonObject o = val.asObject();
+								if (o.containsString("title") && o.containsString("contents") && o.containsString("label")) {
+									String wid = entry.getKey();
+									String wlabel = o.getString("label").Value;
+									String wcontents = o.getString("contents").Value;
+									String wtitle = o.getString("title").Value;
+									windowData.add(new GenericTestWindow(wid, wtitle, wcontents, wlabel));
+								}
+							}
+						}
+					}
+
+					TestConfiguration config = new TestConfiguration(tc, sdb, tvd, id, files, title, descr, initial, hidden, secret, priorTests, builder, windowData);
 					if (type.equals("asm")) {
 						return AsmTest.get(config, obj);
 					} else if (type.equals("gcc")) {

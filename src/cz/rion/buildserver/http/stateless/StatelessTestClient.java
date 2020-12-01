@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 
 import cz.rion.buildserver.Settings;
@@ -34,6 +35,7 @@ import cz.rion.buildserver.json.JsonValue.JsonNumber;
 import cz.rion.buildserver.json.JsonValue.JsonObject;
 import cz.rion.buildserver.json.JsonValue.JsonString;
 import cz.rion.buildserver.test.GenericTest;
+import cz.rion.buildserver.test.GenericTestWindow;
 import cz.rion.buildserver.test.TestManager;
 import cz.rion.buildserver.test.TestManager.RunnerLogger;
 import cz.rion.buildserver.test.TestManager.TestResults;
@@ -703,7 +705,7 @@ public class StatelessTestClient extends StatelessPresenceClient {
 			}
 		});
 		List<CompletedTest> completed = state.Data.RuntimeDB.getCompletedTests(state.getPermissions().Login, state.Toolchain);
-		List<JsonValue> d = new ArrayList<>();
+		List<JsonValue> testsArr = new ArrayList<>();
 		Map<String, CompletedTest> finishedByTestID = new HashMap<>();
 		for (CompletedTest test : completed) {
 			finishedByTestID.put(test.TestID, test);
@@ -743,7 +745,17 @@ public class StatelessTestClient extends StatelessPresenceClient {
 				tobj.add("finished_date", new JsonString(result.CompletionDateStr));
 				tobj.add("finished_code", new JsonString(result.Code));
 			}
-			d.add(tobj);
+			List<GenericTestWindow> windowData = tst.getWindowData();
+			JsonObject wobj = new JsonObject();
+			for (GenericTestWindow entry : windowData) {
+				JsonObject wwobj = new JsonObject();
+				wwobj.add("title", entry.Title);
+				wwobj.add("contents", entry.Contents);
+				wwobj.add("label", entry.Label);
+				wobj.add(entry.ID, wwobj);
+			}
+			tobj.add("windows", wobj);
+			testsArr.add(tobj);
 		}
 
 		BadResults badResults = null;
@@ -758,7 +770,7 @@ public class StatelessTestClient extends StatelessPresenceClient {
 		}
 
 		JsonObject res = new JsonObject();
-		res.add("tests", new JsonArray(d));
+		res.add("tests", new JsonArray(testsArr));
 		String notification = data.StaticDB.getNotification(state.Toolchain, state.getPermissions());
 		if (notification != null) {
 			res.add("notification", notification);
