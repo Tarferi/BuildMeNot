@@ -1246,7 +1246,7 @@ window.Tester.FeedbackPanel = function(data, showLoginColumn, readCommentCB) {
 				self.lastcommentlogin.innerHTML = "";
 			}
 			
-			if (data && data.comments && data.comments.length !== undefined && data.data && data.data.Code) {
+			if (data && data.comments && data.comments.length !== undefined && data.data && data.data.Code !== undefined) {
 				self.loadedPnl = new window.Tester.LoadedFeedbackPanel(data, self.data.ID, self.codeFmt, self.reload);
 				self.detailRoot.appendChild(self.loadedPnl.getNode());
 				self.loadedPnl.handleInitSize();
