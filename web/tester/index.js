@@ -1887,7 +1887,7 @@ window.Tester.TestPanel = function(data, forEveryOtherPanelCB, getFilterDataCB, 
 	self.templates = new window.Tester.Templates();
 	self.getFilterDataCB = getFilterDataCB;
 	self.setFilterDataCB = setFilterDataCB;
-	self.showConfetti = data.confetty == 1;
+	self.showConfetti = data.confetti == 1;
 	
 	self.codeArea = null;
 

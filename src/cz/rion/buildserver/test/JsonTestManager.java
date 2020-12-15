@@ -168,7 +168,7 @@ public class JsonTestManager {
 					String initial = obj.containsString("init") ? obj.getString("init").Value : "";
 					boolean hidden = obj.containsNumber("hidden") ? obj.getNumber("hidden").Value == 1 : false;
 					boolean secret = obj.containsNumber("secret") ? obj.getNumber("secret").Value == 1 : false;
-					boolean confetty = obj.containsNumber("confetty") ? obj.getNumber("secret").Value == 1 : true;
+					boolean confetti = obj.containsNumber("confetti") ? obj.getNumber("confetti").Value == 1 : true;
 
 					String builder = obj.containsString("builder") ? obj.getString("builder").Value : tc.getName();
 
@@ -189,7 +189,7 @@ public class JsonTestManager {
 						}
 					}
 
-					TestConfiguration config = new TestConfiguration(tc, sdb, tvd, id, files, title, descr, initial, hidden, secret, priorTests, builder, windowData, confetty);
+					TestConfiguration config = new TestConfiguration(tc, sdb, tvd, id, files, title, descr, initial, hidden, secret, priorTests, builder, windowData, confetti);
 					if (type.equals("asm")) {
 						return AsmTest.get(config, obj);
 					} else if (type.equals("gcc")) {

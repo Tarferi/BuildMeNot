@@ -39,5 +39,5 @@ public interface GenericTest {
 
 	public List<GenericTestWindow> getWindowData();
 
-	public boolean ShowConfetty();
+	public boolean ShowConfetti();
 }
