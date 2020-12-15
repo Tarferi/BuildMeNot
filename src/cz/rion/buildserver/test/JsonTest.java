@@ -31,8 +31,9 @@ public abstract class JsonTest implements GenericTest {
 		private final Set<String> priorTests;
 		private final String builder;
 		private final List<GenericTestWindow> windowData;
+		private final boolean showConfetty;
 
-		TestConfiguration(Toolchain toolchain, StaticDB sdb, List<TestVerificationData> tests, String id, VirtualFileManager files, String title, String description, String initialCode, boolean hidden, boolean secret, Set<String> priorTests, String builder, List<GenericTestWindow> windowData) {
+		TestConfiguration(Toolchain toolchain, StaticDB sdb, List<TestVerificationData> tests, String id, VirtualFileManager files, String title, String description, String initialCode, boolean hidden, boolean secret, Set<String> priorTests, String builder, List<GenericTestWindow> windowData, boolean showConfetty) {
 			this.sdb = sdb;
 			this.files = files;
 			this.id = id;
@@ -46,6 +47,7 @@ public abstract class JsonTest implements GenericTest {
 			this.priorTests = priorTests;
 			this.builder = builder;
 			this.windowData = windowData;
+			this.showConfetty = showConfetty;
 		}
 	}
 
@@ -278,4 +280,8 @@ public abstract class JsonTest implements GenericTest {
 		return config.windowData;
 	}
 
+	@Override
+	public boolean ShowConfetty() {
+		return config.showConfetty;
+	}
 }

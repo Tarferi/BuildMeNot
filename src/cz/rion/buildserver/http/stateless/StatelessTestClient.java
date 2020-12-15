@@ -735,6 +735,7 @@ public class StatelessTestClient extends StatelessPresenceClient {
 				tobj.add("zadani", new JsonString(tst.getDescription()));
 				tobj.add("init", new JsonString(tst.getInitialCode()));
 				tobj.add("hidden", new JsonNumber(tst.isHidden() ? 1 : 0));
+				tobj.add("confetty", tst.ShowConfetty() ? 1 : 0);
 				if (!state.getPermissions().allowExecute(tst.getID())) {
 					tobj.add("noexec", new JsonNumber(1));
 				}

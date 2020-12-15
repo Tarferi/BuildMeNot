@@ -38,4 +38,6 @@ public interface GenericTest {
 	public String getBuilder();
 
 	public List<GenericTestWindow> getWindowData();
+
+	public boolean ShowConfetty();
 }

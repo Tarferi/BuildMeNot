@@ -1887,6 +1887,7 @@ window.Tester.TestPanel = function(data, forEveryOtherPanelCB, getFilterDataCB, 
 	self.templates = new window.Tester.Templates();
 	self.getFilterDataCB = getFilterDataCB;
 	self.setFilterDataCB = setFilterDataCB;
+	self.showConfetti = data.confetty == 1;
 	
 	self.codeArea = null;
 
@@ -1999,8 +2000,10 @@ window.Tester.TestPanel = function(data, forEveryOtherPanelCB, getFilterDataCB, 
 						self.setFinished(false);
 						confetti.frameInterval = 15;
 						confetti.maxCount = 900;
-						confetti.start();
-						setTimeout(function(){self.setComponentsEnabled(true);confetti.stop();}, 5000);
+						if(self.showConfetti) {
+							confetti.start();
+							setTimeout(function(){self.setComponentsEnabled(true);confetti.stop();}, 5000);
+						}
 					} else {
 						cbFail(data.result, data.waiter);
 					}
