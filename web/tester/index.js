@@ -2003,6 +2003,8 @@ window.Tester.TestPanel = function(data, forEveryOtherPanelCB, getFilterDataCB, 
 							confetti.maxCount = 900;
 							confetti.start();
 							setTimeout(function(){self.setComponentsEnabled(true);confetti.stop();}, 5000);
+						} else {
+							self.setComponentsEnabled(true);
 						}
 					} else {
 						cbFail(data.result, data.waiter);
