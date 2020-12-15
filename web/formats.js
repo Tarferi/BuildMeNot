@@ -1,7 +1,7 @@
 var CommonFormats = function() {
 	var self = this;
 	
-	var supportedEmoji = ["monkaChrist", "listenHere", "peepoHappy", "painsChamp"]
+	var supportedEmoji = ["monkaChrist", "listenHere", "peepoHappy", "painsChamp", "thereIsAnother"]
 	
 	var supportedTags = ["math", "code", "code_line"];
 	
