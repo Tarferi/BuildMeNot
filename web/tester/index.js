@@ -1997,10 +1997,10 @@ window.Tester.TestPanel = function(data, forEveryOtherPanelCB, getFilterDataCB, 
 							toAppend = self.handleUnlocked(data.unlocked);
 						}
 						self.setResult(data.result + (toAppend ? "<br />" + toAppend : ""));
-						self.setFinished(false);
-						confetti.frameInterval = 15;
-						confetti.maxCount = 900;
 						if(self.showConfetti) {
+							self.setFinished(false);
+							confetti.frameInterval = 15;
+							confetti.maxCount = 900;
 							confetti.start();
 							setTimeout(function(){self.setComponentsEnabled(true);confetti.stop();}, 5000);
 						}
